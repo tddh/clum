@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 use super::common::{collect_batch_results, create_session_inner, make_semaphore, resolve_hosts};
 use super::exec::exec_in_session;
 use super::ToolContext;
-use crate::transport::connect_to_bridge_hybrid;
+use crate::transport::{connect_to_bridge_hybrid, send_json_frame};
 use agent_ops_core::types::{AuditAction, AuditEvent};
 use chrono::Utc;
 use uuid::Uuid;
@@ -183,9 +183,13 @@ pub(crate) async fn deploy_bridge(ctx: &ToolContext, args: Value) -> Result<Valu
                 }));
             }
 
-            let restart_cmd = "systemctl restart rmux-bridge";
-            let _restart_result = exec_in_session(&mut stream, session_name, &pane_id,
-                restart_cmd, 10000, 50).await;
+            // Fire-and-forget: bridge dies immediately, don't wait for sentinel
+            let _ = send_json_frame(&mut stream, &json!({
+                "type": "send_keys",
+                "session_name": session_name,
+                "pane_id": pane_id,
+                "keys": "\x15c\nsystemctl restart rmux-bridge\n",
+            })).await;
 
             drop(stream);
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;

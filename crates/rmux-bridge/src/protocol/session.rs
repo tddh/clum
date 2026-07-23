@@ -1,6 +1,20 @@
 use super::ProtocolProxy;
-use rmux_sdk::{EnsureSession, EnsureSessionPolicy, ProcessSpec, SessionName};
+use rmux_sdk::{EnsureSession, EnsureSessionPolicy, ProcessCommandSpec, ProcessSpec, SessionName};
 use serde_json::json;
+use std::ffi::CStr;
+
+fn system_user() -> Option<(String, String, String)> {
+    unsafe {
+        let pw = libc::getpwuid(libc::getuid());
+        if pw.is_null() {
+            return None;
+        }
+        let home = CStr::from_ptr((*pw).pw_dir).to_string_lossy().to_string();
+        let user = CStr::from_ptr((*pw).pw_name).to_string_lossy().to_string();
+        let shell = CStr::from_ptr((*pw).pw_shell).to_string_lossy().to_string();
+        Some((home, user, shell))
+    }
+}
 
 impl ProtocolProxy {
     pub async fn handle_new_session(&self, name: &str, detached: bool) -> serde_json::Value {
@@ -9,10 +23,28 @@ impl ProtocolProxy {
             Err(e) => return json!({"ok": false, "error": e.to_string()}),
         };
 
+        let (env_vars, login_cmd) = match system_user() {
+            Some((home, user, shell)) => {
+                let envs = vec![
+                    format!("HOME={}", home),
+                    format!("USER={}", user),
+                    format!("LOGNAME={}", user),
+                    format!("SHELL={}", shell),
+                ];
+                let cmd = format!("exec {} -l", shell);
+                (envs, cmd)
+            }
+            None => (vec![], String::from("exec /bin/sh -l")),
+        };
+
         let ensure = EnsureSession::named(session_name.clone())
             .policy(EnsureSessionPolicy::CreateOrReuse)
             .detached(detached)
-            .process(ProcessSpec::default());
+            .process(ProcessSpec {
+                environment: Some(env_vars),
+                process_command: Some(ProcessCommandSpec::Shell(login_cmd)),
+                ..Default::default()
+            });
 
         match self.rmux.ensure_session(ensure).await {
             Ok(session) => {
