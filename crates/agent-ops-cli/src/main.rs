@@ -70,7 +70,7 @@ fn load_host_config(
     host_name: &str,
 ) -> anyhow::Result<agent_ops_core::HostConfig> {
     let contents = std::fs::read_to_string(hosts_file)?;
-    let registry: agent_ops_core::HostRegistry = serde_yaml::from_str(&contents)?;
+    let registry: agent_ops_core::HostRegistry = serde_yml::from_str(&contents)?;
     registry
         .hosts
         .into_iter()
