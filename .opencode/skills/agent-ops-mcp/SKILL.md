@@ -269,16 +269,14 @@ wait_stable(host, session_name, pane_id)
 
 ### 执行单个命令
 ```
-1. list_window_panes(host, session_name, window_index=0) → 确认 pane_id
-2. exec(host, session_name, pane_id, command) → 执行命令
+exec(host, session_name, command) → 直接执行（pane_id 可省略）
 ```
 
 ### 交互式程序（vim, top, htop）
 ```
-1. list_window_panes → 确认 pane_id
-2. send_keys("vim file.txt\n") → 启动程序
-3. capture_pane → 查看输出
-4. send_keys("\x03") → Ctrl-C 退出
+1. send_keys("vim file.txt\n") → 启动程序
+2. capture_pane → 查看输出
+3. send_keys("\x03") → Ctrl-C 退出
 ```
 
 ### 批量操作多台主机

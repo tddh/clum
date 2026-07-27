@@ -85,7 +85,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
+                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "keys": { "type": "string", "description": "Key sequence, e.g. \\n=Enter, \\x03=Ctrl-C" }
                     },
                     "required": ["host", "session_name", "keys"]
@@ -99,7 +99,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
+                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "max_lines": { "type": "integer", "description": "Default 200, 0=unlimited" },
                         "ansi": { "type": "boolean", "description": "Preserve ANSI escape codes (default: false). When true, text is base64-encoded." },
                         "start_line": { "type": "integer", "description": "Starting line (negative = from end). Overrides max_lines when set." },
@@ -120,7 +120,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
+                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "text": { "type": "string", "description": "Text pattern to wait for (exact match, not regex)" },
                         "timeout_ms": { "type": "number", "description": "Maximum wait time in milliseconds (default: 30000)" }
                     },
@@ -135,7 +135,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
+                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "command": { "type": "string", "description": "Command to execute (e.g., 'top', 'vim', 'tail')" },
                         "args": { "type": "array", "items": { "type": "string" }, "description": "Command arguments (e.g., ['-f', '/var/log/syslog'])" }
                     },
@@ -150,7 +150,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
+                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "command": { "type": "string", "description": "Shell command to execute (e.g., 'ls -la | grep foo > /tmp/out')" }
                     },
                     "required": ["host", "session_name", "command"]
@@ -184,7 +184,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
+                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "timeout_ms": { "type": "number", "description": "Maximum wait time in milliseconds (default: 30000)" }
                     },
                     "required": ["host", "session_name"]
@@ -211,7 +211,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
+                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "timeout_ms": { "type": "number", "description": "Blocking timeout in ms (default: 10000)" }
                     },
                     "required": ["host", "session_name"]
@@ -253,7 +253,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, default: agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
+                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "command": { "type": "string", "description": "Shell command, e.g. ls -la" },
                         "timeout_ms": { "type": "number", "description": "Safety-net timeout in ms (default: 600000 = 10min). Normal commands don't need to set this — waiting for command completion is the default behavior." },
                         "max_lines": { "type": "integer", "description": "Keep only the LAST N lines of output (default: 200, 0 = unlimited). Full output is always captured from scrollback regardless of this setting." },
@@ -270,7 +270,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID to split, e.g. %0" },
+                        "pane_id": { "type": "string", "description": "Pane ID to split, e.g. %0 (optional, auto-detects if omitted)" },
                         "direction": { "type": "string", "description": "horizontal (top/bottom) or vertical (left/right). Default: horizontal" }
                     },
                     "required": ["host", "session_name"]
@@ -284,7 +284,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
+                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "cols": { "type": "integer", "description": "Width in columns (default: 80)" },
                         "rows": { "type": "integer", "description": "Height in rows (default: 24)" }
                     },
@@ -299,7 +299,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
+                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "text": { "type": "string", "description": "Plain text to send (no escape interpretation)" }
                     },
                     "required": ["host", "session_name", "text"]
@@ -313,7 +313,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
+                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "title": { "type": "string", "description": "Title to set (e.g., 'web-server', 'db-monitor')" }
                     },
                     "required": ["host", "session_name", "title"]
@@ -327,7 +327,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
+                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "pattern": { "type": "string", "description": "Text pattern to search for (exact match, not regex)" }
                     },
                     "required": ["host", "session_name", "pattern"]
@@ -474,7 +474,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" }
+                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" }
                     },
                     "required": ["host", "session_name"]
                 }
@@ -500,7 +500,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID to check, e.g. %0" }
+                        "pane_id": { "type": "string", "description": "Pane ID to check, e.g. %0 (optional, auto-detects if omitted)" }
                     },
                     "required": ["host", "session_name"]
                 }
@@ -624,7 +624,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" }
+                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" }
                     },
                     "required": ["host", "session_name"]
                 }
@@ -637,7 +637,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
+                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "pattern": { "type": "string", "description": "Text pattern to search for (exact match, not regex)" }
                     },
                     "required": ["host", "session_name", "pattern"]
@@ -651,7 +651,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" }
+                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" }
                     },
                     "required": ["host", "session_name"]
                 }
@@ -701,7 +701,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Source pane ID to split, e.g. %0" },
+                        "pane_id": { "type": "string", "description": "Source pane ID to split, e.g. %0 (optional, auto-detects if omitted)" },
                         "direction": { "type": "string", "description": "Split direction: horizontal (top/bottom) or vertical (left/right)" },
                         "command": { "type": "string", "description": "Command to run in the new pane (e.g., 'tail -f /var/log/syslog')" },
                         "args": { "type": "array", "items": { "type": "string" }, "description": "Command arguments (used when shell=false)" },
@@ -734,7 +734,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
+                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "max_bytes": { "type": "integer", "description": "Maximum bytes to collect (default: 1048576 = 1MB)" },
                         "timeout_ms": { "type": "number", "description": "Timeout in milliseconds (default: 60000)" },
                         "starting_at": { "type": "string", "description": "Where to start collecting: 'now' (default) or 'oldest' (includes scrollback)" }
@@ -808,7 +808,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
+                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "row": { "type": "integer", "description": "Top row of region (0-based). Omit all coords for full pane capture." },
                         "col": { "type": "integer", "description": "Left column of region (0-based)" },
                         "rows": { "type": "integer", "description": "Height of region in rows" },
@@ -826,7 +826,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
+                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "bytes": { "type": "string", "description": "Raw bytes to wait for, encoded as base64" },
                         "only_new": { "type": "boolean", "description": "Only match data appearing after this call (skip existing buffer, default: false)" },
                         "timeout_ms": { "type": "number", "description": "Maximum wait time in milliseconds (default: 30000)" }
@@ -842,7 +842,7 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
-                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
+                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "stable_ms": { "type": "number", "description": "Duration of stability required in milliseconds (default: 500)" },
                         "timeout_ms": { "type": "number", "description": "Maximum total wait time in milliseconds (default: 30000)" }
                     },
