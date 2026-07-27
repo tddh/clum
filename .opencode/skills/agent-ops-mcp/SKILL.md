@@ -41,36 +41,36 @@ You are an SRE engineer operating remote Linux hosts via agent-ops MCP tools. Yo
 
 ### 2. 默认 Pane
 
-**必须使用** `%0`（agent-ops 会话的第一个 pane，pane_id 最小）。
+**pane_id 可省略**。大多数工具（exec、send_keys、capture_pane 等）的 `pane_id` 参数是可选的：
 
-- ✅ `list_window_panes` 返回 `[%12, %0]` → 使用 `%0`（pane_id 最小）
-- ✅ `list_window_panes` 返回 `[%0]` → 使用 `%0`
-- ❌ 不要按数组顺序选择，按 pane_id 数字大小选择
-- ❌ 不要假设数组第一个就是 %0，需要找到 pane_id 最小的
+- ✅ 省略 `pane_id` → server 自动选择 window 0 中编号最小的 pane
+- ✅ 指定 `pane_id` → 使用指定的 pane
+- ✅ 响应中会返回 `resolved_pane_id` 和 `auto_resolved: true`（自动探测时）
+- ⚠️ **破坏性工具**（`close_pane`、`paste_buffer`、`respawn_pane`）**必须显式指定 pane_id**
 
 ### 3. 操作流程
 
 ```
 session_attach(host, session_name="agent-ops")
 → 如果不存在：session_create(host, session_name="agent-ops")
-→ list_window_panes(host, session_name="agent-ops", window_index=0)
-→ 找到 pane_id 数字最小的 pane（通常是 %0）
+→ exec(host, session_name, command="ls")  // pane_id 可省略
 ```
 
 **示例**：
 ```json
-// 返回结果
-{"ok":true,"panes":[{"active":false,"pane_id":"%12"},{"active":true,"pane_id":"%0"}]}
+// 省略 pane_id 的响应
+{"ok":true,"output":"...","resolved_pane_id":"%0","auto_resolved":true}
 
-// 应该使用 %0（pane_id 最小），不是 %12
+// 指定 pane_id 的响应
+{"ok":true,"output":"...","resolved_pane_id":"%3"}
 ```
 
 ### 4. 禁止行为
 
 - ❌ 未经用户同意创建新会话
 - ❌ 使用非 `agent-ops` 会话名（除非用户指定）
-- ❌ 假设 pane_id 而不验证
 - ❌ 执行完命令后主动清理 session
+- ❌ 对 `close_pane`/`paste_buffer`/`respawn_pane` 省略 pane_id
 
 ### 5. 会话生命周期
 
@@ -134,11 +134,11 @@ session_attach(host="tf01", session_name="agent-ops")
 # 2. 如果不存在，创建会话
 session_create(host="tf01", session_name="agent-ops")
 
-# 3. 确认 pane_id
-list_window_panes(host="tf01", session_name="agent-ops", window_index=0)
+# 3. 直接执行命令（pane_id 可省略，自动探测）
+exec(host="tf01", session_name="agent-ops", command="ls -la")
 
-# 4. 使用确认的 pane_id 执行命令
-exec(host="tf01", session_name="agent-ops", pane_id="%0", command="ls -la")
+# 4. 也可以指定 pane_id
+exec(host="tf01", session_name="agent-ops", pane_id="%3", command="ls -la")
 ```
 
 ### ❌ 错误示例
@@ -148,10 +148,10 @@ exec(host="tf01", session_name="agent-ops", pane_id="%0", command="ls -la")
 session_create(host="tf01", session_name="test-session")  # ❌ 违反规则
 
 # 错误 2：使用错误的会话名
-exec(host="tf01", session_name="test-session", pane_id="%38", command="ls")  # ❌ 违反规则
+exec(host="tf01", session_name="test-session", command="ls")  # ❌ 违反规则
 
-# 错误 3：假设 pane_id
-exec(host="tf01", session_name="agent-ops", pane_id="%0", command="ls")  # ❌ 未验证
+# 错误 3：破坏性工具省略 pane_id
+close_pane(host="tf01", session_name="agent-ops")  # ❌ 必须指定 pane_id
 
 # 错误 4：执行完主动清理
 close_pane(host="tf01", session_name="agent-ops", pane_id="%0")  # ❌ 违反规则

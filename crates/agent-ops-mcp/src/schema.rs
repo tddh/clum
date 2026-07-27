@@ -88,7 +88,7 @@ pub fn tools_definition() -> Value {
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
                         "keys": { "type": "string", "description": "Key sequence, e.g. \\n=Enter, \\x03=Ctrl-C" }
                     },
-                    "required": ["host", "session_name", "pane_id", "keys"]
+                    "required": ["host", "session_name", "keys"]
                 }
             },
             {
@@ -109,7 +109,7 @@ pub fn tools_definition() -> Value {
                         "alternate": { "type": "boolean", "description": "Capture alternate screen (e.g. vim/less). Default: false." },
                         "buffer_name": { "type": "string", "description": "Write capture to a named buffer instead of returning text. Mutually exclusive with other text-return params." }
                     },
-                    "required": ["host", "session_name", "pane_id"]
+                    "required": ["host", "session_name"]
                 }
             },
             {
@@ -124,7 +124,7 @@ pub fn tools_definition() -> Value {
                         "text": { "type": "string", "description": "Text pattern to wait for (exact match, not regex)" },
                         "timeout_ms": { "type": "number", "description": "Maximum wait time in milliseconds (default: 30000)" }
                     },
-                    "required": ["host", "session_name", "pane_id", "text"]
+                    "required": ["host", "session_name", "text"]
                 }
             },
             {
@@ -139,7 +139,7 @@ pub fn tools_definition() -> Value {
                         "command": { "type": "string", "description": "Command to execute (e.g., 'top', 'vim', 'tail')" },
                         "args": { "type": "array", "items": { "type": "string" }, "description": "Command arguments (e.g., ['-f', '/var/log/syslog'])" }
                     },
-                    "required": ["host", "session_name", "pane_id", "command"]
+                    "required": ["host", "session_name", "command"]
                 }
             },
             {
@@ -153,7 +153,7 @@ pub fn tools_definition() -> Value {
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
                         "command": { "type": "string", "description": "Shell command to execute (e.g., 'ls -la | grep foo > /tmp/out')" }
                     },
-                    "required": ["host", "session_name", "pane_id", "command"]
+                    "required": ["host", "session_name", "command"]
                 }
             },
             {
@@ -187,7 +187,7 @@ pub fn tools_definition() -> Value {
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
                         "timeout_ms": { "type": "number", "description": "Maximum wait time in milliseconds (default: 30000)" }
                     },
-                    "required": ["host", "session_name", "pane_id"]
+                    "required": ["host", "session_name"]
                 }
             },
             {
@@ -214,7 +214,7 @@ pub fn tools_definition() -> Value {
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
                         "timeout_ms": { "type": "number", "description": "Blocking timeout in ms (default: 10000)" }
                     },
-                    "required": ["host", "session_name", "pane_id"]
+                    "required": ["host", "session_name"]
                 }
             },
             {
@@ -259,7 +259,7 @@ pub fn tools_definition() -> Value {
                         "max_lines": { "type": "integer", "description": "Keep only the LAST N lines of output (default: 200, 0 = unlimited). Full output is always captured from scrollback regardless of this setting." },
                         "clear_screen": { "type": "boolean", "description": "Clear pane before running" }
                     },
-                    "required": ["host", "session_name", "pane_id", "command"]
+                    "required": ["host", "session_name", "command"]
                 }
             },
             {
@@ -273,7 +273,7 @@ pub fn tools_definition() -> Value {
                         "pane_id": { "type": "string", "description": "Pane ID to split, e.g. %0" },
                         "direction": { "type": "string", "description": "horizontal (top/bottom) or vertical (left/right). Default: horizontal" }
                     },
-                    "required": ["host", "session_name", "pane_id"]
+                    "required": ["host", "session_name"]
                 }
             },
             {
@@ -288,7 +288,7 @@ pub fn tools_definition() -> Value {
                         "cols": { "type": "integer", "description": "Width in columns (default: 80)" },
                         "rows": { "type": "integer", "description": "Height in rows (default: 24)" }
                     },
-                    "required": ["host", "session_name", "pane_id"]
+                    "required": ["host", "session_name"]
                 }
             },
             {
@@ -302,7 +302,7 @@ pub fn tools_definition() -> Value {
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
                         "text": { "type": "string", "description": "Plain text to send (no escape interpretation)" }
                     },
-                    "required": ["host", "session_name", "pane_id", "text"]
+                    "required": ["host", "session_name", "text"]
                 }
             },
             {
@@ -316,7 +316,7 @@ pub fn tools_definition() -> Value {
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
                         "title": { "type": "string", "description": "Title to set (e.g., 'web-server', 'db-monitor')" }
                     },
-                    "required": ["host", "session_name", "pane_id", "title"]
+                    "required": ["host", "session_name", "title"]
                 }
             },
             {
@@ -330,7 +330,7 @@ pub fn tools_definition() -> Value {
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
                         "pattern": { "type": "string", "description": "Text pattern to search for (exact match, not regex)" }
                     },
-                    "required": ["host", "session_name", "pane_id", "pattern"]
+                    "required": ["host", "session_name", "pattern"]
                 }
             },
             {
@@ -476,7 +476,7 @@ pub fn tools_definition() -> Value {
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" }
                     },
-                    "required": ["host", "session_name", "pane_id"]
+                    "required": ["host", "session_name"]
                 }
             },
             {
@@ -502,7 +502,7 @@ pub fn tools_definition() -> Value {
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
                         "pane_id": { "type": "string", "description": "Pane ID to check, e.g. %0" }
                     },
-                    "required": ["host", "session_name", "pane_id"]
+                    "required": ["host", "session_name"]
                 }
             },
             {
@@ -626,7 +626,7 @@ pub fn tools_definition() -> Value {
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" }
                     },
-                    "required": ["host", "session_name", "pane_id"]
+                    "required": ["host", "session_name"]
                 }
             },
             {
@@ -640,7 +640,7 @@ pub fn tools_definition() -> Value {
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
                         "pattern": { "type": "string", "description": "Text pattern to search for (exact match, not regex)" }
                     },
-                    "required": ["host", "session_name", "pane_id", "pattern"]
+                    "required": ["host", "session_name", "pattern"]
                 }
             },
             {
@@ -653,7 +653,7 @@ pub fn tools_definition() -> Value {
                         "session_name": { "type": "string", "description": "Session name, e.g. agent-ops" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" }
                     },
-                    "required": ["host", "session_name", "pane_id"]
+                    "required": ["host", "session_name"]
                 }
             },
             {
@@ -711,7 +711,7 @@ pub fn tools_definition() -> Value {
                         "title": { "type": "string", "description": "Title for the new pane (useful for identification)" },
                         "keep_alive_on_exit": { "type": "boolean", "description": "Keep pane open after process exits (default: false)" }
                     },
-                    "required": ["host", "session_name", "pane_id", "direction", "command"]
+                    "required": ["host", "session_name", "direction", "command"]
                 }
             },
             {
@@ -739,7 +739,7 @@ pub fn tools_definition() -> Value {
                         "timeout_ms": { "type": "number", "description": "Timeout in milliseconds (default: 60000)" },
                         "starting_at": { "type": "string", "description": "Where to start collecting: 'now' (default) or 'oldest' (includes scrollback)" }
                     },
-                    "required": ["host", "session_name", "pane_id"]
+                    "required": ["host", "session_name"]
                 }
             },
             {
@@ -815,7 +815,7 @@ pub fn tools_definition() -> Value {
                         "cols": { "type": "integer", "description": "Width of region in columns" },
                         "styled": { "type": "boolean", "description": "Preserve style/color markup (default: false, plain text only)" }
                     },
-                    "required": ["host", "session_name", "pane_id"]
+                    "required": ["host", "session_name"]
                 }
             },
             {
@@ -831,7 +831,7 @@ pub fn tools_definition() -> Value {
                         "only_new": { "type": "boolean", "description": "Only match data appearing after this call (skip existing buffer, default: false)" },
                         "timeout_ms": { "type": "number", "description": "Maximum wait time in milliseconds (default: 30000)" }
                     },
-                    "required": ["host", "session_name", "pane_id", "bytes"]
+                    "required": ["host", "session_name", "bytes"]
                 }
             },
             {
@@ -846,7 +846,7 @@ pub fn tools_definition() -> Value {
                         "stable_ms": { "type": "number", "description": "Duration of stability required in milliseconds (default: 500)" },
                         "timeout_ms": { "type": "number", "description": "Maximum total wait time in milliseconds (default: 30000)" }
                     },
-                    "required": ["host", "session_name", "pane_id"]
+                    "required": ["host", "session_name"]
                 }
             },
             {

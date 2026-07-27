@@ -46,17 +46,27 @@ pub(crate) async fn stream_pane(ctx: &ToolContext, args: Value) -> Result<Value>
     let session_name = args["session_name"]
         .as_str()
         .context("missing 'session_name'")?;
-    let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
+    let pane_id_arg = args["pane_id"].as_str();
     let timeout_ms = args["timeout_ms"].as_u64().unwrap_or(10000);
     let host = ctx
         .router
         .get(host_name)
         .with_context(|| format!("host not found: {}", host_name))?;
 
+    let (pane_id, auto_resolved) = match pane_id_arg {
+        Some(id) => (id.to_string(), false),
+        None => {
+            let mut tls =
+                connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
+                    .await?;
+            super::common::resolve_pane_id(&mut tls, session_name, None).await?
+        }
+    };
+
     let start = std::time::Instant::now();
-    let response = ctx
+    let mut response = ctx
         .stream_manager
-        .stream_pane(&host, session_name, pane_id, timeout_ms, &ctx.ca_cert_path)
+        .stream_pane(&host, session_name, &pane_id, timeout_ms, &ctx.ca_cert_path)
         .await?;
     let elapsed = start.elapsed().as_millis() as u64;
 
@@ -64,12 +74,13 @@ pub(crate) async fn stream_pane(ctx: &ToolContext, args: Value) -> Result<Value>
         .as_str()
         .map(|s| !s.is_empty())
         .unwrap_or(false);
+    super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
     super::audit(
         ctx,
         AuditAction::StreamSubscribe,
         host_name,
         session_name,
-        Some(pane_id),
+        Some(&pane_id),
         "",
         None,
         has_data,
@@ -294,7 +305,7 @@ pub(crate) async fn pane_info(ctx: &ToolContext, args: Value) -> Result<Value> {
     let session_name = args["session_name"]
         .as_str()
         .context("missing 'session_name'")?;
-    let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
+    let pane_id_arg = args["pane_id"].as_str();
     let host = ctx
         .router
         .get(host_name)
@@ -302,18 +313,21 @@ pub(crate) async fn pane_info(ctx: &ToolContext, args: Value) -> Result<Value> {
     let mut tls =
         connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
             .await?;
+    let (pane_id, auto_resolved) =
+        super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
     send_json_frame(
         &mut tls,
         &json!({ "type": "pane_info", "session_name": session_name, "pane_id": pane_id }),
     )
     .await?;
-    let response = recv_json_frame(&mut tls).await?;
+    let mut response = recv_json_frame(&mut tls).await?;
+    super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
     super::audit(
         ctx,
         AuditAction::PaneInfo,
         host_name,
         session_name,
-        Some(pane_id),
+        Some(&pane_id),
         "",
         None,
         response["ok"].as_bool().unwrap_or(true),
@@ -362,7 +376,7 @@ pub(crate) async fn pane_exists(ctx: &ToolContext, args: Value) -> Result<Value>
     let session_name = args["session_name"]
         .as_str()
         .context("missing 'session_name'")?;
-    let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
+    let pane_id_arg = args["pane_id"].as_str();
     let host = ctx
         .router
         .get(host_name)
@@ -370,19 +384,22 @@ pub(crate) async fn pane_exists(ctx: &ToolContext, args: Value) -> Result<Value>
     let mut tls =
         connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
             .await?;
+    let (pane_id, auto_resolved) =
+        super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
     send_json_frame(
         &mut tls,
         &json!({ "type": "pane_exists", "session_name": session_name, "pane_id": pane_id }),
     )
     .await?;
-    let response = recv_json_frame(&mut tls).await?;
+    let mut response = recv_json_frame(&mut tls).await?;
+    super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
     super::audit(
         ctx,
         AuditAction::PaneExists,
         host_name,
         session_name,
-        Some(pane_id),
-        pane_id,
+        Some(&pane_id),
+        &pane_id,
         None,
         response["exists"].as_bool().unwrap_or(false),
         0,

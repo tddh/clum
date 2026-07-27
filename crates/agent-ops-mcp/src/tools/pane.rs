@@ -11,7 +11,7 @@ pub(crate) async fn send_keys(ctx: &ToolContext, args: Value) -> Result<Value> {
     let session_name = args["session_name"]
         .as_str()
         .context("missing 'session_name'")?;
-    let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
+    let pane_id_arg = args["pane_id"].as_str();
     let raw_keys = args["keys"].as_str().context("missing 'keys'")?;
     let keys = unescape_keys(raw_keys);
     let host = ctx
@@ -21,15 +21,18 @@ pub(crate) async fn send_keys(ctx: &ToolContext, args: Value) -> Result<Value> {
     let mut tls =
         connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
             .await?;
+    let (pane_id, auto_resolved) =
+        super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
 
     send_json_frame(&mut tls, &json!({ "type": "send_keys", "session_name": session_name, "pane_id": pane_id, "keys": keys })).await?;
-    let response = recv_json_frame(&mut tls).await?;
+    let mut response = recv_json_frame(&mut tls).await?;
+    super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
     super::audit(
         ctx,
         AuditAction::SendKeys,
         host_name,
         session_name,
-        Some(pane_id),
+        Some(&pane_id),
         &keys,
         None,
         response["ok"].as_bool().unwrap_or(false),
@@ -45,7 +48,7 @@ pub(crate) async fn capture_pane(ctx: &ToolContext, args: Value) -> Result<Value
     let session_name = args["session_name"]
         .as_str()
         .context("missing 'session_name'")?;
-    let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
+    let pane_id_arg = args["pane_id"].as_str();
     let max_lines = args["max_lines"]
         .as_u64()
         .map(|v| v as usize)
@@ -57,6 +60,8 @@ pub(crate) async fn capture_pane(ctx: &ToolContext, args: Value) -> Result<Value
     let mut tls =
         connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
             .await?;
+    let (pane_id, auto_resolved) =
+        super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
 
     let mut request = json!({
         "type": "capture_pane",
@@ -87,17 +92,18 @@ pub(crate) async fn capture_pane(ctx: &ToolContext, args: Value) -> Result<Value
     }
 
     send_json_frame(&mut tls, &request).await?;
-    let response = recv_json_frame(&mut tls).await?;
+    let mut response = recv_json_frame(&mut tls).await?;
     let num_lines = response["text"]
         .as_str()
         .map(|s| s.lines().count())
         .unwrap_or(0);
+    super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
     super::audit(
         ctx,
         AuditAction::CapturePane,
         host_name,
         session_name,
-        Some(pane_id),
+        Some(&pane_id),
         &format!("{} lines", num_lines),
         None,
         true,
@@ -113,7 +119,7 @@ pub(crate) async fn resize_pane(ctx: &ToolContext, args: Value) -> Result<Value>
     let session_name = args["session_name"]
         .as_str()
         .context("missing 'session_name'")?;
-    let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
+    let pane_id_arg = args["pane_id"].as_str();
     let cols = args["cols"].as_u64().unwrap_or(80);
     let rows = args["rows"].as_u64().unwrap_or(24);
     let host = ctx
@@ -123,14 +129,17 @@ pub(crate) async fn resize_pane(ctx: &ToolContext, args: Value) -> Result<Value>
     let mut tls =
         connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
             .await?;
+    let (pane_id, auto_resolved) =
+        super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
     send_json_frame(&mut tls, &json!({ "type": "resize_pane", "session_name": session_name, "pane_id": pane_id, "cols": cols, "rows": rows })).await?;
-    let response = recv_json_frame(&mut tls).await?;
+    let mut response = recv_json_frame(&mut tls).await?;
+    super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
     super::audit(
         ctx,
         AuditAction::ResizePane,
         host_name,
         session_name,
-        Some(pane_id),
+        Some(&pane_id),
         &format!("{}x{}", cols, rows),
         None,
         response["ok"].as_bool().unwrap_or(false),
@@ -146,7 +155,7 @@ pub(crate) async fn send_text(ctx: &ToolContext, args: Value) -> Result<Value> {
     let session_name = args["session_name"]
         .as_str()
         .context("missing 'session_name'")?;
-    let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
+    let pane_id_arg = args["pane_id"].as_str();
     let text = args["text"].as_str().context("missing 'text'")?;
     let host = ctx
         .router
@@ -155,14 +164,17 @@ pub(crate) async fn send_text(ctx: &ToolContext, args: Value) -> Result<Value> {
     let mut tls =
         connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
             .await?;
+    let (pane_id, auto_resolved) =
+        super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
     send_json_frame(&mut tls, &json!({ "type": "send_text", "session_name": session_name, "pane_id": pane_id, "text": text })).await?;
-    let response = recv_json_frame(&mut tls).await?;
+    let mut response = recv_json_frame(&mut tls).await?;
+    super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
     super::audit(
         ctx,
         AuditAction::SendText,
         host_name,
         session_name,
-        Some(pane_id),
+        Some(&pane_id),
         text,
         None,
         response["ok"].as_bool().unwrap_or(false),
@@ -178,7 +190,7 @@ pub(crate) async fn set_pane_title(ctx: &ToolContext, args: Value) -> Result<Val
     let session_name = args["session_name"]
         .as_str()
         .context("missing 'session_name'")?;
-    let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
+    let pane_id_arg = args["pane_id"].as_str();
     let title = args["title"].as_str().context("missing 'title'")?;
     let host = ctx
         .router
@@ -187,14 +199,17 @@ pub(crate) async fn set_pane_title(ctx: &ToolContext, args: Value) -> Result<Val
     let mut tls =
         connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
             .await?;
+    let (pane_id, auto_resolved) =
+        super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
     send_json_frame(&mut tls, &json!({ "type": "set_pane_title", "session_name": session_name, "pane_id": pane_id, "title": title })).await?;
-    let response = recv_json_frame(&mut tls).await?;
+    let mut response = recv_json_frame(&mut tls).await?;
+    super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
     super::audit(
         ctx,
         AuditAction::SetPaneTitle,
         host_name,
         session_name,
-        Some(pane_id),
+        Some(&pane_id),
         title,
         None,
         response["ok"].as_bool().unwrap_or(false),
@@ -210,7 +225,7 @@ pub(crate) async fn find_pane_text(ctx: &ToolContext, args: Value) -> Result<Val
     let session_name = args["session_name"]
         .as_str()
         .context("missing 'session_name'")?;
-    let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
+    let pane_id_arg = args["pane_id"].as_str();
     let pattern = args["pattern"].as_str().context("missing 'pattern'")?;
     let host = ctx
         .router
@@ -219,14 +234,17 @@ pub(crate) async fn find_pane_text(ctx: &ToolContext, args: Value) -> Result<Val
     let mut tls =
         connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
             .await?;
+    let (pane_id, auto_resolved) =
+        super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
     send_json_frame(&mut tls, &json!({ "type": "find_pane_text", "session_name": session_name, "pane_id": pane_id, "pattern": pattern })).await?;
-    let response = recv_json_frame(&mut tls).await?;
+    let mut response = recv_json_frame(&mut tls).await?;
+    super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
     super::audit(
         ctx,
         AuditAction::FindPaneText,
         host_name,
         session_name,
-        Some(pane_id),
+        Some(&pane_id),
         pattern,
         None,
         response["found"].as_bool().unwrap_or(false),
@@ -242,7 +260,7 @@ pub(crate) async fn split_pane(ctx: &ToolContext, args: Value) -> Result<Value> 
     let session_name = args["session_name"]
         .as_str()
         .context("missing 'session_name'")?;
-    let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
+    let pane_id_arg = args["pane_id"].as_str();
     let direction = args["direction"].as_str().unwrap_or("horizontal");
     let host = ctx
         .router
@@ -251,14 +269,17 @@ pub(crate) async fn split_pane(ctx: &ToolContext, args: Value) -> Result<Value> 
     let mut tls =
         connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
             .await?;
+    let (pane_id, auto_resolved) =
+        super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
     send_json_frame(&mut tls, &json!({ "type": "split_pane", "session_name": session_name, "pane_id": pane_id, "direction": direction })).await?;
-    let response = recv_json_frame(&mut tls).await?;
+    let mut response = recv_json_frame(&mut tls).await?;
+    super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
     super::audit(
         ctx,
         AuditAction::SplitWindow,
         host_name,
         session_name,
-        Some(pane_id),
+        Some(&pane_id),
         direction,
         None,
         response["ok"].as_bool().unwrap_or(false),
@@ -309,7 +330,7 @@ pub(crate) async fn clear_history(ctx: &ToolContext, args: Value) -> Result<Valu
     let session_name = args["session_name"]
         .as_str()
         .context("missing 'session_name'")?;
-    let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
+    let pane_id_arg = args["pane_id"].as_str();
     let host = ctx
         .router
         .get(host_name)
@@ -317,18 +338,21 @@ pub(crate) async fn clear_history(ctx: &ToolContext, args: Value) -> Result<Valu
     let mut tls =
         connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
             .await?;
+    let (pane_id, auto_resolved) =
+        super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
     send_json_frame(
         &mut tls,
         &json!({ "type": "clear_history", "session_name": session_name, "pane_id": pane_id }),
     )
     .await?;
-    let response = recv_json_frame(&mut tls).await?;
+    let mut response = recv_json_frame(&mut tls).await?;
+    super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
     super::audit(
         ctx,
         AuditAction::ClearHistory,
         host_name,
         session_name,
-        Some(pane_id),
+        Some(&pane_id),
         "",
         None,
         response["ok"].as_bool().unwrap_or(false),
@@ -344,7 +368,7 @@ pub(crate) async fn split_pane_with(ctx: &ToolContext, args: Value) -> Result<Va
     let session_name = args["session_name"]
         .as_str()
         .context("missing 'session_name'")?;
-    let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
+    let pane_id_arg = args["pane_id"].as_str();
     let direction = args["direction"].as_str().context("missing 'direction'")?;
     let command = args["command"].as_str().context("missing 'command'")?;
     let cmd_args = args["args"].as_array().cloned().unwrap_or_default();
@@ -356,6 +380,8 @@ pub(crate) async fn split_pane_with(ctx: &ToolContext, args: Value) -> Result<Va
     let mut tls =
         connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
             .await?;
+    let (pane_id, auto_resolved) =
+        super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
 
     let mut request = json!({
         "type": "split_pane_with",
@@ -380,13 +406,14 @@ pub(crate) async fn split_pane_with(ctx: &ToolContext, args: Value) -> Result<Va
     }
 
     send_json_frame(&mut tls, &request).await?;
-    let response = recv_json_frame(&mut tls).await?;
+    let mut response = recv_json_frame(&mut tls).await?;
+    super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
     super::audit(
         ctx,
         AuditAction::SplitPaneWith,
         host_name,
         session_name,
-        Some(pane_id),
+        Some(&pane_id),
         command,
         None,
         response["ok"].as_bool().unwrap_or(false),
@@ -402,7 +429,7 @@ pub(crate) async fn get_pane_title(ctx: &ToolContext, args: Value) -> Result<Val
     let session_name = args["session_name"]
         .as_str()
         .context("missing 'session_name'")?;
-    let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
+    let pane_id_arg = args["pane_id"].as_str();
     let host = ctx
         .router
         .get(host_name)
@@ -410,6 +437,8 @@ pub(crate) async fn get_pane_title(ctx: &ToolContext, args: Value) -> Result<Val
     let mut tls =
         connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
             .await?;
+    let (pane_id, auto_resolved) =
+        super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
 
     send_json_frame(
         &mut tls,
@@ -420,13 +449,14 @@ pub(crate) async fn get_pane_title(ctx: &ToolContext, args: Value) -> Result<Val
         }),
     )
     .await?;
-    let response = recv_json_frame(&mut tls).await?;
+    let mut response = recv_json_frame(&mut tls).await?;
+    super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
     super::audit(
         ctx,
         AuditAction::GetPaneTitle,
         host_name,
         session_name,
-        Some(pane_id),
+        Some(&pane_id),
         "",
         None,
         response["ok"].as_bool().unwrap_or(false),
@@ -615,7 +645,7 @@ pub(crate) async fn capture_region(ctx: &ToolContext, args: Value) -> Result<Val
     let session_name = args["session_name"]
         .as_str()
         .context("missing 'session_name'")?;
-    let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
+    let pane_id_arg = args["pane_id"].as_str();
     let styled = args["styled"].as_bool().unwrap_or(false);
     let host = ctx
         .router
@@ -624,6 +654,8 @@ pub(crate) async fn capture_region(ctx: &ToolContext, args: Value) -> Result<Val
     let mut tls =
         connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
             .await?;
+    let (pane_id, auto_resolved) =
+        super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
 
     let mut request = json!({
         "type": "capture_region",
@@ -645,13 +677,14 @@ pub(crate) async fn capture_region(ctx: &ToolContext, args: Value) -> Result<Val
     }
 
     send_json_frame(&mut tls, &request).await?;
-    let response = recv_json_frame(&mut tls).await?;
+    let mut response = recv_json_frame(&mut tls).await?;
+    super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
     super::audit(
         ctx,
         AuditAction::CaptureRegion,
         host_name,
         session_name,
-        Some(pane_id),
+        Some(&pane_id),
         "",
         None,
         response["ok"].as_bool().unwrap_or(false),

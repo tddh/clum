@@ -6,7 +6,7 @@
 
 - `host` — 主机名，对应 `config/hosts.yaml` 中的 `name` 字段
 - `session_name` — 会话名（如 `s1`、`agent`）
-- `pane_id` — 窗格 ID（如 `%0`、`%4`）
+- `pane_id` — 窗格 ID（如 `%0`、`%4`）。大多数工具中可选，省略时自动探测 window 0 中编号最小的 pane。`close_pane`、`paste_buffer`、`respawn_pane` 必须显式指定。
 - `window_index` — 窗口索引，从 0 开始
 - `timeout_ms` — 超时毫秒数，默认 30000（`exec` / `batch_exec` 为 600000）
 - 返回值统一为 JSON：`{"ok": true/false, ...}`
@@ -150,7 +150,7 @@
 |------|------|:---:|
 | `host` | string | ✅ |
 | `session_name` | string | ✅ |
-| `pane_id` | string | ✅ |
+| `pane_id` | string | | 可选，省略时自动探测 |
 | `keys` | string | ✅ |
 
 ### `send_text`
@@ -161,7 +161,7 @@
 |------|------|:---:|
 | `host` | string | ✅ |
 | `session_name` | string | ✅ |
-| `pane_id` | string | ✅ |
+| `pane_id` | string | | 可选，省略时自动探测 |
 | `text` | string | ✅ |
 
 ---
@@ -176,7 +176,7 @@
 |------|------|:---:|------|
 | `host` | string | ✅ | |
 | `session_name` | string | ✅ | |
-| `pane_id` | string | ✅ | |
+| `pane_id` | string | | 可选，省略时自动探测 |
 | `max_lines` | integer | | 默认 200，0=不限制 |
 | `ansi` | boolean | | 保留 ANSI 转义码（默认 false），true 时 text 为 base64 |
 | `start_line` | integer | | 起始行（负数 = 从末尾算），覆盖 max_lines |
@@ -198,7 +198,7 @@
 |------|------|:---:|------|
 | `host` | string | ✅ | |
 | `session_name` | string | ✅ | |
-| `pane_id` | string | ✅ | |
+| `pane_id` | string | | 可选，省略时自动探测 |
 | `text` | string | ✅ | 等待出现的文本 |
 | `timeout_ms` | number | | 等待超时毫秒数，默认 30000 |
 
@@ -214,7 +214,7 @@
 |------|------|:---:|
 | `host` | string | ✅ |
 | `session_name` | string | ✅ |
-| `pane_id` | string | ✅ |
+| `pane_id` | string | | 可选，省略时自动探测 |
 | `timeout_ms` | number | ❌ (默认 10000) |
 
 **返回** `{"text": "新增输出内容..."}` 或 `{"text": ""}`（超时无数据或流断开）
@@ -227,7 +227,7 @@
 |------|------|:---:|
 | `host` | string | ✅ |
 | `session_name` | string | ✅ |
-| `pane_id` | string | ✅ |
+| `pane_id` | string | | 可选，省略时自动探测 |
 | `pattern` | string | ✅ |
 
 **返回** `{"ok": true, "found": true, "match": {"start_row": 0, "start_col": 0, "end_row": 0, "end_col": 4, "text": "root"}}`
@@ -242,7 +242,7 @@
 |------|------|:---:|
 | `host` | string | ✅ |
 | `session_name` | string | ✅ |
-| `pane_id` | string | ✅ |
+| `pane_id` | string | | 可选，省略时自动探测 |
 | `pattern` | string | ✅ |
 
 **返回** `{"ok": true, "matches": [{"start_row": 5, "start_col": 0, "end_row": 5, "end_col": 5, "text": "ERROR"}], "count": 2}`
@@ -257,7 +257,7 @@
 |------|------|:---:|------|
 | `host` | string | ✅ | |
 | `session_name` | string | ✅ | |
-| `pane_id` | string | ✅ | |
+| `pane_id` | string | | 可选，省略时自动探测 |
 | `bytes` | string | ✅ | base64 编码的目标字节串 |
 | `only_new` | boolean | | 仅匹配新数据（跳过历史），默认 false |
 | `timeout_ms` | number | | 默认 30000（⚠️ 当前 bridge 侧未强制，实际为无限等待）|
@@ -309,7 +309,7 @@
 |------|------|:---:|
 | `host` | string | ✅ |
 | `session_name` | string | ✅ |
-| `pane_id` | string | ✅ |
+| `pane_id` | string | | 可选，省略时自动探测 |
 
 **返回** `{"ok": true, "pane_id": "%0", "title": "nginx-log"}` — 无标题时 `"title": null`
 
@@ -343,7 +343,7 @@
 |------|------|:---:|------|
 | `host` | string | ✅ | |
 | `session_name` | string | ✅ | |
-| `pane_id` | string | ✅ | |
+| `pane_id` | string | | 可选，省略时自动探测 |
 | `row` | integer | | 起始行（0-based） |
 | `col` | integer | | 起始列（0-based） |
 | `rows` | integer | | 高度（行数） |
@@ -368,7 +368,7 @@
 |------|------|:---:|------|
 | `host` | string | ✅ | 主机名称 |
 | `session_name` | string | ✅ | 会话名称 |
-| `pane_id` | string | ✅ | 窗格 ID，如 `%4` |
+| `pane_id` | string | | 可选，省略时自动探测 |
 | `command` | string | ✅ | shell 命令 |
 | `timeout_ms` | number | | 兜底超时毫秒数，默认 600000（10 分钟）。正常命令（含编译、apt/yum 安装、docker pull）无需设置——等待命令执行完毕是默认行为 |
 | `max_lines` | integer | | 保留输出的最后 N 行（默认 200，0=不限制）。完整输出始终从 scrollback 捕获，此参数仅截断返回量 |
@@ -408,7 +408,7 @@
 |------|------|:---:|------|
 | `host` | string | ✅ | |
 | `session_name` | string | ✅ | |
-| `pane_id` | string | ✅ | |
+| `pane_id` | string | | 可选，省略时自动探测 |
 | `timeout_ms` | number | | 超时毫秒数，默认 30000 |
 
 **返回** `{"ok": true, "exited": true, "exit_code": 0, "signal": null}`
@@ -423,7 +423,7 @@
 |------|------|:---:|------|
 | `host` | string | ✅ | |
 | `session_name` | string | ✅ | |
-| `pane_id` | string | ✅ | |
+| `pane_id` | string | | 可选，省略时自动探测 |
 | `max_bytes` | integer | | 最大收集字节数，默认 1048576 (1MB) |
 | `timeout_ms` | number | | 超时毫秒数，默认 60000 |
 | `starting_at` | string | | `"now"`（默认，从最新输出后开始）或 `"oldest"`（从保留的最旧输出开始） |
@@ -442,7 +442,7 @@
 |------|------|:---:|------|
 | `host` | string | ✅ | |
 | `session_name` | string | ✅ | |
-| `pane_id` | string | ✅ | |
+| `pane_id` | string | | 可选，省略时自动探测 |
 | `stable_ms` | number | | 稳定持续毫秒数，默认 500 |
 | `timeout_ms` | number | | 最大等待毫秒数，默认 30000 |
 
@@ -462,7 +462,7 @@
 |------|------|:---:|------|
 | `host` | string | ✅ | |
 | `session_name` | string | ✅ | |
-| `pane_id` | string | ✅ | 要分割的窗格 ID |
+| `pane_id` | string | | 可选，省略时自动探测 |
 | `direction` | string | | `vertical`（左右分屏）或 `horizontal`（上下分屏），默认 `horizontal` |
 
 **返回** `{"ok": true, "pane_id": "%N"}` — 新 pane 的 ID
@@ -487,7 +487,7 @@
 |------|------|:---:|------|
 | `host` | string | ✅ | |
 | `session_name` | string | ✅ | |
-| `pane_id` | string | ✅ | |
+| `pane_id` | string | | 可选，省略时自动探测 | |
 | `direction` | string | ✅ | `horizontal` 或 `vertical` |
 | `command` | string | ✅ | 在新 pane 中运行的命令 |
 | `args` | string[] | | 命令参数 |
@@ -507,7 +507,7 @@
 |------|------|:---:|:---:|------|
 | `host` | string | ✅ | | |
 | `session_name` | string | ✅ | | |
-| `pane_id` | string | ✅ | | |
+| `pane_id` | string | | 可选，省略时自动探测 |
 | `cols` | integer | | 80 | 列数（宽度） |
 | `rows` | integer | | 24 | 行数（高度） |
 
@@ -519,7 +519,7 @@
 |------|------|:---:|
 | `host` | string | ✅ |
 | `session_name` | string | ✅ |
-| `pane_id` | string | ✅ |
+| `pane_id` | string | | 可选，省略时自动探测 |
 | `title` | string | ✅ |
 
 ### `clear_history`
@@ -530,7 +530,7 @@
 |------|------|:---:|
 | `host` | string | ✅ |
 | `session_name` | string | ✅ |
-| `pane_id` | string | ✅ |
+| `pane_id` | string | | 可选，省略时自动探测 |
 
 ### `close_pane`
 
@@ -653,7 +653,7 @@
 |------|------|:---:|
 | `host` | string | ✅ |
 | `session_name` | string | ✅ |
-| `pane_id` | string | ✅ |
+| `pane_id` | string | | 可选，省略时自动探测 |
 
 **返回** `{"ok": true, "exists": true}`
 
@@ -665,7 +665,7 @@
 |------|------|:---:|
 | `host` | string | ✅ |
 | `session_name` | string | ✅ |
-| `pane_id` | string | ✅ |
+| `pane_id` | string | | 可选，省略时自动探测 |
 
 **返回** `{"ok": true, "info": {"pane_id": "%0", "window_id": "@0", "session_id": "$0", "index": 0, "size_cols": 170, "size_rows": 39, "command": null, "working_directory": "/root", "tags": []}, "terminal_state": "ready", "cursor": {"row": 0, "col": 14, "visible": true}}`
 
@@ -722,7 +722,7 @@
 |------|------|:---:|------|
 | `host` | string | ✅ | |
 | `session_name` | string | ✅ | |
-| `pane_id` | string | ✅ | |
+| `pane_id` | string | | 可选，省略时自动探测 |
 | `command` | string | ✅ | 要执行的命令 |
 | `args` | string[] | | 命令参数 |
 
@@ -736,7 +736,7 @@
 |------|------|:---:|------|
 | `host` | string | ✅ | |
 | `session_name` | string | ✅ | |
-| `pane_id` | string | ✅ | |
+| `pane_id` | string | | 可选，省略时自动探测 |
 | `command` | string | ✅ | 要执行的 shell 命令 |
 
 ### `respawn_pane`

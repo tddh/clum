@@ -46,7 +46,7 @@ pub(crate) async fn spawn_command(ctx: &ToolContext, args: Value) -> Result<Valu
     let session_name = args["session_name"]
         .as_str()
         .context("missing 'session_name'")?;
-    let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
+    let pane_id_arg = args["pane_id"].as_str();
     let command = args["command"].as_str().context("missing 'command'")?;
     let cmd_args = args["args"].as_array().cloned().unwrap_or_default();
     let host = ctx
@@ -56,14 +56,17 @@ pub(crate) async fn spawn_command(ctx: &ToolContext, args: Value) -> Result<Valu
     let mut tls =
         connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
             .await?;
+    let (pane_id, auto_resolved) =
+        super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
     send_json_frame(&mut tls, &json!({ "type": "spawn_command", "session_name": session_name, "pane_id": pane_id, "command": command, "args": cmd_args })).await?;
-    let response = recv_json_frame(&mut tls).await?;
+    let mut response = recv_json_frame(&mut tls).await?;
+    super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
     super::audit(
         ctx,
         AuditAction::SpawnCommand,
         host_name,
         session_name,
-        Some(pane_id),
+        Some(&pane_id),
         command,
         None,
         response["ok"].as_bool().unwrap_or(false),
@@ -79,7 +82,7 @@ pub(crate) async fn shell_command(ctx: &ToolContext, args: Value) -> Result<Valu
     let session_name = args["session_name"]
         .as_str()
         .context("missing 'session_name'")?;
-    let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
+    let pane_id_arg = args["pane_id"].as_str();
     let command = args["command"].as_str().context("missing 'command'")?;
     let host = ctx
         .router
@@ -88,14 +91,17 @@ pub(crate) async fn shell_command(ctx: &ToolContext, args: Value) -> Result<Valu
     let mut tls =
         connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
             .await?;
+    let (pane_id, auto_resolved) =
+        super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
     send_json_frame(&mut tls, &json!({ "type": "shell_command", "session_name": session_name, "pane_id": pane_id, "command": command })).await?;
-    let response = recv_json_frame(&mut tls).await?;
+    let mut response = recv_json_frame(&mut tls).await?;
+    super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
     super::audit(
         ctx,
         AuditAction::ShellCommand,
         host_name,
         session_name,
-        Some(pane_id),
+        Some(&pane_id),
         command,
         None,
         response["ok"].as_bool().unwrap_or(false),
@@ -696,7 +702,7 @@ pub(crate) async fn exec(ctx: &ToolContext, args: Value) -> Result<Value> {
     let session_name = args["session_name"]
         .as_str()
         .context("missing 'session_name'")?;
-    let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
+    let pane_id_arg = args["pane_id"].as_str();
     let command = args["command"].as_str().context("missing 'command'")?;
     let timeout_ms = args["timeout_ms"].as_u64().unwrap_or(600000);
     let max_lines = args["max_lines"]
@@ -712,6 +718,8 @@ pub(crate) async fn exec(ctx: &ToolContext, args: Value) -> Result<Value> {
     let mut tls =
         connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
             .await?;
+    let (pane_id, auto_resolved) =
+        super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
 
     // clear_screen 在 exec_in_session 之前单独处理
     if clear_screen {
@@ -726,12 +734,12 @@ pub(crate) async fn exec(ctx: &ToolContext, args: Value) -> Result<Value> {
         let _ = recv_json_frame(&mut tls).await;
     }
 
-    let result = match exec_send(&mut tls, session_name, pane_id, command, timeout_ms).await {
+    let result = match exec_send(&mut tls, session_name, &pane_id, command, timeout_ms).await {
         SendOutcome::Done(r) => r,
         SendOutcome::Sent(sent) => {
             let deadline = sent.started_at + std::time::Duration::from_millis(timeout_ms);
             'outer: loop {
-                match exec_await_once(&mut tls, session_name, pane_id, &sent, max_lines).await {
+                match exec_await_once(&mut tls, session_name, &pane_id, &sent, max_lines).await {
                     AwaitOutcome::Done(r) => break 'outer r,
                     AwaitOutcome::Lost => {
                         // sentinel 是远端 pane 上的持久状态，断连不影响命令执行；
@@ -778,7 +786,7 @@ pub(crate) async fn exec(ctx: &ToolContext, args: Value) -> Result<Value> {
         AuditAction::Exec,
         host_name,
         session_name,
-        Some(pane_id),
+        Some(&pane_id),
         command,
         Some(&output_summary),
         result.ok,
@@ -806,6 +814,7 @@ pub(crate) async fn exec(ctx: &ToolContext, args: Value) -> Result<Value> {
     if result.refused {
         response["refused"] = json!(true);
     }
+    super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
     Ok(response)
 }
 
@@ -814,7 +823,7 @@ pub(crate) async fn collect_until_exit(ctx: &ToolContext, args: Value) -> Result
     let session_name = args["session_name"]
         .as_str()
         .context("missing 'session_name'")?;
-    let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
+    let pane_id_arg = args["pane_id"].as_str();
     let max_bytes = args["max_bytes"].as_u64().unwrap_or(1048576);
     let timeout_ms = args["timeout_ms"].as_u64().unwrap_or(60000);
     let starting_at = args["starting_at"].as_str().unwrap_or("now");
@@ -825,6 +834,8 @@ pub(crate) async fn collect_until_exit(ctx: &ToolContext, args: Value) -> Result
     let mut tls =
         connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
             .await?;
+    let (pane_id, auto_resolved) =
+        super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
     send_json_frame(
         &mut tls,
         &json!({
@@ -837,13 +848,14 @@ pub(crate) async fn collect_until_exit(ctx: &ToolContext, args: Value) -> Result
         }),
     )
     .await?;
-    let response = recv_json_frame(&mut tls).await?;
+    let mut response = recv_json_frame(&mut tls).await?;
+    super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
     super::audit(
         ctx,
         AuditAction::CollectUntilExit,
         host_name,
         session_name,
-        Some(pane_id),
+        Some(&pane_id),
         "",
         None,
         response["ok"].as_bool().unwrap_or(false),

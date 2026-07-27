@@ -95,7 +95,8 @@ pub async fn run_mcp_stdio_loop(
                     7. On failure (`ok:false`), branch on `error_code` (stable contract) and follow `recovery_hint`; `retryable:false` means never blindly retry (e.g. exec TIMEOUT — the command may still be running remotely).\n\n\
                     ## Basic Workflow\n\
                     `host_list` → `session_attach host=<h> session_name=\"agent-ops\"` (or `session_create`) → `exec`/`send_keys` → `capture_pane`/`wait_for_text`.\n\
-                    - Default pane after session_create: `%0`.\n\
+                    - `pane_id` is optional for most tools. If omitted, the server auto-detects the first pane in window 0. The response includes `resolved_pane_id` and `auto_resolved: true` when auto-detected.\n\
+                    - Destructive tools (`close_pane`, `paste_buffer`, `respawn_pane`) still require explicit `pane_id`.\n\
                     - `exec` supports `clear_screen: true` and `timeout_ms` for long commands.\n\
                     - After closing a pane: `respawn_pane` to restart the shell.\n\
                     - `cmd_escape` for direct rmux CLI access (advanced)."
