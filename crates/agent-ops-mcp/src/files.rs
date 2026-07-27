@@ -11,6 +11,7 @@ use tokio::sync::Semaphore;
 
 const MAX_UPLOAD_CONCURRENCY: usize = 16;
 const MAX_FILE_SIZE: usize = 2 * 1024 * 1024 * 1024; // 2 GB
+const COPY_BUF_SIZE: usize = 1024 * 1024; // 1 MB — 与 bridge CHUNK_SIZE 对齐
 
 const STREAM_UPLOAD: u8 = 0x02;
 const STREAM_DOWNLOAD: u8 = 0x03;
@@ -95,7 +96,7 @@ async fn upload_single(
     send.write_all(&file_size.to_le_bytes()).await?;
 
     let mut file = tokio::fs::File::open(local_path).await?;
-    tokio::io::copy(&mut file, &mut send).await?;
+    copy_with_buf(&mut file, &mut send).await?;
     send.finish()?;
 
     let mut code = [0u8; 1];
@@ -168,7 +169,7 @@ async fn upload_dir(
             send.write_all(&file_size.to_le_bytes()).await?;
 
             let mut file = tokio::fs::File::open(&local).await?;
-            tokio::io::copy(&mut file, &mut send).await?;
+            copy_with_buf(&mut file, &mut send).await?;
             send.finish()?;
 
             let mut code = [0u8; 1];
@@ -360,6 +361,24 @@ async fn read_directory(recv: &mut quinn::RecvStream, local_base: &str) -> Resul
 }
 
 // ─── helper functions ───
+
+async fn copy_with_buf<R, W>(reader: &mut R, writer: &mut W) -> std::io::Result<u64>
+where
+    R: AsyncReadExt + Unpin,
+    W: AsyncWriteExt + Unpin,
+{
+    let mut buf = vec![0u8; COPY_BUF_SIZE];
+    let mut total = 0u64;
+    loop {
+        let n = reader.read(&mut buf).await?;
+        if n == 0 {
+            break;
+        }
+        writer.write_all(&buf[..n]).await?;
+        total += n as u64;
+    }
+    Ok(total)
+}
 
 async fn collect_files(
     base: &Path,

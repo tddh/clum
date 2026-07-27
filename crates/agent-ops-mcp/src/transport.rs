@@ -34,10 +34,11 @@ pub async fn connect_to_bridge_quic(
             .map_err(|e| anyhow::anyhow!("QUIC TLS config error: {e}"))?,
     ));
     let mut transport = quinn::TransportConfig::default();
-    transport.max_idle_timeout(Some(Duration::from_secs(30).try_into()?));
-    // event-driven 等待（wait_for_text/wait_exit/collect_until_exit 等）期间
-    // 连接静默，需 keep-alive 防止 30s idle timeout 断连
-    transport.keep_alive_interval(Some(Duration::from_secs(10)));
+    // 1 小时 idle timeout：大文件传输（数百 MB）期间网络卡顿或磁盘 I/O 阻塞
+    // 不应导致连接断开；event-driven 等待（wait_for_text 等）同理。
+    // keep-alive 每 15s 发一次，确保 NAT/防火墙不回收映射。
+    transport.max_idle_timeout(Some(Duration::from_secs(3600).try_into()?));
+    transport.keep_alive_interval(Some(Duration::from_secs(15)));
     client_config.transport_config(std::sync::Arc::new(transport));
     endpoint.set_default_client_config(client_config);
 
