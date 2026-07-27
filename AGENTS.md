@@ -5,7 +5,7 @@
 **以下规则优先级最高，必须严格遵守：**
 
 1. **默认会话**：所有 agent-ops 操作必须使用 `session_name="agent-ops"`，除非用户明确指定其他会话名
-2. **默认 Pane**：使用 `agent-ops` 会话时，默认使用第一个 pane（通常是 `%0`），通过 `list_window_panes` 确认
+2. **默认 Pane**：`pane_id` 可省略，server 自动选择 window 0 中编号最小的 pane。破坏性工具（`close_pane`、`paste_buffer`、`respawn_pane`）必须显式指定
 3. **禁止随意创建会话**：不要自作主张创建 `test-session`、`debug-session` 等新会话，除非用户明确要求
 4. **先 attach 后 create**：操作前先 `session_attach` 检查会话是否存在，不存在才 `session_create`
 5. **保留会话**：执行完命令后，不要主动清理 session（禁止调用 `kill_session`、`close_window`、`close_pane`），除非用户明确要求"清理"、"关闭"、"销毁"
