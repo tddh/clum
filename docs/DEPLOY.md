@@ -144,6 +144,7 @@ ssh root@<your-bridge-ip> "systemctl status rmux-bridge --no-pager"
 | `--tls-key` | `certs/bridge.key` | TLS 私钥路径 |
 | `--auth-token` | 环境变量 `BRIDGE_AUTH_TOKEN` | 认证令牌 |
 | `--log-level` | `info` | 日志级别：trace/debug/info/warn/error（`RUST_LOG` 环境变量） |
+| `--idle-timeout-secs` | `28800` | 交互式空闲超时（秒），超时后断连并恢复 pane 布局。0=禁用（`IDLE_TIMEOUT_SECS` 环境变量） |
 
 > **QUIC 协议**：所有通信走 QUIC（UDP :9778），内置 TLS 1.3 加密。确保防火墙放行 UDP 9778 端口。
 

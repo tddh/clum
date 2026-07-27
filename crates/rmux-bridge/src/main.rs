@@ -50,6 +50,7 @@ async fn main() -> anyhow::Result<()> {
     let recording_enabled = config.recording_enabled;
     let recording_dir = config.resolve_recording_dir();
     let fsync_interval_secs = config.recording_fsync_interval_secs;
+    let idle_timeout_secs = config.idle_timeout_secs;
     let quic_audit_db = audit_db.clone();
     tokio::spawn(async move {
         let conn_limit = quic_conn_limit_pre;
@@ -158,6 +159,7 @@ async fn main() -> anyhow::Result<()> {
                                     rec_dir,
                                     rec_fsync,
                                     stream_audit_db,
+                                    idle_timeout_secs,
                                 )
                                 .await
                                 {

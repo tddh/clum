@@ -34,6 +34,12 @@ pub struct BridgeConfig {
     #[arg(long, default_value = "256", env = "MAX_CONNECTIONS")]
     pub max_connections: usize,
 
+    /// Interactive session idle timeout in seconds. After this period of
+    /// inactivity on the control stream, the bridge disconnects the client
+    /// and restores pane layout. 0 = disabled. Default: 28800 (8 hours).
+    #[arg(long, default_value = "28800", env = "IDLE_TIMEOUT_SECS")]
+    pub idle_timeout_secs: u64,
+
     /// Log level: trace, debug, info, warn, error.
     #[arg(long, default_value = "info", env = "RUST_LOG")]
     pub log_level: String,

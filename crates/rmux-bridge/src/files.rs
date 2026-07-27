@@ -38,6 +38,7 @@ pub async fn handle_quic_stream(
     recording_dir: std::path::PathBuf,
     fsync_interval_secs: u64,
     audit_db: Arc<BridgeAuditDb>,
+    idle_timeout_secs: u64,
 ) -> anyhow::Result<()> {
     let mut type_buf = [0u8; 1];
     recv.read_exact(&mut type_buf).await?;
@@ -57,6 +58,7 @@ pub async fn handle_quic_stream(
                 protocol_proxy.clone(),
                 session_state.clone(),
                 audit_db,
+                idle_timeout_secs,
             )
             .await
         }

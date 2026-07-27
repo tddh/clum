@@ -8,6 +8,7 @@ use rmux_sdk::TerminalSizeSpec;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::io::unix::AsyncFd;
 use tokio::sync::{Mutex, Notify};
 
@@ -55,6 +56,7 @@ pub async fn handle_interactive_control(
     proxy: Arc<ProtocolProxy>,
     session_state: Arc<Mutex<Option<InteractiveSession>>>,
     audit_db: Arc<BridgeAuditDb>,
+    idle_timeout_secs: u64,
 ) -> Result<()> {
     let msg_type = read_u8(&mut recv).await?;
     if msg_type != 0x01 {
@@ -142,9 +144,25 @@ pub async fn handle_interactive_control(
         .await;
 
     loop {
-        let msg_result = tokio::select! {
-            r = read_u8(&mut recv) => Some(r),
-            _ = exit_notify.notified() => None,
+        let msg_result = if idle_timeout_secs > 0 {
+            tokio::select! {
+                r = read_u8(&mut recv) => Some(r),
+                _ = exit_notify.notified() => None,
+                _ = tokio::time::sleep(Duration::from_secs(idle_timeout_secs)) => {
+                    tracing::warn!(
+                        session = %session_name,
+                        pane = %pane_id,
+                        timeout_secs = idle_timeout_secs,
+                        "idle timeout — disconnecting client"
+                    );
+                    None
+                }
+            }
+        } else {
+            tokio::select! {
+                r = read_u8(&mut recv) => Some(r),
+                _ = exit_notify.notified() => None,
+            }
         };
 
         let msg_type = match msg_result {
@@ -235,7 +253,7 @@ pub async fn handle_interactive_control(
 pub async fn handle_interactive_data(
     mut send: SendStream,
     mut recv: RecvStream,
-    _proxy: Arc<ProtocolProxy>,
+    proxy: Arc<ProtocolProxy>,
     session_state: Arc<Mutex<Option<InteractiveSession>>>,
     recording_enabled: bool,
     recording_dir: PathBuf,
@@ -530,6 +548,37 @@ pub async fn handle_interactive_data(
             }
         } else {
             tracing::warn!("cast recording returned no metadata: {:?}", cast_path);
+        }
+    }
+
+    // ─── Restore pane layout on abnormal disconnect ───
+    // When the client disconnects abnormally (network drop, process killed),
+    // the pane may have been left at the client's terminal size. Restore with
+    // even-vertical layout so other panes are not permanently squashed.
+    if copy_result.is_err() {
+        let state = session_state.lock().await;
+        let sn = state.as_ref().map(|s| s.session_name.clone());
+        let pid = state.as_ref().map(|s| s.pane_id.clone());
+        drop(state);
+        if let Some(ref sn) = sn {
+            let result = proxy.handle_select_layout(sn, 0, "even-vertical").await;
+            let ok = result
+                .get("ok")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            if ok {
+                tracing::info!(
+                    session = %sn,
+                    pane = %pid.as_deref().unwrap_or("?"),
+                    "layout restored after abnormal disconnect"
+                );
+            } else {
+                tracing::warn!(
+                    session = %sn,
+                    result = %result,
+                    "failed to restore layout after abnormal disconnect"
+                );
+            }
         }
     }
 
