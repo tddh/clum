@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **pane_id 自动探测**：23 个 MCP 工具的 `pane_id` 参数改为可选。省略时，server 复用当前 QUIC 连接查询 `list_window_panes(window 0)`，自动选择编号最小的 pane。响应中返回 `resolved_pane_id` 字段（自动探测时附 `auto_resolved: true`），消除 AI 客户端每次操作前的 `list_window_panes` 前置调用。破坏性工具（`close_pane`、`paste_buffer`、`respawn_pane`）仍要求显式指定 `pane_id`。
+
 ## [0.6.2] — 2026-07-27
 
 ### Added
