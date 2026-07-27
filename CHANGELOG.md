@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- **依赖更新**：rmux-sdk 0.9.0→0.9.1（安全加固 + pane 滚动条 + copy-mode 行号，wire v5 不变，daemon 0.9.0 兼容）、tokio 1.52→1.53、clap 4.6.1→4.6.4、rustls 0.23.41→42、futures 0.3.32→33 等 ~70 个传递依赖。
+
 ## [0.6.2] — 2026-07-27
 
 ### Added
