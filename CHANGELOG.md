@@ -1,20 +1,16 @@
 # Changelog
 
-## [Unreleased]
-
-### Added
-- **pane_id 自动探测**：23 个 MCP 工具的 `pane_id` 参数改为可选。省略时，server 复用当前 QUIC 连接查询 `list_window_panes(window 0)`，自动选择编号最小的 pane。响应中返回 `resolved_pane_id` 字段（自动探测时附 `auto_resolved: true`），消除 AI 客户端每次操作前的 `list_window_panes` 前置调用。破坏性工具（`close_pane`、`paste_buffer`、`respawn_pane`）仍要求显式指定 `pane_id`。
-
 ## [0.6.2] — 2026-07-27
 
 ### Added
+- **pane_id 自动探测**：23 个 MCP 工具的 `pane_id` 参数改为可选。省略时，server 复用当前 QUIC 连接查询 `list_window_panes(window 0)`，自动选择编号最小的 pane。响应中返回 `resolved_pane_id` 字段（自动探测时附 `auto_resolved: true`），消除 AI 客户端每次操作前的 `list_window_panes` 前置调用。破坏性工具（`close_pane`、`paste_buffer`、`respawn_pane`）仍要求显式指定 `pane_id`。
 - **`--idle-timeout-secs` CLI 参数**：交互式控制流空闲超时（秒），超时后断开客户端并恢复 pane 布局。默认 28800（8 小时），设为 0 禁用。可通过环境变量 `IDLE_TIMEOUT_SECS` 覆盖。
-
 ### Fixed
 - **CLI 异常断连导致 pane 布局损坏**：当客户端异常断开（网络中断、进程被 kill 等），attach 时设下的 pane 尺寸未被恢复，导致同窗口其他 pane 被挤压至 1 行高度。修复：bridge 检测 QUIC→PTY 数据流异常终止后，自动调用 `select-layout even-vertical` 恢复窗口布局。
 
 ### Changed
 - **交互式控制流新增 idle 超时检测**：8 小时内无操作自动断开连接，避免僵死连接长期占用资源。
+- **serde_yaml → serde_yml**：`serde_yaml` 上游已废弃，迁移至 `serde_yml` crate，无功能变更。
 
 ## [0.6.1] — 2026-07-24
 
