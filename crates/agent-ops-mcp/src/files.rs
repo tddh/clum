@@ -44,6 +44,7 @@ pub async fn upload_file(
     ca_cert_path: &str,
     overwrite: OverwriteMode,
     exclude: &[String],
+    progress: &mut crate::progress::ProgressReporter,
 ) -> Result<Vec<FileResult>> {
     let meta = tokio::fs::metadata(local_path)
         .await
@@ -57,6 +58,7 @@ pub async fn upload_file(
             ca_cert_path,
             overwrite,
             exclude,
+            progress,
         )
         .await
     } else {
@@ -64,7 +66,8 @@ pub async fn upload_file(
         if size > MAX_FILE_SIZE {
             bail!("file too large: {} bytes (max {})", size, MAX_FILE_SIZE);
         }
-        let result = upload_single(host, local_path, remote_path, ca_cert_path, overwrite).await?;
+        let result =
+            upload_single(host, local_path, remote_path, ca_cert_path, overwrite, progress).await?;
         Ok(vec![result])
     }
 }
@@ -75,6 +78,7 @@ async fn upload_single(
     remote_path: &str,
     ca_cert_path: &str,
     overwrite: OverwriteMode,
+    progress: &mut crate::progress::ProgressReporter,
 ) -> Result<FileResult> {
     let meta = tokio::fs::metadata(local_path).await?;
     let file_size = meta.len();
@@ -96,7 +100,7 @@ async fn upload_single(
     send.write_all(&file_size.to_le_bytes()).await?;
 
     let mut file = tokio::fs::File::open(local_path).await?;
-    copy_with_buf(&mut file, &mut send).await?;
+    copy_with_buf(&mut file, &mut send, file_size, progress).await?;
     send.finish()?;
 
     let mut code = [0u8; 1];
@@ -132,6 +136,7 @@ async fn upload_dir(
     ca_cert_path: &str,
     overwrite: OverwriteMode,
     exclude: &[String],
+    _progress: &mut crate::progress::ProgressReporter,
 ) -> Result<Vec<FileResult>> {
     let base = Path::new(local_path).to_path_buf();
     let mut files = Vec::new();
@@ -169,7 +174,7 @@ async fn upload_dir(
             send.write_all(&file_size.to_le_bytes()).await?;
 
             let mut file = tokio::fs::File::open(&local).await?;
-            copy_with_buf(&mut file, &mut send).await?;
+            copy_with_buf(&mut file, &mut send, file_size, &mut crate::progress::ProgressReporter::noop()).await?;
             send.finish()?;
 
             let mut code = [0u8; 1];
@@ -223,6 +228,7 @@ pub async fn download_file(
     remote_path: &str,
     local_path: &str,
     ca_cert_path: &str,
+    progress: &mut crate::progress::ProgressReporter,
 ) -> Result<Vec<FileResult>> {
     let (conn, _auth_send, _auth_recv) = crate::transport::connect_to_bridge_quic(
         &host.bridge_addr,
@@ -244,11 +250,11 @@ pub async fn download_file(
 
     match code[0] {
         0x00 => {
-            let result = read_single_file(&mut recv, local_path).await?;
+            let result = read_single_file(&mut recv, local_path, progress).await?;
             Ok(vec![result])
         }
         0x04 => {
-            let results = read_directory(&mut recv, local_path).await?;
+            let results = read_directory(&mut recv, local_path, progress).await?;
             Ok(results)
         }
         0x02 => {
@@ -263,7 +269,11 @@ pub async fn download_file(
     }
 }
 
-async fn read_single_file(recv: &mut quinn::RecvStream, local_path: &str) -> Result<FileResult> {
+async fn read_single_file(
+    recv: &mut quinn::RecvStream,
+    local_path: &str,
+    progress: &mut crate::progress::ProgressReporter,
+) -> Result<FileResult> {
     let mut size_buf = [0u8; 8];
     recv.read_exact(&mut size_buf).await?;
     let file_size = u64::from_le_bytes(size_buf) as usize;
@@ -285,8 +295,30 @@ async fn read_single_file(recv: &mut quinn::RecvStream, local_path: &str) -> Res
     let mut file = tokio::fs::File::create(local_path)
         .await
         .with_context(|| format!("failed to create: {}", local_path))?;
-    tokio::io::copy(&mut recv.take(file_size as u64), &mut file).await?;
+    let mut buf = vec![0u8; COPY_BUF_SIZE];
+    let mut received = 0u64;
+    let mut remaining = file_size as u64;
+    while remaining > 0 {
+        let to_read = std::cmp::min(buf.len() as u64, remaining) as usize;
+        let n = recv.read(&mut buf[..to_read]).await?.unwrap_or(0);
+        if n == 0 {
+            break;
+        }
+        file.write_all(&buf[..n]).await?;
+        received += n as u64;
+        remaining -= n as u64;
+        progress.report(received, file_size as u64, "downloading").await;
+    }
+    progress.report(file_size as u64, file_size as u64, "done").await;
     file.flush().await?;
+
+    if received != file_size as u64 {
+        bail!(
+            "truncated transfer: expected {} bytes, got {}",
+            file_size,
+            received
+        );
+    }
 
     Ok(FileResult {
         path: local_path.to_string(),
@@ -297,7 +329,11 @@ async fn read_single_file(recv: &mut quinn::RecvStream, local_path: &str) -> Res
     })
 }
 
-async fn read_directory(recv: &mut quinn::RecvStream, local_base: &str) -> Result<Vec<FileResult>> {
+async fn read_directory(
+    recv: &mut quinn::RecvStream,
+    local_base: &str,
+    progress: &mut crate::progress::ProgressReporter,
+) -> Result<Vec<FileResult>> {
     let mut count_buf = [0u8; 4];
     recv.read_exact(&mut count_buf).await?;
     let file_count = u32::from_le_bytes(count_buf) as usize;
@@ -307,7 +343,7 @@ async fn read_directory(recv: &mut quinn::RecvStream, local_base: &str) -> Resul
         .with_context(|| format!("failed to create directory: {}", local_base))?;
 
     let mut results = Vec::with_capacity(file_count);
-    for _ in 0..file_count {
+    for i in 0..file_count {
         let mut path_len_buf = [0u8; 2];
         recv.read_exact(&mut path_len_buf).await?;
         let path_len = u16::from_le_bytes(path_len_buf) as usize;
@@ -345,8 +381,19 @@ async fn read_directory(recv: &mut quinn::RecvStream, local_base: &str) -> Resul
         let mut file = tokio::fs::File::create(&local_path)
             .await
             .with_context(|| format!("failed to create: {}", local_path))?;
-        tokio::io::copy(&mut recv.take(file_size as u64), &mut file).await?;
+        let mut buf = vec![0u8; COPY_BUF_SIZE];
+        let mut remaining = file_size as u64;
+        while remaining > 0 {
+            let to_read = std::cmp::min(buf.len() as u64, remaining) as usize;
+            let n = recv.read(&mut buf[..to_read]).await?.unwrap_or(0);
+            if n == 0 {
+                break;
+            }
+            file.write_all(&buf[..n]).await?;
+            remaining -= n as u64;
+        }
         file.flush().await?;
+        progress.report((i + 1) as u64, file_count as u64, "downloading dir").await;
 
         results.push(FileResult {
             path: rel_path,
@@ -362,7 +409,12 @@ async fn read_directory(recv: &mut quinn::RecvStream, local_base: &str) -> Resul
 
 // ─── helper functions ───
 
-async fn copy_with_buf<R, W>(reader: &mut R, writer: &mut W) -> std::io::Result<u64>
+async fn copy_with_buf<R, W>(
+    reader: &mut R,
+    writer: &mut W,
+    total_size: u64,
+    progress: &mut crate::progress::ProgressReporter,
+) -> std::io::Result<u64>
 where
     R: AsyncReadExt + Unpin,
     W: AsyncWriteExt + Unpin,
@@ -376,7 +428,9 @@ where
         }
         writer.write_all(&buf[..n]).await?;
         total += n as u64;
+        progress.report(total, total_size, "transferring").await;
     }
+    progress.report(total_size, total_size, "done").await;
     Ok(total)
 }
 

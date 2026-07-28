@@ -64,3 +64,4 @@ deploy/rmux-daemon
 dist/
 release-pkg/
 docs/superpowers/
+deploy/*.tar.gz

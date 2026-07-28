@@ -36,7 +36,12 @@ pub struct ToolContext {
     pub recordings_dir: PathBuf,
 }
 
-pub async fn execute_tool(ctx: &ToolContext, tool_name: &str, args: Value) -> Result<Value> {
+pub async fn execute_tool(
+    ctx: &ToolContext,
+    tool_name: &str,
+    args: Value,
+    progress: &mut crate::progress::ProgressReporter,
+) -> Result<Value> {
     match tool_name {
         "agent_ops_usage_rules" => Ok(json!({})),
         "host_list" => discovery::host_list(ctx).await,
@@ -56,8 +61,8 @@ pub async fn execute_tool(ctx: &ToolContext, tool_name: &str, args: Value) -> Re
         "cmd_escape" => exec::cmd_escape(ctx, args).await,
         "split_window" => window::split_window(ctx, args).await,
         "stream_pane" => window::stream_pane(ctx, args).await,
-        "file_upload" => file::file_upload(ctx, args).await,
-        "file_download" => file::file_download(ctx, args).await,
+        "file_upload" => file::file_upload(ctx, args, progress).await,
+        "file_download" => file::file_download(ctx, args, progress).await,
         "exec" => exec::exec(ctx, args).await,
         "close_pane" => pane::close_pane(ctx, args).await,
         "split_pane" => pane::split_pane(ctx, args).await,

@@ -4,7 +4,11 @@ use serde_json::{json, Value};
 use super::ToolContext;
 use agent_ops_core::types::AuditAction;
 
-pub(crate) async fn file_upload(ctx: &ToolContext, args: Value) -> Result<Value> {
+pub(crate) async fn file_upload(
+    ctx: &ToolContext,
+    args: Value,
+    progress: &mut crate::progress::ProgressReporter,
+) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
     let local_path = args["local_path"]
         .as_str()
@@ -39,6 +43,7 @@ pub(crate) async fn file_upload(ctx: &ToolContext, args: Value) -> Result<Value>
         &ctx.ca_cert_path,
         overwrite,
         &exclude,
+        progress,
     )
     .await;
     super::audit(
@@ -68,7 +73,11 @@ pub(crate) async fn file_upload(ctx: &ToolContext, args: Value) -> Result<Value>
     }
 }
 
-pub(crate) async fn file_download(ctx: &ToolContext, args: Value) -> Result<Value> {
+pub(crate) async fn file_download(
+    ctx: &ToolContext,
+    args: Value,
+    progress: &mut crate::progress::ProgressReporter,
+) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
     let remote_path = args["remote_path"]
         .as_str()
@@ -82,7 +91,8 @@ pub(crate) async fn file_download(ctx: &ToolContext, args: Value) -> Result<Valu
         .with_context(|| format!("host not found: {}", host_name))?;
 
     let result =
-        crate::files::download_file(&host, remote_path, local_path, &ctx.ca_cert_path).await;
+        crate::files::download_file(&host, remote_path, local_path, &ctx.ca_cert_path, progress)
+            .await;
     super::audit(
         ctx,
         AuditAction::FileDownload,

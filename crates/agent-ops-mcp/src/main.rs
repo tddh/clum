@@ -4,6 +4,7 @@ mod audit_cli;
 mod error;
 mod files;
 mod handler;
+mod progress;
 mod recording_sync;
 mod router;
 mod schema;

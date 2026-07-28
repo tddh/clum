@@ -1,14 +1,16 @@
+use crate::progress::ProgressReporter;
 use crate::tools;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use tokio::io::{stdin, stdout, AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::sync::Mutex;
 
 pub async fn run_mcp_stdio_loop(
     ctx: Arc<tools::ToolContext>,
     tools_def: Value,
 ) -> anyhow::Result<()> {
     let stdin = BufReader::new(stdin());
-    let mut stdout = stdout();
+    let stdout = Arc::new(Mutex::new(stdout()));
     let mut lines = stdin.lines();
 
     while let Some(line) = lines.next_line().await? {
@@ -20,9 +22,10 @@ pub async fn run_mcp_stdio_loop(
             Ok(v) => v,
             Err(e) => {
                 let err = json_rpc_error(None, -32700, &format!("Parse error: {e}"));
-                stdout.write_all(err.to_string().as_bytes()).await?;
-                stdout.write_all(b"\n").await?;
-                stdout.flush().await?;
+                let mut w = stdout.lock().await;
+                w.write_all(err.to_string().as_bytes()).await?;
+                w.write_all(b"\n").await?;
+                w.flush().await?;
                 continue;
             }
         };
@@ -35,7 +38,12 @@ pub async fn run_mcp_stdio_loop(
             "tools/call" => {
                 let tool_name = request["params"]["name"].as_str().unwrap_or("");
                 let args = request["params"]["arguments"].clone();
-                match tools::execute_tool(&ctx, tool_name, args).await {
+                let meta_token = &request["params"]["_meta"]["progressToken"];
+                let progress_token =
+                    if meta_token.is_null() { None } else { Some(meta_token.clone()) };
+                let mut reporter =
+                    ProgressReporter::new(progress_token, Arc::clone(&stdout));
+                match tools::execute_tool(&ctx, tool_name, args, &mut reporter).await {
                     Ok(mut result) => {
                         crate::error::enrich_error(&mut result);
                         let is_error = result.get("ok").and_then(Value::as_bool) == Some(false);
@@ -48,8 +56,6 @@ pub async fn run_mcp_stdio_loop(
                         json_rpc_response(id, &payload)
                     }
                     Err(e) => {
-                        // 未知工具是协议层错误（MCP 规范 -32602）；其余业务失败
-                        // 统一走 result 信封 + isError，保证错误内容进入模型上下文。
                         if e.to_string().starts_with("unknown tool") {
                             json_rpc_error(id, -32602, &format!("{e:#}"))
                         } else {
@@ -75,7 +81,7 @@ pub async fn run_mcp_stdio_loop(
                     id,
                     &json!({
                         "protocolVersion": "2024-11-05",
-                        "capabilities": { "tools": {} },
+                        "capabilities": { "tools": {}, "progress": {} },
                         "serverInfo": { "name": "agent-ops-mcp", "version": env!("CARGO_PKG_VERSION") },
                         "instructions": "You are an AI agent managing remote Linux hosts via agent-ops.\n\n\
                     ## Core Concepts\n\
@@ -106,9 +112,10 @@ pub async fn run_mcp_stdio_loop(
             _ => json_rpc_error(id, -32601, &format!("Method not found: {method}")),
         };
 
-        stdout.write_all(response.to_string().as_bytes()).await?;
-        stdout.write_all(b"\n").await?;
-        stdout.flush().await?;
+        let mut w = stdout.lock().await;
+        w.write_all(response.to_string().as_bytes()).await?;
+        w.write_all(b"\n").await?;
+        w.flush().await?;
     }
 
     Ok(())

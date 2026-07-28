@@ -223,7 +223,7 @@ pub(crate) async fn batch_upload(ctx: &ToolContext, args: Value) -> Result<Value
                 Some(h) => h,
                 None => return (host_name, json!({"ok": false, "error": "host not found"})),
             };
-            match crate::files::upload_file(&host, &local, &remote, &ca_cert, overwrite, &exclude)
+            match crate::files::upload_file(&host, &local, &remote, &ca_cert, overwrite, &exclude, &mut crate::progress::ProgressReporter::noop())
                 .await
             {
                 Ok(files) => {
@@ -328,7 +328,7 @@ pub(crate) async fn batch_download(ctx: &ToolContext, args: Value) -> Result<Val
                     );
                 }
             }
-            match crate::files::download_file(&host, &remote, &local_path, &ca_cert).await {
+            match crate::files::download_file(&host, &remote, &local_path, &ca_cert, &mut crate::progress::ProgressReporter::noop()).await {
                 Ok(files) => {
                     if files.len() == 1 {
                         (

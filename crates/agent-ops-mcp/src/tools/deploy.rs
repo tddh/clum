@@ -152,6 +152,7 @@ pub(crate) async fn deploy_bridge(ctx: &ToolContext, args: Value) -> Result<Valu
                 &host, &binary_path, &upload_new_path,
                 &ca_cert,
                 crate::files::OverwriteMode::Overwrite, &[],
+                &mut crate::progress::ProgressReporter::noop(),
             ).await;
 
             match upload_result {
