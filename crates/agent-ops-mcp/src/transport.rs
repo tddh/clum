@@ -14,6 +14,24 @@ use tokio::time::sleep;
 // QUIC connection (file transfers)
 // ══════════════════════════════════════════════════════════════════
 
+/// 16 MB 流控窗口：quinn 默认初始拥塞窗口 ~12 KB，内网千兆链路下
+/// 慢启动要 ~20 个 RTT 才能打满带宽；调大窗口大幅缩短爬坡时间。
+const QUIC_WINDOW_SIZE: u32 = 16 * 1024 * 1024;
+
+fn build_transport_config(
+    idle_timeout: Duration,
+    keepalive: Duration,
+) -> anyhow::Result<quinn::TransportConfig> {
+    let mut transport = quinn::TransportConfig::default();
+    transport.max_idle_timeout(Some(idle_timeout.try_into()?));
+    transport.keep_alive_interval(Some(keepalive));
+    transport.stream_receive_window(quinn::VarInt::from_u32(QUIC_WINDOW_SIZE));
+    transport.send_window(QUIC_WINDOW_SIZE as u64);
+    transport.receive_window(quinn::VarInt::from_u32(QUIC_WINDOW_SIZE));
+    transport.congestion_controller_factory(std::sync::Arc::new(quinn::congestion::BbrConfig::default()));
+    Ok(transport)
+}
+
 /// Establish QUIC connection to bridge for file transfers.
 /// Returns authenticated Connection + first stream's send/recv handles.
 /// Use `host.bridge_addr` directly — TCP and UDP share port 9778 safely.
@@ -33,12 +51,7 @@ pub async fn connect_to_bridge_quic(
         quinn::crypto::rustls::QuicClientConfig::try_from(std::sync::Arc::new(tls_config))
             .map_err(|e| anyhow::anyhow!("QUIC TLS config error: {e}"))?,
     ));
-    let mut transport = quinn::TransportConfig::default();
-    // 1 小时 idle timeout：大文件传输（数百 MB）期间网络卡顿或磁盘 I/O 阻塞
-    // 不应导致连接断开；event-driven 等待（wait_for_text 等）同理。
-    // keep-alive 每 15s 发一次，确保 NAT/防火墙不回收映射。
-    transport.max_idle_timeout(Some(Duration::from_secs(3600).try_into()?));
-    transport.keep_alive_interval(Some(Duration::from_secs(15)));
+    let transport = build_transport_config(Duration::from_secs(3600), Duration::from_secs(15))?;
     client_config.transport_config(std::sync::Arc::new(transport));
     endpoint.set_default_client_config(client_config);
 
@@ -97,9 +110,7 @@ pub async fn connect_to_bridge_quic_tunnel(
         quinn::crypto::rustls::QuicClientConfig::try_from(std::sync::Arc::new(tls_config))
             .map_err(|e| anyhow::anyhow!("QUIC TLS config error: {e}"))?,
     ));
-    let mut transport = quinn::TransportConfig::default();
-    transport.max_idle_timeout(Some(Duration::from_secs(3600).try_into()?));
-    transport.keep_alive_interval(Some(Duration::from_secs(15)));
+    let transport = build_transport_config(Duration::from_secs(3600), Duration::from_secs(15))?;
     client_config.transport_config(std::sync::Arc::new(transport));
     endpoint.set_default_client_config(client_config);
 
@@ -300,9 +311,10 @@ pub async fn connect_to_bridge_quic_stream(
         quinn::crypto::rustls::QuicClientConfig::try_from(std::sync::Arc::new(tls_config))
             .map_err(|e| anyhow::anyhow!("QUIC TLS config error: {e}"))?,
     ));
-    let mut transport = quinn::TransportConfig::default();
-    transport.max_idle_timeout(Some(Duration::from_secs(idle_timeout_secs).try_into()?));
-    transport.keep_alive_interval(Some(Duration::from_secs(keepalive_secs)));
+    let transport = build_transport_config(
+        Duration::from_secs(idle_timeout_secs),
+        Duration::from_secs(keepalive_secs),
+    )?;
     client_config.transport_config(std::sync::Arc::new(transport));
     endpoint.set_default_client_config(client_config);
 

@@ -55,6 +55,12 @@ pub fn load_quic_server_config(
     let transport = std::sync::Arc::get_mut(&mut server_config.transport)
         .ok_or_else(|| anyhow::anyhow!("transport Arc is shared, cannot mutate"))?;
     transport.max_concurrent_bidi_streams(256u32.into());
+    transport.stream_receive_window(quinn::VarInt::from_u32(16 * 1024 * 1024));
+    transport.send_window(16 * 1024 * 1024);
+    transport.receive_window(quinn::VarInt::from_u32(16 * 1024 * 1024));
+    transport.congestion_controller_factory(std::sync::Arc::new(
+        quinn::congestion::BbrConfig::default(),
+    ));
 
     Ok(server_config)
 }

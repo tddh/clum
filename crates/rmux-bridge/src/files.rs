@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use sha2::{Digest, Sha256};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 use crate::bridge_audit::BridgeAuditDb;
 use crate::interactive::InteractiveSession;
@@ -216,8 +216,9 @@ async fn download_file_quic(mut send: quinn::SendStream, remote_path: &str) -> a
     send.write_all(&file_size.to_le_bytes()).await?;
     send.write_all(&hash).await?;
 
-    let mut file = tokio::fs::File::open(remote_path).await?;
-    tokio::io::copy(&mut file, &mut send).await?;
+    // seek 回文件头复用已打开的 fd，避免重新 open
+    file.seek(std::io::SeekFrom::Start(0)).await?;
+    copy_with_buf(&mut file, &mut send).await?;
     send.finish()?;
 
     tracing::info!("QUIC downloaded {} ({} bytes)", remote_path, file_size);
@@ -254,8 +255,8 @@ async fn download_dir_quic(mut send: quinn::SendStream, remote_path: &str) -> an
         send.write_all(&file_size.to_le_bytes()).await?;
         send.write_all(&hash).await?;
 
-        let mut file = tokio::fs::File::open(abs_path).await?;
-        tokio::io::copy(&mut file, &mut send).await?;
+        file.seek(std::io::SeekFrom::Start(0)).await?;
+        copy_with_buf(&mut file, &mut send).await?;
     }
 
     send.finish()?;
@@ -351,6 +352,23 @@ async fn handle_tunnel_quic(
 
     tracing::info!("QUIC tunnel closed: {}", target);
     Ok(())
+}
+
+async fn copy_with_buf(
+    reader: &mut (impl AsyncReadExt + Unpin),
+    writer: &mut (impl AsyncWriteExt + Unpin),
+) -> std::io::Result<u64> {
+    let mut buf = vec![0u8; CHUNK_SIZE];
+    let mut total = 0u64;
+    loop {
+        let n = reader.read(&mut buf).await?;
+        if n == 0 {
+            break;
+        }
+        writer.write_all(&buf[..n]).await?;
+        total += n as u64;
+    }
+    Ok(total)
 }
 
 #[cfg(test)]
