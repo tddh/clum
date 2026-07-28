@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.0] — 2026-07-29
+
+### Changed
+- **项目更名 agent-ops → yunying**：所有 crate 重命名（`agent-ops-cli` → `yunying-cli`、`agent-ops-core` → `yunying-core`、`agent-ops-mcp` → `yunying-mcp`），二进制名 `yunying-mcp`、`yunying-cli`，bridge 二进制名 `rmux-bridge` 不变。
+- **默认 session 名改为 `yunying`**：Bridge 端 `new_session` 请求未指定名称时，默认创建 `yunying` 会话（原为 `agent-ops`）。
+- **部署路径改为 `/opt/yunying/`**：`install-bridge.sh` 部署目录从 `/opt/agent-ops/` 改为 `/opt/yunying/`，systemd service、证书、bridge.env 统一迁移。
+- **数据目录改为 `~/.yunying/`**：审计数据库、录制文件等本地存储路径从 `~/.agent-ops/` 改为 `~/.yunying/`。
+- **文档全量更新**：README、DEPLOY、TOOLS、CONTRIBUTING、SECURITY、CHANGELOG、GitHub workflow、issue 模板、MCP 配置示例、justfile 等全部同步更新。
+
+### Added
+- **迁移脚本** `scripts/migrate-to-yunying.sh`：将 `~/.agent-ops/` 数据目录迁移到 `~/.yunying/`，支持合并已有数据。
+
 ## [0.7.1] — 2026-07-28
 
 ### Security
