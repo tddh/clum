@@ -13,6 +13,19 @@ pub struct ProgressReporter {
     failed: bool,
 }
 
+impl Clone for ProgressReporter {
+    fn clone(&self) -> Self {
+        Self {
+            token: self.token.clone(),
+            writer: self.writer.clone(),
+            last_sent: Instant::now()
+                .checked_sub(THROTTLE_INTERVAL)
+                .unwrap_or_else(Instant::now),
+            failed: false,
+        }
+    }
+}
+
 impl ProgressReporter {
     pub fn new(token: Option<Value>, writer: Arc<Mutex<tokio::io::Stdout>>) -> Self {
         Self {
@@ -22,15 +35,6 @@ impl ProgressReporter {
                 .checked_sub(THROTTLE_INTERVAL)
                 .unwrap_or_else(Instant::now),
             failed: false,
-        }
-    }
-
-    pub fn noop() -> Self {
-        Self {
-            token: None,
-            writer: Arc::new(Mutex::new(tokio::io::stdout())),
-            last_sent: Instant::now(),
-            failed: true,
         }
     }
 

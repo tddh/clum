@@ -136,7 +136,7 @@ async fn upload_dir(
     ca_cert_path: &str,
     overwrite: OverwriteMode,
     exclude: &[String],
-    _progress: &mut crate::progress::ProgressReporter,
+    progress: &crate::progress::ProgressReporter,
 ) -> Result<Vec<FileResult>> {
     let base = Path::new(local_path).to_path_buf();
     let mut files = Vec::new();
@@ -159,6 +159,7 @@ async fn upload_dir(
     for (local, remote) in files {
         let conn = conn.clone();
         let permit = semaphore.clone().acquire_owned().await?;
+        let mut file_progress = progress.clone();
 
         handles.push(tokio::spawn(async move {
             let _permit = permit;
@@ -174,7 +175,7 @@ async fn upload_dir(
             send.write_all(&file_size.to_le_bytes()).await?;
 
             let mut file = tokio::fs::File::open(&local).await?;
-            copy_with_buf(&mut file, &mut send, file_size, &mut crate::progress::ProgressReporter::noop()).await?;
+            copy_with_buf(&mut file, &mut send, file_size, &mut file_progress).await?;
             send.finish()?;
 
             let mut code = [0u8; 1];

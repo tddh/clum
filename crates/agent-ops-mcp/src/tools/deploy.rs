@@ -44,7 +44,7 @@ pub(crate) async fn audit(
     ctx.audit_db.log(event).await;
 }
 
-pub(crate) async fn deploy_bridge(ctx: &ToolContext, args: Value) -> Result<Value> {
+pub(crate) async fn deploy_bridge(ctx: &ToolContext, args: Value, progress: &crate::progress::ProgressReporter) -> Result<Value> {
     let hosts_arg: Vec<String> = args["hosts"]
         .as_array()
         .context("missing 'hosts'")?
@@ -80,6 +80,7 @@ pub(crate) async fn deploy_bridge(ctx: &ToolContext, args: Value) -> Result<Valu
         let binary_path = binary_path.to_string();
         let user_remote = user_remote.map(|s| s.to_string());
         let sem = semaphore.clone();
+        let mut task_progress = progress.clone();
 
         handles.push(tokio::spawn(async move {
             let _permit = if let Some(s) = &sem { s.acquire().await.ok() } else { None };
@@ -152,7 +153,7 @@ pub(crate) async fn deploy_bridge(ctx: &ToolContext, args: Value) -> Result<Valu
                 &host, &binary_path, &upload_new_path,
                 &ca_cert,
                 crate::files::OverwriteMode::Overwrite, &[],
-                &mut crate::progress::ProgressReporter::noop(),
+                &mut task_progress,
             ).await;
 
             match upload_result {

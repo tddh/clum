@@ -165,7 +165,7 @@ pub(crate) async fn batch_exec(ctx: &ToolContext, args: Value) -> Result<Value> 
     }))
 }
 
-pub(crate) async fn batch_upload(ctx: &ToolContext, args: Value) -> Result<Value> {
+pub(crate) async fn batch_upload(ctx: &ToolContext, args: Value, progress: &crate::progress::ProgressReporter) -> Result<Value> {
     let hosts_arg: Vec<String> = args["hosts"]
         .as_array()
         .context("missing 'hosts'")?
@@ -212,6 +212,7 @@ pub(crate) async fn batch_upload(ctx: &ToolContext, args: Value) -> Result<Value
         let remote = remote_path.to_string();
         let exclude = exclude.clone();
         let sem = semaphore.clone();
+        let mut task_progress = progress.clone();
 
         handles.push(tokio::spawn(async move {
             let _permit = if let Some(s) = &sem {
@@ -223,7 +224,7 @@ pub(crate) async fn batch_upload(ctx: &ToolContext, args: Value) -> Result<Value
                 Some(h) => h,
                 None => return (host_name, json!({"ok": false, "error": "host not found"})),
             };
-            match crate::files::upload_file(&host, &local, &remote, &ca_cert, overwrite, &exclude, &mut crate::progress::ProgressReporter::noop())
+            match crate::files::upload_file(&host, &local, &remote, &ca_cert, overwrite, &exclude, &mut task_progress)
                 .await
             {
                 Ok(files) => {
@@ -267,7 +268,7 @@ pub(crate) async fn batch_upload(ctx: &ToolContext, args: Value) -> Result<Value
     }))
 }
 
-pub(crate) async fn batch_download(ctx: &ToolContext, args: Value) -> Result<Value> {
+pub(crate) async fn batch_download(ctx: &ToolContext, args: Value, progress: &crate::progress::ProgressReporter) -> Result<Value> {
     let hosts_arg: Vec<String> = args["hosts"]
         .as_array()
         .context("missing 'hosts'")?
@@ -303,6 +304,7 @@ pub(crate) async fn batch_download(ctx: &ToolContext, args: Value) -> Result<Val
         let local_dir = local_dir.to_string();
         let file_name = file_name.clone();
         let sem = semaphore.clone();
+        let mut task_progress = progress.clone();
 
         handles.push(tokio::spawn(async move {
             let _permit = if let Some(s) = &sem {
@@ -328,7 +330,7 @@ pub(crate) async fn batch_download(ctx: &ToolContext, args: Value) -> Result<Val
                     );
                 }
             }
-            match crate::files::download_file(&host, &remote, &local_path, &ca_cert, &mut crate::progress::ProgressReporter::noop()).await {
+            match crate::files::download_file(&host, &remote, &local_path, &ca_cert, &mut task_progress).await {
                 Ok(files) => {
                     if files.len() == 1 {
                         (

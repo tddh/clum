@@ -81,8 +81,8 @@ pub async fn execute_tool(
         "window_info" => window::window_info(ctx, args).await,
         "pane_exists" => window::pane_exists(ctx, args).await,
         "batch_exec" => batch::batch_exec(ctx, args).await,
-        "batch_upload" => batch::batch_upload(ctx, args).await,
-        "batch_download" => batch::batch_download(ctx, args).await,
+        "batch_upload" => batch::batch_upload(ctx, args, progress).await,
+        "batch_download" => batch::batch_download(ctx, args, progress).await,
         "tunnel_create" => tunnel::tunnel_create(ctx, args).await,
         "tunnel_list" => tunnel::tunnel_list(ctx).await,
         "tunnel_close" => tunnel::tunnel_close(ctx, args).await,
@@ -104,7 +104,7 @@ pub async fn execute_tool(
         "capture_region" => pane::capture_region(ctx, args).await,
         "wait_for_bytes" => output::wait_for_bytes(ctx, args).await,
         "wait_stable" => output::wait_stable(ctx, args).await,
-        "deploy_bridge" => deploy::deploy_bridge(ctx, args).await,
+        "deploy_bridge" => deploy::deploy_bridge(ctx, args, progress).await,
         "reload_config" => session::reload_config(ctx).await,
         "query_bridge_audit" => {
             let start = std::time::Instant::now();
