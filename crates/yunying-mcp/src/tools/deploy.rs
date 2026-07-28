@@ -194,11 +194,11 @@ pub(crate) async fn deploy_bridge(
                 "type": "send_keys",
                 "session_name": session_name,
                 "pane_id": pane_id,
-                "keys": "\x15c\nsystemctl restart rmux-bridge\n",
+                "keys": "\x15\nsystemctl restart rmux-bridge\n",
             })).await;
 
             drop(stream);
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
             let mut new_stream = match connect_to_bridge_hybrid(
                 &host.bridge_addr, &host.bridge_token,
                 &ca_cert, 5,
@@ -210,7 +210,16 @@ pub(crate) async fn deploy_bridge(
                 })),
             };
 
-            let verify_result = exec_in_session(&mut new_stream, session_name, &pane_id,
+            // 重启后旧 session/pane 可能已不存在，重新创建以确保验证命令可执行
+            let verify_pane_id = match create_session_inner(&mut new_stream, session_name).await {
+                Ok(resp) => resp.get("pane_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("%0")
+                    .to_string(),
+                Err(_) => pane_id.clone(),
+            };
+
+            let verify_result = exec_in_session(&mut new_stream, session_name, &verify_pane_id,
                 "systemctl is-active rmux-bridge", 10000, 50).await;
             let is_active = verify_result.output.lines().any(|l| l.trim() == "active");
 

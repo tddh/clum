@@ -2109,7 +2109,7 @@ dependencies = [
 
 [[package]]
 name = "rmux-bridge"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "base64",
@@ -3547,7 +3547,7 @@ dependencies = [
 
 [[package]]
 name = "yunying-cli"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -3571,7 +3571,7 @@ dependencies = [
 
 [[package]]
 name = "yunying-core"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "chrono",
  "serde",
@@ -3580,7 +3580,7 @@ dependencies = [
 
 [[package]]
 name = "yunying-mcp"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "chrono",
