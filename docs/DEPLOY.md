@@ -1,6 +1,6 @@
 # agent-ops 部署文档
 
-> 最后更新：2026-07-14
+> 最后更新：2026-07-28
 
 ## 架构
 
@@ -10,6 +10,10 @@
 │  AI 客户端        │◄─────────►│ agent-ops-mcp │                       ║ │   rmux-bridge     │◄─────────────►│  RMUX   │
 │ (OpenCode/Claude) │            │  (macOS/Linux/Windows) │ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ║ │   (Linux 远程主机)  │                │ daemon  │
 └─────────────────┘            └──────────────┘ ════════════════════════╝ └──────────────────┘                └─────────┘
+┌─────────────────┐  QUIC :9778 PTY 透传          ▲
+│  人类运维         │◄─────────────────────────────┘
+│  (agent-ops-cli) │
+└─────────────────┘
 ```
 
 - **agent-ops-mcp**: MCP Server，运行在 AI 客户端同机，提供 66 个终端控制工具 + 操作审计 CLI
@@ -92,7 +96,6 @@ BRIDGE_TOKEN="<your-token>" bash deploy/install-bridge.sh \
 |------|------|
 | `just certs` | 生成本地测试用自签名证书 |
 | `just certs-host host=<name>` | 为指定主机生成 TLS 证书 |
-| `just run-bridge token=<your-token>` | 本地启动 bridge（开发/测试） |
 
 **生成的 systemd 服务文件**（`/etc/systemd/system/rmux-bridge.service`）：
 
@@ -145,6 +148,12 @@ ssh root@<your-bridge-ip> "systemctl status rmux-bridge --no-pager"
 | `--auth-token` | 环境变量 `BRIDGE_AUTH_TOKEN` | 认证令牌 |
 | `--log-level` | `info` | 日志级别：trace/debug/info/warn/error（`RUST_LOG` 环境变量） |
 | `--idle-timeout-secs` | `28800` | 交互式空闲超时（秒），超时后断连并恢复 pane 布局。0=禁用（`IDLE_TIMEOUT_SECS` 环境变量） |
+| `--recording-enabled` | `true` | 启用 PTY 录制（`RECORDING_ENABLED` 环境变量） |
+| `--recording-dir` | 自动检测 | 录制文件存储目录（`RECORDING_DIR` 环境变量） |
+| `--recording-retention-days` | `90` | 录制保留天数（`RECORDING_RETENTION_DAYS` 环境变量） |
+| `--recording-max-size-mb` | `500` | 录制容量上限 MB（`RECORDING_MAX_SIZE_MB` 环境变量） |
+| `--recording-fsync-interval-secs` | `5` | 录制 fsync 间隔秒（`RECORDING_FSYNC_INTERVAL_SECS` 环境变量） |
+| `--bridge-audit-db` | 自动检测 | Bridge 侧审计数据库路径（`BRIDGE_AUDIT_DB` 环境变量） |
 
 > **QUIC 协议**：所有通信走 QUIC（UDP :9778），内置 TLS 1.3 加密。确保防火墙放行 UDP 9778 端口。
 
@@ -268,6 +277,7 @@ agent-ops-mcp audit cleanup --older-than 30
 ```
 ~/.agent-ops/                      # MCP Server 本地
 ├── audit.db                       # 审计数据库（SQLite）
+└── recordings/                    # 从 bridge 同步的 PTY 录制文件（asciinema v2）
 
 /opt/agent-ops/                   # 远程主机
 ├── rmux-bridge                   # bridge 二进制

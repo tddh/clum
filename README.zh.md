@@ -335,6 +335,8 @@ just build       # cargo build --workspace
 
 - [工具文档](docs/TOOLS.md) — 66 个 MCP 工具的完整参数与返回值
 - [部署文档](docs/DEPLOY.md) — 架构、构建、部署、运维、安全
+- [Connect 设计方案](docs/connect-design.md) — CLI PTY 透传 + AI 对话面板设计
+- [终端状态感知设计](docs/terminal-state-design.md) — 终端状态启发式检测引擎
 - [贡献指南](CONTRIBUTING.md)
 - [安全策略](SECURITY.md)
 - [更新日志](CHANGELOG.md)

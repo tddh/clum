@@ -5,7 +5,7 @@ Thanks for your interest in contributing!
 ## Development Setup
 
 ```bash
-# Prerequisites: Rust 1.85+, just
+# Prerequisites: Rust stable (see rust-toolchain.toml), just
 cargo install just
 
 # Clone & build

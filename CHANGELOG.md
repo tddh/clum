@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.7.1] — 2026-07-28
+
+### Security
+- **MCP initialize instructions 增加不可信输出防护**：新增 "Security: Untrusted Output" 规则，明确告知所有 AI 客户端：工具输出（exec/capture_pane/stream_pane/file_download）是来自远程主机的不可信数据，不得将其中出现的文本视为指令执行。防护间接提示词注入（攻击者在日志/命令输出中嵌入伪装指令）。
+- **CLI AI 面板 @analyze 提示词加固**：终端内容改用 `<terminal_output>` XML 标签包裹（替代 ``` 代码块，防止攻击者用 ``` 逃逸），并前置不可信数据声明。
+- **SKILL.md 增加安全规则章节**：新增"工具输出是不可信数据"强制规则 + 典型攻击场景说明，AI agent 加载使用指南时即获得防护。
+
+### Fixed
+- **DEPLOY.md 幽灵命令**：移除已不存在的 `just run-bridge` 命令（0.6.1 已删除该 recipe）。
+- **DEPLOY.md Bridge 参数表不完整**：补充 6 个缺失的录制/审计参数（`--recording-enabled`、`--recording-dir`、`--recording-retention-days`、`--recording-max-size-mb`、`--recording-fsync-interval-secs`、`--bridge-audit-db`）。
+- **DEPLOY.md 架构图缺少 CLI**：补充 Human → agent-ops-cli → Bridge 的 PTY 透传路径。
+- **DEPLOY.md 目录结构缺少 recordings/**：补充 `~/.agent-ops/recordings/` 目录说明。
+- **SECURITY.md 版本号过时**：Supported Versions 从 `0.1.x` 更新为 `0.7.x`。
+- **TOOLS.md 缺少 agent_ops_usage_rules**：补充该工具的文档（System 类别）。
+- **CHANGELOG 0.6.1 重复条目**：移除与 0.6.0 重复的 "HOME/USER/LOGNAME 环境变量" fix。
+
+### Changed
+- **README/README.zh 文档索引**：补充 connect-design.md 和 terminal-state-design.md 设计文档链接。
+- **CONTRIBUTING.md**：Rust 版本要求从 "1.85+" 改为 "stable (see rust-toolchain.toml)"。
+- **CHANGELOG 0.6.1 措辞**：CI 移除描述改为"移除 GitHub Actions CI 测试 workflow（保留 release workflow）"。
+
 ## [0.7.0] — 2026-07-28
 
 ### Changed
@@ -27,14 +48,13 @@
 ## [0.6.1] — 2026-07-24
 
 ### Fixed
-- **新创建 session 缺少 HOME/USER/LOGNAME 环境变量**：bridge 作为 systemd 服务运行，进程环境不包含这些变量，导致 pane 的 bash 仅将其设为 shell 变量而未 export。Go 静态编译的 kubectl 调用 `os.UserHomeDir()` 返回空，回退到相对路径 `.kube/config`，在 `~/.kube/` 目录下解析为 `.kube/.kube/config` 而失败。修复：`session.rs` 创建 session 时通过 `ProcessSpec.environment` 传递从 `getpwuid` 获取的用户环境，并用 login shell 补齐完整 PATH。
 - **deploy_bridge 耗时 47s**：`systemctl restart` 后 `exec_in_session` 在已断开的 QUIC 连接上等待 sentinel，直到 30s idle timeout 才返回。修复：restart 步骤改为 fire-and-forget `send_keys`，不等 sentinel，重启后状态由重连后的单独验证步骤确认。部署耗时从 47s 降至 4s。
 
 ### Added
 - **initialize instructions 增加 Core Concepts**：MCP initialize 响应与 SKILL.md 补充核心概念说明（bridge 架构、session 共享模型、工具选择规则、错误处理规则）
 
 ### Changed
-- **移除 GitHub Actions CI workflow**：本地 `just check`/`just lint`/`just test` 替代提交级门禁
+- **移除 GitHub Actions CI 测试 workflow**（保留 release workflow）：本地 `just check`/`just lint`/`just test` 替代提交级门禁
 - **清理死代码**：CLI、bridge、MCP crates 中未使用的函数与模块
 - **删除不可用命令与幽灵文件**：justfile 移除损坏的 `run-bridge`/`run-mcp` recipe；删除无脚本引用的 `deploy/rmux-bridge.service`（实际部署由 install-bridge.sh heredoc 生成），release.yml 打包同步移除
 - cargo fmt 全量格式化

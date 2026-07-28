@@ -10,7 +10,8 @@ Instead, email the maintainer directly. We will respond within 48 hours and work
 
 | Version | Supported          |
 |---------|--------------------|
-| 0.1.x   | ✅ Supported       |
+| 0.7.x   | ✅ Supported       |
+| < 0.7   | ❌ Not supported   |
 
 ## Security Model
 

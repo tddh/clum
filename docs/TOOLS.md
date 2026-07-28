@@ -1298,3 +1298,17 @@ tunnel_create host="tf01" local_port=8080 remote_host="api.internal" remote_port
 **安全限制**：路径必须在 recordings 目录内，路径穿越会被拒绝。
 
 **回放方式**：使用 CLI `agent-ops-cli replay <file.cast> [--speed 2.0] [--idle 1.0]` 或第三方工具 `asciinema play`。
+
+---
+
+## 系统
+
+### `agent_ops_usage_rules`
+
+返回 agent-ops 的使用规则和最佳实践。AI Agent 在首次使用 agent-ops 工具前可调用此工具了解操作规范。
+
+| 参数 | 类型 | 必填 |
+|------|------|:---:|
+| 无 | | |
+
+**返回** `{"rules": "..."}` — 包含核心概念（持久化会话、共享会话、多主机注册表）、工具选择原则、默认会话名规则、禁止行为等文本。
