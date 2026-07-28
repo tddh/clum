@@ -1,4 +1,4 @@
-# Contributing to agent-ops
+# Contributing to yunying
 
 Thanks for your interest in contributing!
 
@@ -9,8 +9,8 @@ Thanks for your interest in contributing!
 cargo install just
 
 # Clone & build
-git clone git@github.com:tddh/agent-ops.git
-cd agent-ops
+git clone git@github.com:tddh/yunying.git
+cd yunying
 just check        # Verify compilation
 just test         # Run tests
 just lint         # Clippy with -D warnings
@@ -21,9 +21,9 @@ just fmt-check    # Check formatting
 
 ```
 crates/
-├── agent-ops-core/    # Shared types (HostConfig, AuditEvent, SessionInfo)
-├── agent-ops-mcp/     # MCP Server — runs alongside AI client
-├── agent-ops-cli/     # CLI tool — human PTY passthrough to remote sessions
+├── yunying-core/    # Shared types (HostConfig, AuditEvent, SessionInfo)
+├── yunying-mcp/     # MCP Server — runs alongside AI client
+├── yunying-cli/     # CLI tool — human PTY passthrough to remote sessions
 └── rmux-bridge/       # Bridge daemon — deployed on target Linux hosts
 ```
 

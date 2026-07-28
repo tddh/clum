@@ -10,10 +10,10 @@
 ### Fixed
 - **DEPLOY.md 幽灵命令**：移除已不存在的 `just run-bridge` 命令（0.6.1 已删除该 recipe）。
 - **DEPLOY.md Bridge 参数表不完整**：补充 6 个缺失的录制/审计参数（`--recording-enabled`、`--recording-dir`、`--recording-retention-days`、`--recording-max-size-mb`、`--recording-fsync-interval-secs`、`--bridge-audit-db`）。
-- **DEPLOY.md 架构图缺少 CLI**：补充 Human → agent-ops-cli → Bridge 的 PTY 透传路径。
-- **DEPLOY.md 目录结构缺少 recordings/**：补充 `~/.agent-ops/recordings/` 目录说明。
+- **DEPLOY.md 架构图缺少 CLI**：补充 Human → yunying-cli → Bridge 的 PTY 透传路径。
+- **DEPLOY.md 目录结构缺少 recordings/**：补充 `~/.yunying/recordings/` 目录说明。
 - **SECURITY.md 版本号过时**：Supported Versions 从 `0.1.x` 更新为 `0.7.x`。
-- **TOOLS.md 缺少 agent_ops_usage_rules**：补充该工具的文档（System 类别）。
+- **TOOLS.md 缺少 yunying_usage_rules**：补充该工具的文档（System 类别）。
 - **CHANGELOG 0.6.1 重复条目**：移除与 0.6.0 重复的 "HOME/USER/LOGNAME 环境变量" fix。
 
 ### Changed
@@ -68,7 +68,7 @@
 - **结构化错误信封**：`tools/call` 业务失败统一走 result（`ok:false` + `error` 原字符串 + 新增 `error_code`/`recovery_hint`/`retryable`）并标记 `isError: true`，替代原来分裂的 JSON-RPC `-32000` 通道——错误内容稳定进入模型上下文，Agent 可凭错误码可靠分支。错误码覆盖主机/会话/pane/窗口/隧道未找到、参数缺失、路径穿越、白名单拒绝、认证失败、bridge 不可达、连接丢失、超时等；exec 安全拒绝标记为 `REFUSED_STATE`。未知工具仍按 MCP 规范返回 `-32602`。SKILL.md 错误对照表与 initialize instructions 已同步教授新规则（按 error_code 分支、retryable:false 禁止盲目重试）
 - **操作审计追踪**：Bridge 侧 PTY 全量录制（asciinema v2）+ 连接事件 SQLite + MCP 定期拉取录制文件到本地
 - **新 MCP 工具**：`query_bridge_audit`（查询 bridge 侧事件日志）、`list_recordings`（列出已同步录制）、`get_recording`（获取录制内容）
-- **CLI replay 子命令**：`agent-ops-cli replay <file.cast> [--speed N] [--idle N]` 本地回放录制
+- **CLI replay 子命令**：`yunying-cli replay <file.cast> [--speed N] [--idle N]` 本地回放录制
 - **审计闭环**：审计查询/清理/配置重载操作本身也被记录（AuditAction 新增 5 个变体）
 
 ## [0.5.0] — 2026-07-20
@@ -126,12 +126,12 @@
 - **隧道目标白名单（SSRF 防护）**：`hosts.yaml` 新增可选 `allowed_tunnel_targets` 字段，支持 glob 模式限制端口转发目标（如 `"127.0.0.1:5432"`、`"10.0.1.*:*"`），不配置则全部允许（向后兼容）
 
 ### Added
-- **交互式终端直连**：新增 `agent-ops-cli` crate，提供 `agent-ops-cli connect` CLI 命令
+- **交互式终端直连**：新增 `yunying-cli` crate，提供 `yunying-cli connect` CLI 命令
   - PTY + `rmux attach-session` 子进程透传方案，完美支持 vim/htop 等 TUI 程序
   - QUIC 双流协议（0x06 控制 + 0x07 数据），控制面与数据面分离
   - crossterm raw mode 终端转发，支持 resize/detach
 - 部署脚本拆分：`install-daemon.sh`（rmux daemon）+ `install-bridge.sh`（rmux-bridge），职责独立
-- `/etc/profile.d/agent-ops.sh`：自动设置 `RMUX_TMPDIR` 环境变量，用户登录后可直接 `rmux a -t agent-ops`
+- `/etc/profile.d/yunying.sh`：自动设置 `RMUX_TMPDIR` 环境变量，用户登录后可直接 `rmux a -t yunying`
 - Bridge 请求级别日志：INFO 显示请求摘要（type/session/duration），DEBUG 显示完整请求/响应 JSON
 - Bridge `--log-level` 参数（默认 `info`，支持 trace/debug/info/warn/error，可通过 `RUST_LOG` 环境变量覆盖）
 - 端口转发功能：`tunnel_create`、`tunnel_list`、`tunnel_close` 三个 MCP 工具

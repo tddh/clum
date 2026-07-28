@@ -1,4 +1,4 @@
-# agent-ops build commands
+# yunying build commands
 
 default: check
 
@@ -15,23 +15,23 @@ release:
 # 交叉编译 Linux x86_64
 release-linux:
     CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc cargo build --target x86_64-unknown-linux-musl --release -p rmux-bridge
-    CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc cargo build --target x86_64-unknown-linux-musl --release -p agent-ops-mcp
+    CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc cargo build --target x86_64-unknown-linux-musl --release -p yunying-mcp
 
 # 交叉编译 Windows x86_64（MCP 客户端）
 release-windows:
-    cargo build --target x86_64-pc-windows-msvc --release -p agent-ops-mcp -p agent-ops-cli
+    cargo build --target x86_64-pc-windows-msvc --release -p yunying-mcp -p yunying-cli
 
 check-bridge:
     cargo check -p rmux-bridge
 
 check-mcp:
-    cargo check -p agent-ops-mcp
+    cargo check -p yunying-mcp
 
 build-bridge:
     cargo build -p rmux-bridge --release
 
 build-mcp:
-    cargo build -p agent-ops-mcp --release
+    cargo build -p yunying-mcp --release
 
 # ─── 测试 ────────────────────────────
 test:

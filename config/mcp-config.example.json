@@ -1,8 +1,8 @@
 {
     "mcp": {
-        "agent-ops": {
+        "yunying": {
             "type": "local",
-            "command": ["/path/to/agent-ops-mcp"],
+            "command": ["/path/to/yunying-mcp"],
             "args": [
                 "--ca-cert", "/path/to/ca.crt",
                 "--hosts-file", "/path/to/hosts.yaml"

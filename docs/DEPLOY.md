@@ -1,4 +1,4 @@
-# agent-ops 部署文档
+# yunying 部署文档
 
 > 最后更新：2026-07-28
 
@@ -7,17 +7,17 @@
 ```
                                QUIC :9778  终端操作 + 文件传输
 ┌─────────────────┐  MCP stdio  ┌──────────────┐ ════════════════════════╗ ┌──────────────────┐   Unix Socket  ┌─────────┐
-│  AI 客户端        │◄─────────►│ agent-ops-mcp │                       ║ │   rmux-bridge     │◄─────────────►│  RMUX   │
+│  AI 客户端        │◄─────────►│ yunying-mcp │                       ║ │   rmux-bridge     │◄─────────────►│  RMUX   │
 │ (OpenCode/Claude) │            │  (macOS/Linux/Windows) │ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ║ │   (Linux 远程主机)  │                │ daemon  │
 └─────────────────┘            └──────────────┘ ════════════════════════╝ └──────────────────┘                └─────────┘
 ┌─────────────────┐  QUIC :9778 PTY 透传          ▲
 │  人类运维         │◄─────────────────────────────┘
-│  (agent-ops-cli) │
+│  (yunying-cli) │
 └─────────────────┘
 ```
 
-- **agent-ops-mcp**: MCP Server，运行在 AI 客户端同机，提供 66 个终端控制工具 + 操作审计 CLI
-- **agent-ops-cli**: 命令行工具，人可以直接 PTY 透传 attach 到远程 rmux 会话（`agent-ops-cli connect`）
+- **yunying-mcp**: MCP Server，运行在 AI 客户端同机，提供 66 个终端控制工具 + 操作审计 CLI
+- **yunying-cli**: 命令行工具，人可以直接 PTY 透传 attach 到远程 rmux 会话（`yunying-cli connect`）
 - **rmux-bridge**: 部署在每台目标 Linux 主机上，QUIC 加密代理 → RMUX daemon。终端操作与文件传输统一走 QUIC 协议（UDP :9778）
 - **RMUX daemon**: 每个 Linux 主机上的终端多路复用器
 
@@ -37,8 +37,8 @@
 
 ```bash
 # 本机构建（macOS 开发）
-cargo build -p agent-ops-mcp --release
-cargo build -p agent-ops-cli --release
+cargo build -p yunying-mcp --release
+cargo build -p yunying-cli --release
 
 # 交叉编译 bridge（Linux x86_64，静态链接）
 CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc \
@@ -50,8 +50,8 @@ just build-mcp              # 本机构建 mcp
 ```
 
 构建产物：
-- `target/release/agent-ops-mcp` — MCP server（本地运行）
-- `target/release/agent-ops-cli` — 命令行工具（本地运行）
+- `target/release/yunying-mcp` — MCP server（本地运行）
+- `target/release/yunying-cli` — 命令行工具（本地运行）
 - `target/x86_64-unknown-linux-musl/release/rmux-bridge` — bridge（部署到远程）
 
 ### 2. 部署
@@ -69,7 +69,7 @@ bash deploy/install-daemon.sh root@<your-bridge-ip>
 - 上传项目定制的 `rmux-daemon.service`（配置 `RMUX_TMPDIR=%h/.rmux`）
 - 上传项目定制的 `rmux.conf` 到 `/root/.rmux.conf`（启用鼠标、调大回滚缓冲区、**开启 `allow-passthrough`**——rmux 0.9 默认为 `off`，不开启会导致 CLI 连接后按键无效）
 - 启动 daemon
-- 写入 `/etc/profile.d/agent-ops.sh`（`export RMUX_TMPDIR=$HOME/.rmux`），用户登录后可直接 `rmux a -t agent-ops`
+- 写入 `/etc/profile.d/yunying.sh`（`export RMUX_TMPDIR=$HOME/.rmux`），用户登录后可直接 `rmux a -t yunying`
 
 **步骤 2b：部署 bridge**
 
@@ -85,9 +85,9 @@ BRIDGE_TOKEN="<your-token>" bash deploy/install-bridge.sh \
 
 部署脚本自动完成：
 - 用 `deploy/generate-certs.sh` 在本地生成主机专属 TLS 证书（`certs/<ip>.crt` / `certs/<ip>.key`）
-- 上传 `rmux-bridge` 二进制到 `/opt/agent-ops/`
-- 上传证书到 `/opt/agent-ops/certs/`
-- 写入 token 到 `/opt/agent-ops/bridge.env`（权限 600）
+- 上传 `rmux-bridge` 二进制到 `/opt/yunying/`
+- 上传证书到 `/opt/yunying/certs/`
+- 写入 token 到 `/opt/yunying/bridge.env`（权限 600）
 - 创建 `rmux-bridge.service`（`systemctl enable --now`）
 
 **其他 Justfile 命令：**
@@ -107,13 +107,13 @@ Requires=rmux-daemon.service
 
 [Service]
 Type=simple
-EnvironmentFile=/opt/agent-ops/bridge.env
-ExecStart=/opt/agent-ops/rmux-bridge \
+EnvironmentFile=/opt/yunying/bridge.env
+ExecStart=/opt/yunying/rmux-bridge \
     --quic-listen-addr 0.0.0.0:9778 \
     --max-connections 256 \
     --rmux-socket /root/.rmux/rmux-0/default \
-    --tls-cert /opt/agent-ops/certs/<ip>.crt \
-    --tls-key /opt/agent-ops/certs/<ip>.key
+    --tls-cert /opt/yunying/certs/<ip>.crt \
+    --tls-key /opt/yunying/certs/<ip>.key
 Restart=always
 RestartSec=5
 
@@ -129,7 +129,7 @@ just release-linux
 
 # 替换二进制 + 重启
 ssh root@<your-bridge-ip> "systemctl stop rmux-bridge"
-scp target/x86_64-unknown-linux-musl/release/rmux-bridge root@<your-bridge-ip>:/opt/agent-ops/
+scp target/x86_64-unknown-linux-musl/release/rmux-bridge root@<your-bridge-ip>:/opt/yunying/
 ssh root@<your-bridge-ip> "systemctl start rmux-bridge"
 
 # 验证
@@ -163,12 +163,12 @@ ssh root@<your-bridge-ip> "systemctl status rmux-bridge --no-pager"
 |------|--------|------|
 | `--hosts-file` | `config/hosts.yaml` | 主机注册表路径 |
 | `--ca-cert` | 无 | CA 证书路径（必填，不传则拒绝连接） |
-| `--audit-db` | `~/.agent-ops/audit.db` | 审计数据库路径 |
+| `--audit-db` | `~/.yunying/audit.db` | 审计数据库路径 |
 | `--audit-retention-days` | `90` | 审计数据保留天数 |
 | `--audit-max-size-mb` | `500` | 审计数据库大小上限 (MB) |
 | `--audit-cleanup-interval-secs` | `600` | 自动清理间隔（秒） |
 | `--audit-sync-interval-secs` | `300` | 录制文件同步拉取间隔（秒） |
-| `--recordings-dir` | `~/.agent-ops/recordings` | 本地录制存储目录 |
+| `--recordings-dir` | `~/.yunying/recordings` | 本地录制存储目录 |
 | `--recordings-retention-days` | `90` | 本地录制保留天数 |
 | `--recordings-max-size-mb` | `5000` | 本地录制容量上限 (MB) |
 
@@ -216,12 +216,12 @@ hosts:
 ```json
 {
   "mcp": {
-    "agent-ops": {
+    "yunying": {
       "type": "local",
-      "command": ["/path/to/agent-ops/target/release/agent-ops-mcp"],
+      "command": ["/path/to/yunying/target/release/yunying-mcp"],
       "args": [
         "--hosts-file",
-        "/path/to/agent-ops/config/hosts.test.yaml",
+        "/path/to/yunying/config/hosts.test.yaml",
         "--ca-cert",
         "/tmp/bridge-remote.crt"
       ],
@@ -236,7 +236,7 @@ hosts:
 ```bash
 # 直接调 MCP 测试
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"host_list","arguments":{}}}' \
-  | target/release/agent-ops-mcp --hosts-file config/hosts.test.yaml --ca-cert /tmp/bridge-remote.crt 2>/dev/null
+  | target/release/yunying-mcp --hosts-file config/hosts.test.yaml --ca-cert /tmp/bridge-remote.crt 2>/dev/null
 ```
 
 信任首次连接：将远程 bridge 的 `bridge.crt` 复制到本地，通过 `--ca-cert` 参数指定。
@@ -258,28 +258,28 @@ ssh root@<your-bridge-ip> "ls -la \$HOME/.rmux/rmux-*/default"
 
 ```bash
 # 查最近操作
-agent-ops-mcp audit query --format table
+yunying-mcp audit query --format table
 
 # 查特定主机的命令执行记录
-agent-ops-mcp audit query --host tf01 --action exec --since 2026-06-01
+yunying-mcp audit query --host tf01 --action exec --since 2026-06-01
 
 # 统计概览
-agent-ops-mcp audit stats
+yunying-mcp audit stats
 
 # 手动清理
-agent-ops-mcp audit cleanup --older-than 30
+yunying-mcp audit cleanup --older-than 30
 ```
 
-审计数据默认存储在 `~/.agent-ops/audit.db`，保留 90 天，上限 500MB。
+审计数据默认存储在 `~/.yunying/audit.db`，保留 90 天，上限 500MB。
 
 ## 目录结构
 
 ```
-~/.agent-ops/                      # MCP Server 本地
+~/.yunying/                      # MCP Server 本地
 ├── audit.db                       # 审计数据库（SQLite）
 └── recordings/                    # 从 bridge 同步的 PTY 录制文件（asciinema v2）
 
-/opt/agent-ops/                   # 远程主机
+/opt/yunying/                   # 远程主机
 ├── rmux-bridge                   # bridge 二进制
 ├── bridge.env                    # BRIDGE_AUTH_TOKEN（权限 600）
 └── certs/
@@ -291,7 +291,7 @@ agent-ops-mcp audit cleanup --older-than 30
 └── rmux-bridge.service           # bridge systemd 服务
 
 /etc/profile.d/
-└── agent-ops.sh                  # RMUX_TMPDIR 环境变量
+└── yunying.sh                  # RMUX_TMPDIR 环境变量
 ```
 
 ## 故障排查
@@ -315,7 +315,7 @@ rmux daemon 的 socket 路径由 `RMUX_TMPDIR` 环境变量控制。项目定制
 
 如果需要在自定义路径运行 rmux daemon，同步更新：
 - `rmux-daemon.service` 中的 `Environment=RMUX_TMPDIR=...`
-- `/etc/profile.d/agent-ops.sh` 中的 `export RMUX_TMPDIR=...`
+- `/etc/profile.d/yunying.sh` 中的 `export RMUX_TMPDIR=...`
 - bridge 的 `--rmux-socket` 参数（部署脚本自动检测）
 
 ### TLS 安全模式
@@ -336,7 +336,7 @@ rmux daemon 的 socket 路径由 `RMUX_TMPDIR` 环境变量控制。项目定制
 ```bash
 # 生成 CA
 openssl req -x509 -newkey rsa:4096 -keyout ca.key -out ca.crt -days 3650 -nodes \
-  -subj "/CN=agent-ops-ca" -addext "basicConstraints=critical,CA:TRUE"
+  -subj "/CN=yunying-ca" -addext "basicConstraints=critical,CA:TRUE"
 
 # 为 bridge 签发（替换 <your-bridge-ip> 为实际 IP）
 openssl req -new -newkey rsa:2048 -keyout bridge.key -out bridge.csr -nodes \
@@ -345,6 +345,6 @@ openssl x509 -req -in bridge.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
   -out bridge.crt -days 365
 
 # MCP server 启动时指定 CA
-agent-ops-mcp --ca-cert ca.crt ...
+yunying-mcp --ca-cert ca.crt ...
 ```
 

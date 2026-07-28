@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug in agent-ops
+about: Report a bug in yunying
 title: "[Bug] "
 labels: bug
 assignees: ''
@@ -18,7 +18,7 @@ Steps to reproduce:
 What you expected to happen.
 
 **Environment:**
-- agent-ops version: [e.g. 0.1.0]
+- yunying version: [e.g. 0.1.0]
 - OS: [e.g. macOS 14, Ubuntu 24.04]
 - Rust version: [e.g. 1.85]
 

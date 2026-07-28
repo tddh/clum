@@ -6,7 +6,7 @@ set -euo pipefail
 BRIDGE_BINARY="${1:?Usage: $0 <bridge-binary> <user@host> [<certs-dir>]}"
 REMOTE_HOST="${2:?Usage: $0 <bridge-binary> <user@host> [<certs-dir>]}"
 CERTS_DIR="${3:-certs}"
-REMOTE_DIR="/opt/agent-ops"
+REMOTE_DIR="/opt/yunying"
 BRIDGE_TOKEN="${BRIDGE_TOKEN:-$(openssl rand -hex 32)}"
 
 HOST_IP=$(echo "$REMOTE_HOST" | cut -d@ -f2 | cut -d: -f1)
@@ -27,8 +27,8 @@ fi
 ssh "$REMOTE_HOST" 'command -v rmux || curl -fsSL https://rmux.io/install.sh | sh'
 
 # 2. 写入 profile.d，方便用户直接使用 rmux CLI（与 rmux-daemon.service 的 RMUX_TMPDIR 保持一致）
-ssh "$REMOTE_HOST" "echo 'export RMUX_TMPDIR=\$HOME/.rmux' | sudo tee /etc/profile.d/agent-ops.sh > /dev/null"
-echo "Wrote RMUX_TMPDIR=\$HOME/.rmux to /etc/profile.d/agent-ops.sh"
+ssh "$REMOTE_HOST" "echo 'export RMUX_TMPDIR=\$HOME/.rmux' | sudo tee /etc/profile.d/yunying.sh > /dev/null"
+echo "Wrote RMUX_TMPDIR=\$HOME/.rmux to /etc/profile.d/yunying.sh"
 
 # 3. 创建目录
 ssh "$REMOTE_HOST" "sudo mkdir -p $REMOTE_DIR/certs && sudo chown \$USER:\$USER $REMOTE_DIR"
@@ -58,13 +58,13 @@ Requires=rmux-daemon.service
 
 [Service]
 Type=simple
-EnvironmentFile=/opt/agent-ops/bridge.env
-ExecStart=/opt/agent-ops/rmux-bridge \\
+EnvironmentFile=/opt/yunying/bridge.env
+ExecStart=/opt/yunying/rmux-bridge \\
     --quic-listen-addr 0.0.0.0:9778 \\
     --max-connections 256 \\
     --rmux-socket $RMUX_SOCK \\
-    --tls-cert /opt/agent-ops/certs/${HOST_IP}.crt \\
-    --tls-key /opt/agent-ops/certs/${HOST_IP}.key
+    --tls-cert /opt/yunying/certs/${HOST_IP}.crt \\
+    --tls-key /opt/yunying/certs/${HOST_IP}.key
 Restart=always
 RestartSec=5
 

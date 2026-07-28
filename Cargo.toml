@@ -1,9 +1,9 @@
 [workspace]
 members = [
     "crates/rmux-bridge",
-    "crates/agent-ops-core",
-    "crates/agent-ops-mcp",
-    "crates/agent-ops-cli",
+    "crates/yunying-core",
+    "crates/yunying-mcp",
+    "crates/yunying-cli",
 ]
 resolver = "2"
 
@@ -13,7 +13,7 @@ edition = "2021"
 license = "MIT"
 
 [workspace.dependencies]
-agent-ops-core = { path = "crates/agent-ops-core" }
+yunying-core = { path = "crates/yunying-core" }
 tokio = { version = "1", features = ["full"] }
 tokio-rustls = "0.26"
 rustls = "0.23"

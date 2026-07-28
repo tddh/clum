@@ -3,67 +3,6 @@
 version = 4
 
 [[package]]
-name = "agent-ops-cli"
-version = "0.7.0"
-dependencies = [
- "agent-ops-core",
- "anyhow",
- "clap",
- "crossterm",
- "futures",
- "libc",
- "opencode-client-sdk",
- "quinn",
- "ratatui",
- "ratatui-crossterm",
- "rustls",
- "rustls-pemfile",
- "serde",
- "serde_json",
- "serde_yml",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "agent-ops-core"
-version = "0.7.0"
-dependencies = [
- "chrono",
- "serde",
- "uuid",
-]
-
-[[package]]
-name = "agent-ops-mcp"
-version = "0.7.0"
-dependencies = [
- "agent-ops-core",
- "anyhow",
- "chrono",
- "clap",
- "dirs",
- "futures",
- "glob",
- "hex",
- "quinn",
- "regex",
- "rusqlite",
- "rustls",
- "rustls-pemfile",
- "serde",
- "serde_json",
- "serde_yml",
- "sha2",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2172,7 +2111,6 @@ dependencies = [
 name = "rmux-bridge"
 version = "0.7.0"
 dependencies = [
- "agent-ops-core",
  "anyhow",
  "base64",
  "chrono",
@@ -2194,6 +2132,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "yunying-core",
 ]
 
 [[package]]
@@ -3604,6 +3543,67 @@ dependencies = [
  "quote",
  "syn 2.0.119",
  "synstructure",
+]
+
+[[package]]
+name = "yunying-cli"
+version = "0.7.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "crossterm",
+ "futures",
+ "libc",
+ "opencode-client-sdk",
+ "quinn",
+ "ratatui",
+ "ratatui-crossterm",
+ "rustls",
+ "rustls-pemfile",
+ "serde",
+ "serde_json",
+ "serde_yml",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "yunying-core",
+]
+
+[[package]]
+name = "yunying-core"
+version = "0.7.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "uuid",
+]
+
+[[package]]
+name = "yunying-mcp"
+version = "0.7.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "dirs",
+ "futures",
+ "glob",
+ "hex",
+ "quinn",
+ "regex",
+ "rusqlite",
+ "rustls",
+ "rustls-pemfile",
+ "serde",
+ "serde_json",
+ "serde_yml",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "yunying-core",
 ]
 
 [[package]]

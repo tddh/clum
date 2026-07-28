@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in agent-ops, please **do not** open a public issue.
+If you discover a security vulnerability in yunying, please **do not** open a public issue.
 
 Instead, email the maintainer directly. We will respond within 48 hours and work on a fix.
 
@@ -15,10 +15,10 @@ Instead, email the maintainer directly. We will respond within 48 hours and work
 
 ## Security Model
 
-agent-ops consists of three components connected over TLS:
+yunying consists of three components connected over TLS:
 
-1. **agent-ops-mcp** — MCP server running alongside the AI client
-2. **agent-ops-cli** — CLI tool for humans to attach to remote sessions
+1. **yunying-mcp** — MCP server running alongside the AI client
+2. **yunying-cli** — CLI tool for humans to attach to remote sessions
 3. **rmux-bridge** — Bridge daemon deployed on target Linux hosts
 
 Security assumptions:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""agent-ops-mcp remote functional test.
+"""yunying-mcp remote functional test.
 
-Per skill rules: session_name="agent-ops", attach-before-create,
+Per skill rules: session_name="yunying", attach-before-create,
 min pane_id, no session cleanup. Full depth: session/exec/state/
 wait/file transfer/tunnel/batch.
 """
@@ -12,11 +12,11 @@ import socket
 import subprocess
 import sys
 
-BIN = "target/debug/agent-ops-mcp"
+BIN = "target/debug/yunying-mcp"
 CA = "certs/ca.crt"
 HOSTS_FILE = "config/hosts.yaml"
 HOSTS = ["k8s-m1", "dns-backup", "tf001"]
-SESSION = "agent-ops"
+SESSION = "yunying"
 MARK = f"SMK{os.getpid()}"
 
 results = []
@@ -139,7 +139,7 @@ def host_flow(m, host, tunnel_port):
     local_up = f"/tmp/mcp_smoke_up_{os.getpid()}.txt"
     local_dn = f"/tmp/mcp_smoke_dn_{os.getpid()}_{host}.txt"
     remote = f"/tmp/mcp_smoke_{os.getpid()}_{host}.txt"
-    payload = f"agent-ops smoke {host} {MARK}\n"
+    payload = f"yunying smoke {host} {MARK}\n"
     with open(local_up, "w") as f:
         f.write(payload)
     r = m.tool("file_upload", {"host": host, "local_path": local_up, "remote_path": remote})

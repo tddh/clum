@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest an idea for agent-ops
+about: Suggest an idea for yunying
 title: "[Feature] "
 labels: enhancement
 assignees: ''

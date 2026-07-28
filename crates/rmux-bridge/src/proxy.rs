@@ -11,7 +11,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
 
 use crate::bridge_audit::BridgeAuditDb;
 use crate::protocol::ProtocolProxy;
-use agent_ops_core::MAX_FRAME_SIZE;
+use yunying_core::MAX_FRAME_SIZE;
 
 /// Main event loop: reads length-prefixed JSON frames from `tls_stream`,
 /// dispatches each request to `protocol_proxy`, and writes back the response.
@@ -227,7 +227,7 @@ where
 
         let response = match req_type {
             "new_session" => {
-                let name = request["name"].as_str().unwrap_or("agent-ops");
+                let name = request["name"].as_str().unwrap_or("yunying");
                 let detached = request["detached"].as_bool().unwrap_or(true);
                 protocol_proxy.handle_new_session(name, detached).await
             }

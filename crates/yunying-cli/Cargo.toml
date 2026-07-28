@@ -1,0 +1,30 @@
+[package]
+name = "yunying-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "yunying-cli"
+path = "src/main.rs"
+
+[dependencies]
+yunying-core.workspace = true
+anyhow.workspace = true
+clap = { workspace = true, features = ["derive"] }
+crossterm = { version = "0.29", features = ["event-stream"] }
+futures.workspace = true
+quinn.workspace = true
+ratatui = "0.30"
+ratatui-crossterm = "0.1"
+rustls.workspace = true
+rustls-pemfile.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yml = "0.0"
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+opencode = { package = "opencode-client-sdk", version = "1.2" }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

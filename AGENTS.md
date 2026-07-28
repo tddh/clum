@@ -1,10 +1,10 @@
-# agent-ops 项目开发规则
+# yunying 项目开发规则
 
 ## MCP 工具使用规则（最高优先级）
 
 **以下规则优先级最高，必须严格遵守：**
 
-1. **默认会话**：所有 agent-ops 操作必须使用 `session_name="agent-ops"`，除非用户明确指定其他会话名
+1. **默认会话**：所有 yunying 操作必须使用 `session_name="yunying"`，除非用户明确指定其他会话名
 2. **默认 Pane**：`pane_id` 可省略，server 自动选择 window 0 中编号最小的 pane。破坏性工具（`close_pane`、`paste_buffer`、`respawn_pane`）必须显式指定
 3. **禁止随意创建会话**：不要自作主张创建 `test-session`、`debug-session` 等新会话，除非用户明确要求
 4. **先 attach 后 create**：操作前先 `session_attach` 检查会话是否存在，不存在才 `session_create`
@@ -25,11 +25,11 @@
 ## 项目结构
 
 ```
-agent-ops/
+yunying/
 ├── crates/              # Rust crates
-│   ├── agent-ops-cli/   # CLI 交互式终端
-│   ├── agent-ops-core/  # 共享类型（HostConfig, AuditEvent, AuditAction）
-│   ├── agent-ops-mcp/   # MCP Server
+│   ├── yunying-cli/   # CLI 交互式终端
+│   ├── yunying-core/  # 共享类型（HostConfig, AuditEvent, AuditAction）
+│   ├── yunying-mcp/   # MCP Server
 │   └── rmux-bridge/     # Bridge proxy
 ├── config/              # 配置文件
 ├── docs/                # 文档

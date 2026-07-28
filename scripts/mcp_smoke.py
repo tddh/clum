@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""agent-ops-mcp stdio smoke driver.
+"""yunying-mcp stdio smoke driver.
 
 Spawns the MCP server, speaks newline-delimited JSON-RPC, runs a test
 plan, prints PASS/FAIL per step. Read-only against remote hosts.
@@ -8,7 +8,7 @@ import json
 import subprocess
 import sys
 
-BIN = "target/debug/agent-ops-mcp"
+BIN = "target/debug/yunying-mcp"
 CA = "certs/ca.crt"
 HOSTS = "config/hosts.yaml"
 
@@ -75,7 +75,7 @@ def main():
         "clientInfo": {"name": "mcp-smoke", "version": "0"},
     })
     info = r.get("result", {}).get("serverInfo", {})
-    check("initialize: serverInfo", info.get("name") == "agent-ops-mcp", str(r))
+    check("initialize: serverInfo", info.get("name") == "yunying-mcp", str(r))
     check("initialize: version 0.5.0", info.get("version") == "0.5.0", str(info))
 
     r = m.rpc("tools/list")
@@ -98,7 +98,7 @@ def main():
     hosts = [h["name"] for h in r.get("hosts", [])]
     check("host_list: 3 hosts", len(hosts) == 3, str(hosts))
 
-    r = m.tool("exec", {"host": "nonexistent-host", "session_name": "agent-ops",
+    r = m.tool("exec", {"host": "nonexistent-host", "session_name": "yunying",
                         "pane_id": "%0", "command": "true"})
     check("exec bad host -> structured error", r.get("ok") is False and "_rpc_error" not in r, str(r)[:300])
     check("exec bad host -> HOST_NOT_FOUND", r.get("error_code") == "HOST_NOT_FOUND", str(r)[:300])
