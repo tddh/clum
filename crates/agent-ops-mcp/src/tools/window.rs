@@ -56,9 +56,13 @@ pub(crate) async fn stream_pane(ctx: &ToolContext, args: Value) -> Result<Value>
     let (pane_id, auto_resolved) = match pane_id_arg {
         Some(id) => (id.to_string(), false),
         None => {
-            let mut tls =
-                connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
-                    .await?;
+            let mut tls = connect_to_bridge_hybrid(
+                &host.bridge_addr,
+                &host.bridge_token,
+                &ctx.ca_cert_path,
+                3,
+            )
+            .await?;
             super::common::resolve_pane_id(&mut tls, session_name, None).await?
         }
     };

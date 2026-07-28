@@ -44,7 +44,11 @@ pub(crate) async fn audit(
     ctx.audit_db.log(event).await;
 }
 
-pub(crate) async fn deploy_bridge(ctx: &ToolContext, args: Value, progress: &crate::progress::ProgressReporter) -> Result<Value> {
+pub(crate) async fn deploy_bridge(
+    ctx: &ToolContext,
+    args: Value,
+    progress: &crate::progress::ProgressReporter,
+) -> Result<Value> {
     let hosts_arg: Vec<String> = args["hosts"]
         .as_array()
         .context("missing 'hosts'")?

@@ -6,6 +6,7 @@ use std::sync::Arc;
 use agent_ops_core::types::HostConfig;
 use anyhow::{bail, Context, Result};
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Semaphore;
 
@@ -66,8 +67,15 @@ pub async fn upload_file(
         if size > MAX_FILE_SIZE {
             bail!("file too large: {} bytes (max {})", size, MAX_FILE_SIZE);
         }
-        let result =
-            upload_single(host, local_path, remote_path, ca_cert_path, overwrite, progress).await?;
+        let result = upload_single(
+            host,
+            local_path,
+            remote_path,
+            ca_cert_path,
+            overwrite,
+            progress,
+        )
+        .await?;
         Ok(vec![result])
     }
 }
@@ -286,9 +294,6 @@ async fn read_single_file(
         );
     }
 
-    let mut sha256 = [0u8; 32];
-    recv.read_exact(&mut sha256).await?;
-
     if let Some(parent) = Path::new(local_path).parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
@@ -296,6 +301,7 @@ async fn read_single_file(
     let mut file = tokio::fs::File::create(local_path)
         .await
         .with_context(|| format!("failed to create: {}", local_path))?;
+    let mut hasher = Sha256::new();
     let mut buf = vec![0u8; COPY_BUF_SIZE];
     let mut received = 0u64;
     let mut remaining = file_size as u64;
@@ -305,12 +311,17 @@ async fn read_single_file(
         if n == 0 {
             break;
         }
+        hasher.update(&buf[..n]);
         file.write_all(&buf[..n]).await?;
         received += n as u64;
         remaining -= n as u64;
-        progress.report(received, file_size as u64, "downloading").await;
+        progress
+            .report(received, file_size as u64, "downloading")
+            .await;
     }
-    progress.report(file_size as u64, file_size as u64, "done").await;
+    progress
+        .report(file_size as u64, file_size as u64, "done")
+        .await;
     file.flush().await?;
 
     if received != file_size as u64 {
@@ -321,11 +332,13 @@ async fn read_single_file(
         );
     }
 
+    let hash: [u8; 32] = hasher.finalize().into();
+
     Ok(FileResult {
         path: local_path.to_string(),
         status: "downloaded".into(),
         size: Some(file_size as u64),
-        sha256: Some(hex::encode(sha256)),
+        sha256: Some(hex::encode(hash)),
         error: None,
     })
 }
@@ -371,9 +384,6 @@ async fn read_directory(
             );
         }
 
-        let mut sha256 = [0u8; 32];
-        recv.read_exact(&mut sha256).await?;
-
         let local_path = format!("{}/{}", local_base, rel_path);
         if let Some(parent) = Path::new(&local_path).parent() {
             tokio::fs::create_dir_all(parent).await?;
@@ -382,6 +392,7 @@ async fn read_directory(
         let mut file = tokio::fs::File::create(&local_path)
             .await
             .with_context(|| format!("failed to create: {}", local_path))?;
+        let mut hasher = Sha256::new();
         let mut buf = vec![0u8; COPY_BUF_SIZE];
         let mut remaining = file_size as u64;
         while remaining > 0 {
@@ -390,17 +401,22 @@ async fn read_directory(
             if n == 0 {
                 break;
             }
+            hasher.update(&buf[..n]);
             file.write_all(&buf[..n]).await?;
             remaining -= n as u64;
         }
         file.flush().await?;
-        progress.report((i + 1) as u64, file_count as u64, "downloading dir").await;
+        progress
+            .report((i + 1) as u64, file_count as u64, "downloading dir")
+            .await;
+
+        let hash: [u8; 32] = hasher.finalize().into();
 
         results.push(FileResult {
             path: rel_path,
             status: "downloaded".into(),
             size: Some(file_size as u64),
-            sha256: Some(hex::encode(sha256)),
+            sha256: Some(hex::encode(hash)),
             error: None,
         });
     }

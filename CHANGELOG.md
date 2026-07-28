@@ -4,6 +4,13 @@
 
 ### Changed
 - **依赖更新**：rmux-sdk 0.9.0→0.9.1（安全加固 + pane 滚动条 + copy-mode 行号，wire v5 不变，daemon 0.9.0 兼容）、tokio 1.52→1.53、clap 4.6.1→4.6.4、rustls 0.23.41→42、futures 0.3.32→33 等 ~70 个传递依赖。
+- **QUIC 拥塞控制 Cubic→BBR**：MCP 端与 Bridge 端统一启用 BBR 拥塞控制算法，替代 quinn 默认的 Cubic。在有丢包的链路上 BBR 基于带宽和 RTT 模型调速，不因少量丢包大幅降窗。同时增大 QUIC 流控窗口至 16MB（`stream_receive_window`/`send_window`/`receive_window`），消除默认 ~12KB 初始窗口的慢启动瓶颈。MCP 端抽取 `build_transport_config()` 统一 3 处连接函数的传输配置。200MB 上传从 60.4s 降至 28.1s（+53%），1GB 稳态吞吐 82 Mbps（链路利用率 82%）。
+- **文件下载 SHA256 改为接收方计算**：下载协议变更——Bridge 端不再预计算 SHA256（原先需完整读取文件一遍算 hash 再读一遍传数据），改为只流式发送 `status + file_size + data`；MCP 端边接收数据边计算 SHA256。Bridge 磁盘 I/O 减半，与上传路径统一为"接收方算 hash"模式。200MB 下载从 63.5s 降至 21.8s（+192%）。⚠️ 需 MCP 与 Bridge 同步升级。
+- **Bridge 端文件传输 buffer 8KB→1MB**：`download_file_quic`/`download_dir_quic` 中 `tokio::io::copy`（默认 8KB buffer）替换为 `copy_with_buf`（1MB，与 MCP 端 `COPY_BUF_SIZE` 对齐），syscall 次数减少 128 倍。
+- **ProgressReporter 支持 Clone**：新增 `Clone` impl（共享 `Arc<Mutex<Stdout>>` writer，独立节流定时器），移除 `noop()`。并发文件操作（目录上传、batch_upload/download、deploy_bridge）中每个 tokio task 持有独立的 reporter clone，解决并发场景无法发送进度通知的问题。
+
+### Fixed
+- **并发文件操作触发 MCP 客户端超时**：`upload_dir`、`batch_upload`、`batch_download`、`deploy_bridge` 使用 `ProgressReporter::noop()` 导致长时间传输无进度通知，MCP 客户端（如 opencode）因无响应超时断开。修复：所有文件传输工具统一传入 `ProgressReporter`，每个并发任务 clone 独立 reporter，确保进度通知持续发送。
 
 ## [0.6.2] — 2026-07-27
 

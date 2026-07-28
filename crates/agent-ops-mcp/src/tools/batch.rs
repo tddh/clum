@@ -165,7 +165,11 @@ pub(crate) async fn batch_exec(ctx: &ToolContext, args: Value) -> Result<Value> 
     }))
 }
 
-pub(crate) async fn batch_upload(ctx: &ToolContext, args: Value, progress: &crate::progress::ProgressReporter) -> Result<Value> {
+pub(crate) async fn batch_upload(
+    ctx: &ToolContext,
+    args: Value,
+    progress: &crate::progress::ProgressReporter,
+) -> Result<Value> {
     let hosts_arg: Vec<String> = args["hosts"]
         .as_array()
         .context("missing 'hosts'")?
@@ -224,8 +228,16 @@ pub(crate) async fn batch_upload(ctx: &ToolContext, args: Value, progress: &crat
                 Some(h) => h,
                 None => return (host_name, json!({"ok": false, "error": "host not found"})),
             };
-            match crate::files::upload_file(&host, &local, &remote, &ca_cert, overwrite, &exclude, &mut task_progress)
-                .await
+            match crate::files::upload_file(
+                &host,
+                &local,
+                &remote,
+                &ca_cert,
+                overwrite,
+                &exclude,
+                &mut task_progress,
+            )
+            .await
             {
                 Ok(files) => {
                     let uploaded = files.iter().filter(|f| f.status == "uploaded").count();
@@ -268,7 +280,11 @@ pub(crate) async fn batch_upload(ctx: &ToolContext, args: Value, progress: &crat
     }))
 }
 
-pub(crate) async fn batch_download(ctx: &ToolContext, args: Value, progress: &crate::progress::ProgressReporter) -> Result<Value> {
+pub(crate) async fn batch_download(
+    ctx: &ToolContext,
+    args: Value,
+    progress: &crate::progress::ProgressReporter,
+) -> Result<Value> {
     let hosts_arg: Vec<String> = args["hosts"]
         .as_array()
         .context("missing 'hosts'")?
@@ -330,7 +346,15 @@ pub(crate) async fn batch_download(ctx: &ToolContext, args: Value, progress: &cr
                     );
                 }
             }
-            match crate::files::download_file(&host, &remote, &local_path, &ca_cert, &mut task_progress).await {
+            match crate::files::download_file(
+                &host,
+                &remote,
+                &local_path,
+                &ca_cert,
+                &mut task_progress,
+            )
+            .await
+            {
                 Ok(files) => {
                     if files.len() == 1 {
                         (

@@ -28,7 +28,9 @@ fn build_transport_config(
     transport.stream_receive_window(quinn::VarInt::from_u32(QUIC_WINDOW_SIZE));
     transport.send_window(QUIC_WINDOW_SIZE as u64);
     transport.receive_window(quinn::VarInt::from_u32(QUIC_WINDOW_SIZE));
-    transport.congestion_controller_factory(std::sync::Arc::new(quinn::congestion::BbrConfig::default()));
+    transport.congestion_controller_factory(std::sync::Arc::new(
+        quinn::congestion::BbrConfig::default(),
+    ));
     Ok(transport)
 }
 

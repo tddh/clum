@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use sha2::{Digest, Sha256};
-use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::bridge_audit::BridgeAuditDb;
 use crate::interactive::InteractiveSession;
@@ -201,23 +201,9 @@ async fn download_file_quic(mut send: quinn::SendStream, remote_path: &str) -> a
     let mut file = tokio::fs::File::open(remote_path).await?;
     let file_size = file.metadata().await?.len();
 
-    let mut hasher = Sha256::new();
-    let mut buf = vec![0u8; CHUNK_SIZE];
-    loop {
-        let n = file.read(&mut buf).await?;
-        if n == 0 {
-            break;
-        }
-        hasher.update(&buf[..n]);
-    }
-    let hash: [u8; 32] = hasher.finalize().into();
-
     send.write_all(&[0x00]).await?;
     send.write_all(&file_size.to_le_bytes()).await?;
-    send.write_all(&hash).await?;
 
-    // seek 回文件头复用已打开的 fd，避免重新 open
-    file.seek(std::io::SeekFrom::Start(0)).await?;
     copy_with_buf(&mut file, &mut send).await?;
     send.finish()?;
 
@@ -241,21 +227,8 @@ async fn download_dir_quic(mut send: quinn::SendStream, remote_path: &str) -> an
         let mut file = tokio::fs::File::open(abs_path).await?;
         let file_size = file.metadata().await?.len();
 
-        let mut hasher = Sha256::new();
-        let mut buf = vec![0u8; CHUNK_SIZE];
-        loop {
-            let n = file.read(&mut buf).await?;
-            if n == 0 {
-                break;
-            }
-            hasher.update(&buf[..n]);
-        }
-        let hash: [u8; 32] = hasher.finalize().into();
-
         send.write_all(&file_size.to_le_bytes()).await?;
-        send.write_all(&hash).await?;
 
-        file.seek(std::io::SeekFrom::Start(0)).await?;
         copy_with_buf(&mut file, &mut send).await?;
     }
 

@@ -39,10 +39,12 @@ pub async fn run_mcp_stdio_loop(
                 let tool_name = request["params"]["name"].as_str().unwrap_or("");
                 let args = request["params"]["arguments"].clone();
                 let meta_token = &request["params"]["_meta"]["progressToken"];
-                let progress_token =
-                    if meta_token.is_null() { None } else { Some(meta_token.clone()) };
-                let mut reporter =
-                    ProgressReporter::new(progress_token, Arc::clone(&stdout));
+                let progress_token = if meta_token.is_null() {
+                    None
+                } else {
+                    Some(meta_token.clone())
+                };
+                let mut reporter = ProgressReporter::new(progress_token, Arc::clone(&stdout));
                 match tools::execute_tool(&ctx, tool_name, args, &mut reporter).await {
                     Ok(mut result) => {
                         crate::error::enrich_error(&mut result);
