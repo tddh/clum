@@ -84,5 +84,27 @@ pub fn replay(path: &Path, opts: &ReplayOptions) -> anyhow::Result<()> {
     }
 
     eprintln!("\r\n\x1b[90m■ replay finished ({:.1}s)\x1b[0m", last_time);
+
+    // Drain pending terminal responses (e.g. cursor position reports from \e[6n)
+    #[cfg(unix)]
+    {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        use std::io::Read;
+        use std::os::unix::io::AsRawFd;
+        let fd = std::io::stdin().as_raw_fd();
+        let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+        unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) };
+        let mut buf = [0u8; 128];
+        loop {
+            match std::io::stdin().lock().read(&mut buf) {
+                Ok(0) => break,
+                Ok(_) => continue,
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
+                Err(_) => break,
+            }
+        }
+        unsafe { libc::fcntl(fd, libc::F_SETFL, flags) };
+    }
+
     Ok(())
 }
