@@ -14,6 +14,7 @@ clap = { workspace = true, features = ["derive", "env"] }
 crossterm = { version = "0.29", features = ["event-stream"] }
 futures.workspace = true
 quinn.workspace = true
+hex = "0.4"
 ratatui = "0.30"
 ratatui-crossterm = "0.1"
 rustls.workspace = true

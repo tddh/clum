@@ -65,3 +65,4 @@ dist/
 release-pkg/
 docs/superpowers/
 deploy/*.tar.gz
+downloaded-readme.md
