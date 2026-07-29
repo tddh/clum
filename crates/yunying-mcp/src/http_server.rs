@@ -53,7 +53,7 @@ impl ServerHandler for YunyingServer {
     fn call_tool(
         &self,
         request: CallToolRequestParams,
-        _context: RequestContext<RoleServer>,
+        context: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<CallToolResponse, rmcp::ErrorData>> + Send + '_
     {
         let ctx = Arc::clone(&self.ctx);
@@ -63,12 +63,14 @@ impl ServerHandler for YunyingServer {
             .arguments
             .map(serde_json::Value::Object)
             .unwrap_or(serde_json::Value::Object(Default::default()));
+        let peer = context.peer.clone();
+        let progress_token = context.meta.get_progress_token();
 
         async move {
             if let Ok(name) = agent_name.lock() {
                 *ctx.agent_name.lock().unwrap_or_else(|e| e.into_inner()) = name.clone();
             }
-            let mut reporter = crate::progress::ProgressReporter::noop();
+            let mut reporter = crate::progress::ProgressReporter::new_peer(progress_token, peer);
             match tools::execute_tool(&ctx, &tool_name, args, &mut reporter).await {
                 Ok(mut result) => {
                     crate::error::enrich_error(&mut result);

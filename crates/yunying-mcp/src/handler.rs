@@ -44,7 +44,7 @@ pub async fn run_mcp_stdio_loop(
                 } else {
                     Some(meta_token.clone())
                 };
-                let mut reporter = ProgressReporter::new(progress_token, Arc::clone(&stdout));
+                let mut reporter = ProgressReporter::new_stdout(progress_token, Arc::clone(&stdout));
                 match tools::execute_tool(&ctx, tool_name, args, &mut reporter).await {
                     Ok(mut result) => {
                         crate::error::enrich_error(&mut result);
