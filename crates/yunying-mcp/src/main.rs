@@ -269,6 +269,7 @@ async fn main() -> anyhow::Result<()> {
                     cert_path: cert.clone(),
                     key_path: key.clone(),
                     bridge_token_hashes: hash_map,
+                    recordings_dir: ctx.recordings_dir.clone(),
                 };
                 let reg = Arc::clone(&bridge_registry);
                 tokio::spawn(async move {

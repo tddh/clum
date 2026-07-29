@@ -152,15 +152,24 @@ pub async fn execute_tool(
         "audit_query" => {
             let params = crate::audit::query::QueryParams {
                 host: args.get("host").and_then(|v| v.as_str()).map(String::from),
-                action: args.get("action").and_then(|v| v.as_str()).map(String::from),
+                action: args
+                    .get("action")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
                 agent: args.get("agent").and_then(|v| v.as_str()).map(String::from),
                 since: args.get("since").and_then(|v| v.as_str()).map(String::from),
                 until: args.get("until").and_then(|v| v.as_str()).map(String::from),
                 success: args.get("success").and_then(|v| v.as_bool()),
                 limit: args.get("limit").and_then(|v| v.as_u64()).map(|v| v as u32),
             };
-            match ctx.audit_db.query(params, crate::audit::query::OutputFormat::Json).await {
-                Ok(json_str) => Ok(serde_json::from_str(&json_str).unwrap_or(json!({"ok": true, "events": []}))),
+            match ctx
+                .audit_db
+                .query(params, crate::audit::query::OutputFormat::Json)
+                .await
+            {
+                Ok(json_str) => Ok(
+                    serde_json::from_str(&json_str).unwrap_or(json!({"ok": true, "events": []}))
+                ),
                 Err(e) => Ok(json!({"ok": false, "error": format!("{e:#}")})),
             }
         }

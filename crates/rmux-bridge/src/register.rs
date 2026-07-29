@@ -136,6 +136,42 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
         }
     });
 
+    // Recording push loop: scan for new .cast files and push to Server
+    let push_conn = conn.clone();
+    let push_dir = config.recording_dir.clone();
+    let push_enabled = config.recording_enabled;
+    if push_enabled {
+        tokio::spawn(async move {
+            let mut pushed: std::collections::HashSet<std::path::PathBuf> =
+                std::collections::HashSet::new();
+            let mut interval = tokio::time::interval(Duration::from_secs(30));
+            loop {
+                interval.tick().await;
+                if push_conn.close_reason().is_some() {
+                    break;
+                }
+                let files = match scan_cast_files(&push_dir).await {
+                    Ok(f) => f,
+                    Err(_) => continue,
+                };
+                for path in files {
+                    if pushed.contains(&path) {
+                        continue;
+                    }
+                    match push_recording(&push_conn, &path).await {
+                        Ok(()) => {
+                            pushed.insert(path.clone());
+                            tracing::info!(file = %path.display(), "recording pushed to server");
+                        }
+                        Err(e) => {
+                            tracing::debug!(file = %path.display(), "recording push failed: {e}");
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     // Accept incoming streams from Server (tool execution requests)
     loop {
         match conn.accept_bi().await {
@@ -235,6 +271,44 @@ fn read_os_info() -> String {
                 })
         })
         .unwrap_or_else(|| format!("unknown {}", std::env::consts::ARCH))
+}
+
+async fn scan_cast_files(dir: &std::path::Path) -> anyhow::Result<Vec<std::path::PathBuf>> {
+    let mut files = Vec::new();
+    if !dir.exists() {
+        return Ok(files);
+    }
+    let mut entries = tokio::fs::read_dir(dir).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        let path = entry.path();
+        if path.extension().map(|e| e == "cast").unwrap_or(false) {
+            files.push(path);
+        }
+    }
+    Ok(files)
+}
+
+async fn push_recording(conn: &quinn::Connection, path: &std::path::Path) -> anyhow::Result<()> {
+    let data = tokio::fs::read(path).await?;
+    let filename = path
+        .file_name()
+        .map(|f| f.to_string_lossy().to_string())
+        .unwrap_or_else(|| "unknown.cast".to_string());
+
+    let (mut send, mut recv) = conn.open_bi().await?;
+
+    let header = serde_json::json!({
+        "type": "recording_push",
+        "filename": filename,
+        "size": data.len(),
+    });
+    write_frame(&mut send, &header).await?;
+
+    send.write_all(&data).await?;
+    send.finish()?;
+
+    let _ack = read_frame(&mut recv).await?;
+    Ok(())
 }
 
 async fn persist_token(token: &str) -> anyhow::Result<()> {

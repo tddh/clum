@@ -13,6 +13,7 @@ pub struct QuicServerConfig {
     pub key_path: String,
     /// SHA-256(token) hex → hostname
     pub bridge_token_hashes: HashMap<String, String>,
+    pub recordings_dir: std::path::PathBuf,
 }
 
 pub async fn run_quic_server(
@@ -43,8 +44,9 @@ pub async fn run_quic_server(
     while let Some(incoming) = endpoint.accept().await {
         let registry = Arc::clone(&registry);
         let token_map = Arc::clone(&token_map);
+        let rec_dir = config.recordings_dir.clone();
         tokio::spawn(async move {
-            if let Err(e) = handle_connection(incoming, registry, token_map).await {
+            if let Err(e) = handle_connection(incoming, registry, token_map, rec_dir).await {
                 tracing::debug!("QUIC connection handler ended: {e}");
             }
         });
@@ -57,6 +59,7 @@ async fn handle_connection(
     incoming: quinn::Incoming,
     registry: Arc<BridgeRegistry>,
     token_map: Arc<HashMap<String, String>>,
+    recordings_dir: std::path::PathBuf,
 ) -> anyhow::Result<()> {
     let conn = incoming.await?;
     let remote_addr = conn.remote_address();
@@ -160,18 +163,79 @@ async fn handle_connection(
 
     tracing::info!(%hostname, %remote_addr, "bridge registration complete, entering heartbeat loop");
 
-    while let Ok(data) = read_frame(&mut recv).await {
-        let msg: serde_json::Value = match serde_json::from_slice(&data) {
-            Ok(m) => m,
-            Err(_) => continue,
-        };
-        if msg.get("type").and_then(|v| v.as_str()) == Some("ping") {
-            registry.update_heartbeat(&hostname).await;
+    // Control stream reader: handle pings from Bridge
+    let ctrl_hostname = hostname.clone();
+    let ctrl_registry = Arc::clone(&registry);
+    tokio::spawn(async move {
+        while let Ok(data) = read_frame(&mut recv).await {
+            let msg: serde_json::Value = match serde_json::from_slice(&data) {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
+            if msg.get("type").and_then(|v| v.as_str()) == Some("ping") {
+                ctrl_registry.update_heartbeat(&ctrl_hostname).await;
+            }
+        }
+    });
+
+    // Accept Bridge-initiated streams (recording pushes)
+    loop {
+        match conn.accept_bi().await {
+            Ok((push_send, push_recv)) => {
+                let dir = recordings_dir.clone();
+                let host = hostname.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = handle_push_stream(push_send, push_recv, &dir, &host).await {
+                        tracing::debug!("push stream from {host} ended: {e}");
+                    }
+                });
+            }
+            Err(quinn::ConnectionError::ApplicationClosed { .. }) => break,
+            Err(quinn::ConnectionError::LocallyClosed) => break,
+            Err(_) => break,
         }
     }
 
     registry.unregister(&hostname).await;
     tracing::info!(%hostname, "bridge disconnected");
+    Ok(())
+}
+
+async fn handle_push_stream(
+    mut send: quinn::SendStream,
+    mut recv: quinn::RecvStream,
+    recordings_dir: &std::path::Path,
+    hostname: &str,
+) -> anyhow::Result<()> {
+    let header_data = read_frame(&mut recv).await?;
+    let header: serde_json::Value = serde_json::from_slice(&header_data)?;
+
+    if header.get("type").and_then(|v| v.as_str()) != Some("recording_push") {
+        anyhow::bail!("unexpected push type");
+    }
+
+    let filename = header
+        .get("filename")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown.cast");
+    let size = header.get("size").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+
+    let host_dir = recordings_dir.join(hostname);
+    tokio::fs::create_dir_all(&host_dir).await?;
+    let file_path = host_dir.join(filename);
+
+    let mut file_data = vec![0u8; size];
+    recv.read_exact(&mut file_data).await?;
+    tokio::fs::write(&file_path, &file_data).await?;
+
+    tracing::info!(%hostname, %filename, size, "recording received");
+
+    let ack = serde_json::json!({"type": "recording_ack", "ok": true});
+    let ack_data = serde_json::to_vec(&ack)?;
+    let len = (ack_data.len() as u32).to_le_bytes();
+    send.write_all(&len).await?;
+    send.write_all(&ack_data).await?;
+
     Ok(())
 }
 
