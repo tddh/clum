@@ -915,7 +915,7 @@ yunying-mcp audit cleanup [--db <path>] [--older-than <days>] [--max-size <mb>]
 | `host_name` | string | 目标主机 |
 | `session_name` | string | 会话名 |
 | `pane_id` | string | 窗格 ID（非 pane 操作为空） |
-| `action` | string | 操作类型（66 种 AuditAction） |
+| `action` | string | 操作类型（65 种 AuditAction） |
 | `detail` | string | 操作参数 |
 | `output_summary` | string | Exec/CmdEscape 的输出摘要（前 500 字符） |
 | `success` | bool | 操作是否成功 |

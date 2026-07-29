@@ -1,6 +1,6 @@
 use crate::audit::AuditDb;
-use yunying_core::types::AuditEvent;
 use rusqlite::params;
+use yunying_core::types::AuditEvent;
 
 impl AuditDb {
     /// Async wrapper: logs an audit event via spawn_blocking.

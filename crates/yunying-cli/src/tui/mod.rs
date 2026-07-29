@@ -7,7 +7,6 @@ use std::time::Duration;
 #[cfg(unix)]
 use std::os::unix::io::AsRawFd;
 
-use yunying_core::HostConfig;
 use anyhow::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
@@ -17,6 +16,7 @@ use ratatui::Terminal;
 use ratatui_crossterm::CrosstermBackend;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Mutex;
+use yunying_core::HostConfig;
 
 use crate::connect::connect_to_bridge_quic;
 use crate::protocol::{

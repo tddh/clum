@@ -1,5 +1,7 @@
 # yunying
 
+> *yunying* (云影) — from the I Ching hexagram Xun (巽, Wind): invisible yet pervasive, all things move with it unaware.
+
 > Secure infrastructure for AI agents and human operators managing Linux hosts — persistent terminal sessions powered by rmux, full-chain audit logging, MCP-native interface for AI clients + CLI PTY passthrough for humans, with file transfer and multi-host orchestration.
 
 [中文文档](README.zh.md)

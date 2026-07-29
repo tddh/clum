@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use yunying_core::HostConfig;
 use anyhow::{Context, Result};
+use yunying_core::HostConfig;
 
 pub async fn connect_to_bridge_quic(
     bridge_addr: &str,

@@ -9,6 +9,9 @@
 - **数据目录改为 `~/.yunying/`**：审计数据库、录制文件等本地存储路径从 `~/.agent-ops/` 改为 `~/.yunying/`。
 - **文档全量更新**：README、DEPLOY、TOOLS、CONTRIBUTING、SECURITY、CHANGELOG、GitHub workflow、issue 模板、MCP 配置示例、justfile 等全部同步更新。
 
+### Fixed
+- **deploy_bridge 重连健壮性**：修复 send_keys 中 Ctrl+U 后多余字符；重启后等待时间 2s→3s；重连后重建 session 再验证（旧 session/pane 可能不存活）；单主机部署耗时 30s+→7s。
+
 ### Added
 - **迁移脚本** `scripts/migrate-to-yunying.sh`：将 `~/.agent-ops/` 数据目录迁移到 `~/.yunying/`，支持合并已有数据。
 
