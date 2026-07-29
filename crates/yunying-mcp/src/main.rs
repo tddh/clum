@@ -270,6 +270,7 @@ async fn main() -> anyhow::Result<()> {
                     key_path: key.clone(),
                     bridge_token_hashes: hash_map,
                     recordings_dir: ctx.recordings_dir.clone(),
+                    api_key_store: Some(api_keys::ApiKeyStore::open(&db_path)?),
                 };
                 let reg = Arc::clone(&bridge_registry);
                 tokio::spawn(async move {

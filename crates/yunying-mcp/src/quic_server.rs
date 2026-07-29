@@ -14,6 +14,7 @@ pub struct QuicServerConfig {
     /// SHA-256(token) hex → hostname
     pub bridge_token_hashes: HashMap<String, String>,
     pub recordings_dir: std::path::PathBuf,
+    pub api_key_store: Option<Arc<crate::api_keys::ApiKeyStore>>,
 }
 
 pub async fn run_quic_server(
@@ -40,13 +41,15 @@ pub async fn run_quic_server(
     tracing::info!("QUIC server listening on udp/{addr} (ALPN: yunying)");
 
     let token_map = Arc::new(config.bridge_token_hashes);
+    let api_key_store = config.api_key_store.clone();
 
     while let Some(incoming) = endpoint.accept().await {
         let registry = Arc::clone(&registry);
         let token_map = Arc::clone(&token_map);
         let rec_dir = config.recordings_dir.clone();
+        let store = api_key_store.clone();
         tokio::spawn(async move {
-            if let Err(e) = handle_connection(incoming, registry, token_map, rec_dir).await {
+            if let Err(e) = handle_connection(incoming, registry, token_map, rec_dir, store).await {
                 tracing::debug!("QUIC connection handler ended: {e}");
             }
         });
@@ -60,6 +63,7 @@ async fn handle_connection(
     registry: Arc<BridgeRegistry>,
     token_map: Arc<HashMap<String, String>>,
     recordings_dir: std::path::PathBuf,
+    api_key_store: Option<Arc<crate::api_keys::ApiKeyStore>>,
 ) -> anyhow::Result<()> {
     let conn = incoming.await?;
     let remote_addr = conn.remote_address();
@@ -84,7 +88,8 @@ async fn handle_connection(
             .await
         }
         Some("agent_connect") => {
-            handle_agent_connection(conn, remote_addr, send, recv, msg, registry).await
+            handle_agent_connection(conn, remote_addr, send, recv, msg, registry, api_key_store)
+                .await
         }
         _ => {
             write_frame(
@@ -272,7 +277,20 @@ async fn handle_agent_connection(
     _recv: quinn::RecvStream,
     msg: serde_json::Value,
     registry: Arc<BridgeRegistry>,
+    api_key_store: Option<Arc<crate::api_keys::ApiKeyStore>>,
 ) -> anyhow::Result<()> {
+    // Validate API key if auth is enabled
+    if let Some(store) = &api_key_store {
+        if !store.is_empty().await {
+            let key = msg.get("api_key").and_then(|v| v.as_str()).unwrap_or("");
+            if store.validate(key).await.is_none() {
+                write_frame(&mut send, &serde_json::json!({"type": "agent_ack", "ok": false, "error": "invalid api key"})).await?;
+                conn.close(quinn::VarInt::from_u32(0), b"auth failed");
+                anyhow::bail!("agent auth failed from {remote_addr}");
+            }
+        }
+    }
+
     let host = msg
         .get("host")
         .and_then(|v| v.as_str())

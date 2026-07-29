@@ -292,6 +292,7 @@ async fn ai_loop(
 
 // ── PTY Mode (Main Screen — raw passthrough) ──
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_connect_with_ai(
     config: Option<&HostConfig>,
     ca_cert_path: &str,
@@ -300,10 +301,11 @@ pub async fn run_connect_with_ai(
     readonly: bool,
     opencode_dir: &str,
     server: Option<(String, String)>,
+    api_key: Option<&str>,
 ) -> Result<()> {
     crate::ai::init_opencode_dir(opencode_dir);
     let conn = if let Some((server_addr, host)) = &server {
-        crate::connect::connect_via_server(server_addr, ca_cert_path, host).await?
+        crate::connect::connect_via_server(server_addr, ca_cert_path, host, api_key).await?
     } else {
         let config = config.context("either config or server must be provided")?;
         connect_to_bridge_quic(&config.bridge_addr, &config.bridge_token, ca_cert_path).await?

@@ -21,6 +21,10 @@ struct Cli {
     /// Central server address. If set, connect via server relay instead of direct to bridge.
     #[arg(long, env = "YUNYING_SERVER_ADDR")]
     server_addr: Option<String>,
+
+    /// API key for server authentication.
+    #[arg(long, env = "YUNYING_API_KEY")]
+    api_key: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -108,6 +112,7 @@ async fn main() -> anyhow::Result<()> {
                     readonly,
                     &opencode_dir,
                     Some((server_addr.clone(), host.clone())),
+                    cli.api_key.as_deref(),
                 )
                 .await
             } else {
@@ -124,6 +129,7 @@ async fn main() -> anyhow::Result<()> {
                     readonly,
                     &opencode_dir,
                     None,
+                    None,
                 )
                 .await
             }
@@ -135,8 +141,29 @@ async fn main() -> anyhow::Result<()> {
         Commands::Replay { file, speed, idle } => {
             let expanded = expand_tilde(&file);
             let path = std::path::Path::new(&expanded);
+
+            let local_path = if path.exists() {
+                expanded
+            } else if let Some(server) = &cli.server_addr {
+                let url = format!("http://{server}/recordings/{expanded}");
+                eprintln!("Fetching recording from {url} ...");
+                let mut cmd = std::process::Command::new("curl");
+                cmd.args(["-fsSL", "-o", "/tmp/yunying-replay.cast"]);
+                if let Some(key) = &cli.api_key {
+                    cmd.args(["-H", &format!("Authorization: Bearer {key}")]);
+                }
+                cmd.arg(&url);
+                let resp = tokio::task::block_in_place(|| cmd.status())?;
+                if !resp.success() {
+                    anyhow::bail!("failed to download recording from {url}");
+                }
+                "/tmp/yunying-replay.cast".to_string()
+            } else {
+                anyhow::bail!("file not found: {expanded} (use --server-addr for remote replay)");
+            };
+
             replay::replay(
-                path,
+                std::path::Path::new(&local_path),
                 &replay::ReplayOptions {
                     speed,
                     idle_limit: idle,

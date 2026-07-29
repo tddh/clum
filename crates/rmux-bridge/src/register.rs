@@ -281,7 +281,15 @@ async fn scan_cast_files(dir: &std::path::Path) -> anyhow::Result<Vec<std::path:
     let mut entries = tokio::fs::read_dir(dir).await?;
     while let Some(entry) = entries.next_entry().await? {
         let path = entry.path();
-        if path.extension().map(|e| e == "cast").unwrap_or(false) {
+        if path.is_dir() {
+            let mut sub = tokio::fs::read_dir(&path).await?;
+            while let Some(sub_entry) = sub.next_entry().await? {
+                let sub_path = sub_entry.path();
+                if sub_path.extension().map(|e| e == "cast").unwrap_or(false) {
+                    files.push(sub_path);
+                }
+            }
+        } else if path.extension().map(|e| e == "cast").unwrap_or(false) {
             files.push(path);
         }
     }

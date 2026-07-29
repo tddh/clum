@@ -156,6 +156,7 @@ pub async fn run_http_server(
         let dir1 = Arc::clone(&dir);
         let dir2 = Arc::clone(&dir);
         let dir3 = Arc::clone(&dir);
+        let dir4 = Arc::clone(&dir);
         app = app
             .route(
                 "/install.sh",
@@ -171,6 +172,15 @@ pub async fn run_http_server(
                     move |axum::extract::Path(path): axum::extract::Path<String>| {
                         let dir = Arc::clone(&dir3);
                         async move { serve_static(dir, &format!("releases/{path}")).await }
+                    },
+                ),
+            )
+            .route(
+                "/recordings/{*path}",
+                axum::routing::get(
+                    move |axum::extract::Path(path): axum::extract::Path<String>| {
+                        let dir = Arc::clone(&dir4);
+                        async move { serve_static(dir, &format!("recordings/{path}")).await }
                     },
                 ),
             );
