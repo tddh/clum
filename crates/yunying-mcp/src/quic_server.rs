@@ -42,14 +42,19 @@ pub async fn run_quic_server(
 
     let token_map = Arc::new(config.bridge_token_hashes);
     let api_key_store = config.api_key_store.clone();
+    let last_agents: Arc<tokio::sync::RwLock<HashMap<String, String>>> =
+        Arc::new(tokio::sync::RwLock::new(HashMap::new()));
 
     while let Some(incoming) = endpoint.accept().await {
         let registry = Arc::clone(&registry);
         let token_map = Arc::clone(&token_map);
         let rec_dir = config.recordings_dir.clone();
         let store = api_key_store.clone();
+        let agents = Arc::clone(&last_agents);
         tokio::spawn(async move {
-            if let Err(e) = handle_connection(incoming, registry, token_map, rec_dir, store).await {
+            if let Err(e) =
+                handle_connection(incoming, registry, token_map, rec_dir, store, agents).await
+            {
                 tracing::debug!("QUIC connection handler ended: {e}");
             }
         });
@@ -64,6 +69,7 @@ async fn handle_connection(
     token_map: Arc<HashMap<String, String>>,
     recordings_dir: std::path::PathBuf,
     api_key_store: Option<Arc<crate::api_keys::ApiKeyStore>>,
+    last_agents: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
 ) -> anyhow::Result<()> {
     let conn = incoming.await?;
     let remote_addr = conn.remote_address();
@@ -84,12 +90,22 @@ async fn handle_connection(
                 registry,
                 token_map,
                 recordings_dir,
+                last_agents,
             )
             .await
         }
         Some("agent_connect") => {
-            handle_agent_connection(conn, remote_addr, send, recv, msg, registry, api_key_store)
-                .await
+            handle_agent_connection(
+                conn,
+                remote_addr,
+                send,
+                recv,
+                msg,
+                registry,
+                api_key_store,
+                last_agents,
+            )
+            .await
         }
         _ => {
             write_frame(
@@ -113,6 +129,7 @@ async fn handle_bridge_registration(
     registry: Arc<BridgeRegistry>,
     token_map: Arc<HashMap<String, String>>,
     recordings_dir: std::path::PathBuf,
+    last_agents: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
 ) -> anyhow::Result<()> {
     let token = reg
         .get("token")
@@ -215,8 +232,11 @@ async fn handle_bridge_registration(
             Ok((push_send, push_recv)) => {
                 let dir = recordings_dir.clone();
                 let host = hostname.clone();
+                let agents = Arc::clone(&last_agents);
                 tokio::spawn(async move {
-                    if let Err(e) = handle_push_stream(push_send, push_recv, &dir, &host).await {
+                    if let Err(e) =
+                        handle_push_stream(push_send, push_recv, &dir, &host, &agents).await
+                    {
                         tracing::debug!("push stream from {host} ended: {e}");
                     }
                 });
@@ -237,6 +257,7 @@ async fn handle_push_stream(
     mut recv: quinn::RecvStream,
     recordings_dir: &std::path::Path,
     hostname: &str,
+    last_agents: &tokio::sync::RwLock<HashMap<String, String>>,
 ) -> anyhow::Result<()> {
     let header_data = read_frame(&mut recv).await?;
     let header: serde_json::Value = serde_json::from_slice(&header_data)?;
@@ -245,21 +266,29 @@ async fn handle_push_stream(
         anyhow::bail!("unexpected push type");
     }
 
-    let filename = header
+    let raw_filename = header
         .get("filename")
         .and_then(|v| v.as_str())
         .unwrap_or("unknown.cast");
     let size = header.get("size").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
 
+    let agent = last_agents
+        .read()
+        .await
+        .get(hostname)
+        .cloned()
+        .unwrap_or_else(|| "unknown".to_string());
+    let filename = format!("{agent}_{raw_filename}");
+
     let host_dir = recordings_dir.join(hostname);
     tokio::fs::create_dir_all(&host_dir).await?;
-    let file_path = host_dir.join(filename);
+    let file_path = host_dir.join(&filename);
 
     let mut file_data = vec![0u8; size];
     recv.read_exact(&mut file_data).await?;
     tokio::fs::write(&file_path, &file_data).await?;
 
-    tracing::info!(%hostname, %filename, size, "recording received");
+    tracing::info!(%hostname, %filename, %agent, size, "recording received");
 
     let ack = serde_json::json!({"type": "recording_ack", "ok": true});
     let ack_data = serde_json::to_vec(&ack)?;
@@ -270,6 +299,7 @@ async fn handle_push_stream(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_agent_connection(
     conn: quinn::Connection,
     remote_addr: std::net::SocketAddr,
@@ -278,15 +308,20 @@ async fn handle_agent_connection(
     msg: serde_json::Value,
     registry: Arc<BridgeRegistry>,
     api_key_store: Option<Arc<crate::api_keys::ApiKeyStore>>,
+    last_agents: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
 ) -> anyhow::Result<()> {
     // Validate API key if auth is enabled
+    let mut agent_name = "unknown".to_string();
     if let Some(store) = &api_key_store {
         if !store.is_empty().await {
             let key = msg.get("api_key").and_then(|v| v.as_str()).unwrap_or("");
-            if store.validate(key).await.is_none() {
-                write_frame(&mut send, &serde_json::json!({"type": "agent_ack", "ok": false, "error": "invalid api key"})).await?;
-                conn.close(quinn::VarInt::from_u32(0), b"auth failed");
-                anyhow::bail!("agent auth failed from {remote_addr}");
+            match store.validate(key).await {
+                Some(identity) => agent_name = identity.name,
+                None => {
+                    write_frame(&mut send, &serde_json::json!({"type": "agent_ack", "ok": false, "error": "invalid api key"})).await?;
+                    conn.close(quinn::VarInt::from_u32(0), b"auth failed");
+                    anyhow::bail!("agent auth failed from {remote_addr}");
+                }
             }
         }
     }
@@ -319,7 +354,11 @@ async fn handle_agent_connection(
         &serde_json::json!({"type": "agent_ack", "ok": true, "host": host}),
     )
     .await?;
-    tracing::info!(%host, %remote_addr, "agent connected, starting relay");
+    last_agents
+        .write()
+        .await
+        .insert(host.clone(), agent_name.clone());
+    tracing::info!(%host, %remote_addr, %agent_name, "agent connected, starting relay");
 
     // Relay loop: for each stream CLI opens, open corresponding stream to Bridge and relay
     loop {
