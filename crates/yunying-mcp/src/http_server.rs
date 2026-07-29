@@ -23,6 +23,7 @@ use crate::tools::{self, ToolContext};
 struct AuthState {
     store: Arc<ApiKeyStore>,
     agent_name: Arc<std::sync::Mutex<String>>,
+    bridge_store: Arc<crate::bridge_store::BridgeStore>,
 }
 
 #[derive(Clone)]
@@ -112,16 +113,22 @@ async fn auth_middleware(
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.strip_prefix("Bearer "));
 
+    let is_mcp = request.uri().path().starts_with("/mcp");
+
     match token {
-        Some(t) => match auth.store.validate(t).await {
-            Some(identity) => {
+        Some(t) => {
+            if let Some(identity) = auth.store.validate(t).await {
                 if let Ok(mut name) = auth.agent_name.lock() {
                     *name = identity.name;
                 }
-                Ok(next.run(request).await)
+                return Ok(next.run(request).await);
             }
-            None => Err(StatusCode::UNAUTHORIZED),
-        },
+            if !is_mcp && t.starts_with("dl_") && auth.bridge_store.validate_download_token(t).await
+            {
+                return Ok(next.run(request).await);
+            }
+            Err(StatusCode::UNAUTHORIZED)
+        }
         _ => Err(StatusCode::UNAUTHORIZED),
     }
 }
@@ -130,6 +137,7 @@ pub async fn run_http_server(
     ctx: Arc<ToolContext>,
     listen_addr: &str,
     key_store: Arc<ApiKeyStore>,
+    bridge_store: Arc<crate::bridge_store::BridgeStore>,
     static_dir: Option<std::path::PathBuf>,
 ) -> anyhow::Result<()> {
     let config = StreamableHttpServerConfig::default()
@@ -191,6 +199,7 @@ pub async fn run_http_server(
     let auth_state = AuthState {
         store: key_store,
         agent_name,
+        bridge_store,
     };
     let app = app.layer(middleware::from_fn_with_state(auth_state, auth_middleware));
 

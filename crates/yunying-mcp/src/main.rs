@@ -288,7 +288,9 @@ async fn main() -> anyhow::Result<()> {
             }
 
             let key_store = api_keys::ApiKeyStore::open(&db_path)?;
-            http_server::run_http_server(ctx, &cli.listen, key_store, cli.static_dir).await
+            let bridge_store = Arc::new(bridge_store::BridgeStore::open(&db_path)?);
+            http_server::run_http_server(ctx, &cli.listen, key_store, bridge_store, cli.static_dir)
+                .await
         }
         _ => {
             let tools_definition = schema::tools_definition();
@@ -370,11 +372,14 @@ async fn run_bridge_command(args: &[String]) -> anyhow::Result<()> {
                 .unwrap_or_default();
             let token = bridge_store::generate_bridge_token();
             store.add(hostname, &token, &tags).await?;
+            let dl_token = store.generate_download_token().await?;
             println!("Bridge: {hostname}");
             println!("Token:  {token}");
+            println!("Download token (1h expiry): {dl_token}");
             println!();
-            println!("Deploy command (on target machine):");
-            println!("  rmux-bridge --server-addr <SERVER>:9778 --auth-token {token} --ca-cert /etc/yunying/ca.crt");
+            println!("Install command (on target machine):");
+            println!("  curl -fsSL -H \"Authorization: Bearer {dl_token}\" http://<SERVER>:9788/install.sh | \\");
+            println!("    BRIDGE_TOKEN={token} SERVER_ADDR=<SERVER>:9788 DOWNLOAD_TOKEN={dl_token} sh");
         }
         Some("list") => {
             let bridges = store.list().await;

@@ -32,6 +32,10 @@ impl BridgeStore {
                 os_info      TEXT,
                 created_at   TEXT NOT NULL,
                 revoked_at   TEXT
+            );
+            CREATE TABLE IF NOT EXISTS download_tokens (
+                token_hash TEXT PRIMARY KEY,
+                expires_at TEXT NOT NULL
             );",
         )?;
         Ok(Self {
@@ -125,6 +129,43 @@ impl BridgeStore {
             rusqlite::params![new_hash, new_prefix, now, hostname],
         )?;
         Ok(())
+    }
+
+    pub async fn generate_download_token(&self) -> Result<String> {
+        let mut bytes = [0u8; 16];
+        getrandom::getrandom(&mut bytes).expect("CSPRNG failed");
+        let token = format!("dl_{}", hex::encode(bytes));
+        let hash = hex::encode(Sha256::digest(token.as_bytes()));
+        let expires = (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339();
+
+        let db = self.db.lock().await;
+        db.execute(
+            "INSERT OR REPLACE INTO download_tokens (token_hash, expires_at) VALUES (?1, ?2)",
+            rusqlite::params![hash, expires],
+        )?;
+        Ok(token)
+    }
+
+    pub async fn validate_download_token(&self, token: &str) -> bool {
+        let hash = hex::encode(Sha256::digest(token.as_bytes()));
+        let db = self.db.lock().await;
+        let result: Option<String> = db
+            .query_row(
+                "SELECT expires_at FROM download_tokens WHERE token_hash = ?1",
+                rusqlite::params![hash],
+                |row| row.get(0),
+            )
+            .ok();
+        match result {
+            Some(expires) => {
+                if let Ok(exp) = chrono::DateTime::parse_from_rfc3339(&expires) {
+                    chrono::Utc::now() < exp
+                } else {
+                    false
+                }
+            }
+            None => false,
+        }
     }
 }
 

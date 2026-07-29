@@ -29,17 +29,23 @@ BASE_URL="http://${SERVER_HOST}:${SERVER_PORT}"
 echo ">>> Installing yunying bridge (${ARCH})"
 echo ">>> Server: ${SERVER_ADDR}"
 
+# Auth header for downloads (download token or API key)
+AUTH_HEADER=""
+if [ -n "${DOWNLOAD_TOKEN}" ]; then
+    AUTH_HEADER="-H \"Authorization: Bearer ${DOWNLOAD_TOKEN}\""
+fi
+
 mkdir -p /etc/yunying
 
 # Download binary
 echo ">>> Downloading rmux-bridge..."
-curl -fsSL "${BASE_URL}/releases/rmux-bridge-linux-${ARCH}" -o /usr/local/bin/rmux-bridge
+eval curl -fsSL ${AUTH_HEADER} "${BASE_URL}/releases/rmux-bridge-linux-${ARCH}" -o /usr/local/bin/rmux-bridge
 chmod +x /usr/local/bin/rmux-bridge
 
 # Download CA cert (default: yes, since we use private CA)
 if [ "${SKIP_CA}" != "1" ]; then
     echo ">>> Downloading CA certificate..."
-    curl -fsSL "${BASE_URL}/ca.crt" -o /etc/yunying/ca.crt
+    eval curl -fsSL ${AUTH_HEADER} "${BASE_URL}/ca.crt" -o /etc/yunying/ca.crt
     CA_FLAG="--ca-cert /etc/yunying/ca.crt"
 else
     CA_FLAG=""
