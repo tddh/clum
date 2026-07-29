@@ -7,7 +7,7 @@ use tokio::io::AsyncReadExt;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
-use crate::transport::{connect_to_bridge_hybrid_stream, recv_json_frame, send_json_frame};
+use crate::transport::{connect_to_host_stream, recv_json_frame, send_json_frame};
 use yunying_core::types::HostConfig;
 
 const STREAM_FRAME_MAGIC: u8 = 0x02;
@@ -69,11 +69,11 @@ impl StreamManager {
 
     pub async fn stream_pane(
         &self,
+        ctx: &crate::tools::ToolContext,
         host: &HostConfig,
         session_name: &str,
         pane_id: &str,
         timeout_ms: u64,
-        ca_cert_path: &str,
     ) -> anyhow::Result<serde_json::Value> {
         let key = format!("{}:{}:{}", host.name, session_name, pane_id);
 
@@ -87,11 +87,9 @@ impl StreamManager {
             c
         } else {
             tracing::info!("stream_pane: creating new connection for key={}", key);
-            let mut tls = connect_to_bridge_hybrid_stream(
-                &host.bridge_addr,
-                &host.bridge_token,
-                ca_cert_path,
-                3,
+            let mut tls = connect_to_host_stream(
+                ctx,
+                host,
                 DEFAULT_IDLE_TIMEOUT_SECS,
                 DEFAULT_KEEPALIVE_SECS,
             )

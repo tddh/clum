@@ -62,7 +62,7 @@ pub(crate) async fn stream_pane(ctx: &ToolContext, args: Value) -> Result<Value>
     let start = std::time::Instant::now();
     let mut response = ctx
         .stream_manager
-        .stream_pane(&host, session_name, &pane_id, timeout_ms, &ctx.ca_cert_path)
+        .stream_pane(ctx, &host, session_name, &pane_id, timeout_ms)
         .await?;
     let elapsed = start.elapsed().as_millis() as u64;
 
