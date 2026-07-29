@@ -1,25 +1,76 @@
 # yunying 部署文档
 
-> 最后更新：2026-07-28
+> 最后更新：2026-07-30
 
-## 架构
+## 架构（Hub 模式）
 
 ```
-                               QUIC :9778  终端操作 + 文件传输
-┌─────────────────┐  MCP stdio  ┌──────────────┐ ════════════════════════╗ ┌──────────────────┐   Unix Socket  ┌─────────┐
-│  AI 客户端        │◄─────────►│ yunying-mcp │                       ║ │   rmux-bridge     │◄─────────────►│  RMUX   │
-│ (OpenCode/Claude) │            │  (macOS/Linux/Windows) │ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ║ │   (Linux 远程主机)  │                │ daemon  │
-└─────────────────┘            └──────────────┘ ════════════════════════╝ └──────────────────┘                └─────────┘
-┌─────────────────┐  QUIC :9778 PTY 透传          ▲
-│  人类运维         │◄─────────────────────────────┘
-│  (yunying-cli) │
-└─────────────────┘
+┌─────────────────┐  HTTP :9778 (MCP)   ┌────────────────────────────────────────┐
+│  AI 客户端        │◄──────────────────►│        Central MCP Server              │
+│ (OpenCode/Claude) │                     │        yunying-mcp --mode http        │
+└─────────────────┘                     │                                        │
+┌─────────────────┐  QUIC :9778         │  TCP :9778  HTTP/2 (MCP 生态)          │
+│  人类运维         │◄──────────────────►│  UDP :9778  QUIC (Bridge/CLI)          │
+│  (yunying-cli)   │  PTY/upload/tunnel  │                                        │
+└─────────────────┘                     │  集中审计 + API Key + 注册表 + 静态文件  │
+                                        └───────────┬──────────┬─────────────────┘
+                                                    │ QUIC     │ QUIC
+                                          ┌─────────▼──┐  ┌───▼──────────┐
+                                          │ rmux-bridge │  │ rmux-bridge  │  ...
+                                          │ (host-1)    │  │ (host-N)     │
+                                          └──────┬──────┘  └──────┬───────┘
+                                                 │ Unix Socket     │
+                                          ┌──────▼──────┐  ┌──────▼───────┐
+                                          │ RMUX daemon │  │ RMUX daemon  │
+                                          └─────────────┘  └──────────────┘
 ```
 
-- **yunying-mcp**: MCP Server，运行在 AI 客户端同机，提供 66 个终端控制工具 + 操作审计 CLI
-- **yunying-cli**: 命令行工具，人可以直接 PTY 透传 attach 到远程 rmux 会话（`yunying-cli connect`）
-- **rmux-bridge**: 部署在每台目标 Linux 主机上，QUIC 加密代理 → RMUX daemon。终端操作与文件传输统一走 QUIC 协议（UDP :9778）
-- **RMUX daemon**: 每个 Linux 主机上的终端多路复用器
+- **yunying-mcp (Hub Server)**: 中央 MCP Server，双栈监听。AI 客户端通过 HTTP 连接，Bridge 通过 QUIC 反向注册。
+- **yunying-cli**: 命令行工具，通过 QUIC 连接 Server 中继到 Bridge。支持 connect/upload/download/tunnel/list/replay。
+- **rmux-bridge**: 部署在每台目标 Linux 主机，主动连接 Server 注册，处理工具执行、文件 I/O、PTY、录制推送。
+- **RMUX daemon**: 每个 Linux 主机上的终端多路复用器。
+
+## 快速部署
+
+### 1. 部署 Server
+
+```bash
+# 在中心服务器上
+scp target/x86_64-unknown-linux-musl/release/yunying-mcp server:/opt/yunying/
+ssh server '/opt/yunying/yunying-mcp --mode http \
+  --listen 0.0.0.0:9778 \
+  --server-cert /etc/yunying/server.crt \
+  --server-key /etc/yunying/server.key \
+  --ca-cert /etc/yunying/ca.crt \
+  --hosts-file /etc/yunying/hosts.yaml \
+  --static-dir /root/.yunying'
+```
+
+### 2. 添加 Bridge
+
+```bash
+# Server 侧生成 token
+yunying-mcp bridge add my-host --tags gpu,web
+# 输出 token 和安装命令
+
+# 目标机器一键安装
+curl -fsSL http://SERVER:9778/install.sh | \
+  BRIDGE_TOKEN=<token> SERVER_ADDR=SERVER:9778 sh
+```
+
+### 3. 配置 AI 客户端
+
+```json
+{
+  "mcp": {
+    "yunying": {
+      "type": "remote",
+      "url": "http://SERVER:9778/mcp",
+      "headers": { "Authorization": "Bearer yk_tddh_..." }
+    }
+  }
+}
+```
 
 ## 前置条件
 

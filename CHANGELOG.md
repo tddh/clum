@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.9.0] — 2026-07-30
+
+### Added — Central Server (Hub Mode)
+- **中央 MCP Server**：双栈监听 TCP :9778（HTTP/2，rmcp StreamableHttpService）+ UDP :9778（QUIC，ALPN "yunying"）。AI 客户端只需配置一个 URL + API Key 即可连接。
+- **Bridge 反向注册**：Bridge 主动连接 Server 并注册（token 认证），心跳保活（15s），断连指数退避重连（500ms→30s）。
+- **连接注册表**：Server 内存注册表（`BridgeRegistry`），工具调用优先走 Hub 路由，未注册主机回退直连。
+- **API Key 认证**：`yk_{name}_{32hex}` 格式，SQLite 存储，SHA-256 哈希。HTTP（Bearer）+ QUIC（agent_connect）双通道认证。
+- **管理命令**：`yunying-mcp agent add/list/rotate/revoke`、`yunying-mcp bridge add/list/remove/join`。
+- **server-config.yaml**：YAML 配置文件支持（listen、certs、bridges、token TTL），CLI 参数覆盖。
+- **SSE 进度通知**：通过 rmcp `Peer.send_notification(ProgressNotification)` 实现 HTTP 模式实时进度推送。
+- **audit_query MCP 工具**：查询 Server 侧集中审计日志（谁、何时、哪台机器、什么操作）。
+- **审计身份注入**：API Key 验证后提取 agent name，审计日志记录操作者身份。
+- **host_list 在线状态**：返回 `online: true`（Hub 连接）或 `null`（直连/未知）。
+
+### Added — CLI 数据平面
+- **`yunying-cli upload/download`**：文件传输通过 Hub 中继（0x02/0x03 协议）。
+- **`yunying-cli tunnel`**：本地端口转发，per-connection QUIC stream 中继（0x05 协议）。
+- **`yunying-cli connect`**：PTY 透传通过 Server 中继（agent_connect + 透明字节转发）。
+- **`yunying-cli list`**：会话列表（通过 Hub 或直连）。
+- **`yunying-cli replay`**：远程录制回放（从 Server HTTP 拉取 .cast 文件）。
+- **全局选项**：`--server-addr`（Hub 模式）、`--api-key`（认证）、环境变量 `YUNYING_SERVER_ADDR`/`YUNYING_API_KEY`。
+
+### Added — 录制与部署
+- **录制推送**：Bridge 定期扫描 .cast 文件并推送到 Server（替代 Server 拉取），文件名带 agent 标识。
+- **install.sh 一键部署**：`curl | sh` 自动下载二进制 + CA 证书 + 配置 systemd + 启动。
+- **静态文件服务**：Server HTTP 端口提供 `/install.sh`、`/ca.crt`、`/releases/*`、`/recordings/*`。
+- **Token 自动轮换**：24h TTL，Server 通过 QUIC 控制流推送新 token，Bridge 持久化到 `/etc/yunying/token`。
+
+### Changed
+- **MCP 协议升级**：rmcp v3.0.0（2026-07-28 spec），Streamable HTTP 传输。
+- **架构文档更新**：SKILL.md、MCP instructions 同步 Hub 架构 + CLI 命令。
+
 ## [0.8.0] — 2026-07-29
 
 ### Changed

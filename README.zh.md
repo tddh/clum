@@ -61,26 +61,31 @@ AI（通过 MCP）
 
 ```mermaid
 graph LR
-    A[AI 客户端] <-->|MCP stdio| B[yunying-mcp<br/>macOS/Linux/Windows]
-    H[人] <-->|PTY 透传| E[yunying-cli<br/>macOS/Linux/Windows]
-    B <-->|QUIC :9778<br/>终端操作 + 文件传输| C[rmux-bridge<br/>Linux 远程主机]
-    E <-->|QUIC :9778<br/>终端 attach| C
-    C <-->|Unix Socket| D[RMUX daemon<br/>基于 rmux]
+    A[AI 客户端<br/>opencode/Claude/Cursor] <-->|HTTP :9778<br/>MCP Streamable HTTP| S[中央 MCP Server<br/>yunying-mcp --mode http]
+    H[人类运维] <-->|QUIC :9778<br/>PTY / 文件 / 隧道| S
+    S <-->|QUIC :9778<br/>反向注册| C1[rmux-bridge<br/>主机-1]
+    S <-->|QUIC :9778| C2[rmux-bridge<br/>主机-2]
+    S <-->|QUIC :9778| C3[rmux-bridge<br/>主机-N]
+    C1 <-->|Unix Socket| D1[RMUX daemon]
+    C2 <-->|Unix Socket| D2[RMUX daemon]
+    C3 <-->|Unix Socket| D3[RMUX daemon]
 ```
 
-- **yunying-mcp** — MCP Server，运行在 AI 客户端同机，提供 66 个终端控制工具 + 操作审计 CLI
-- **yunying-cli** — 命令行工具，人可以直接 PTY 透传 attach 到远程 rmux 会话（`yunying-cli connect`），内置 AI 对话面板（Ctrl+G）支持 SSE 实时流式输出，支持 vim/htop/TUI
-- **rmux-bridge** — 部署在每台目标 Linux 主机上的 QUIC 加密代理，将 JSON 请求翻译为 RMUX daemon 调用
-- **RMUX daemon** — 每台 Linux 主机上的终端多路复用器（基于 rmux）
+- **yunying-mcp（Hub Server）** — 中央 MCP Server：HTTP :9778 面向 AI 客户端（MCP 协议）+ QUIC :9778 面向 Bridge 注册和 CLI 数据平面。提供 67 个工具、集中审计、API Key 认证、静态文件服务。
+- **yunying-cli** — 命令行工具：PTY 透传（`connect`）、文件传输（`upload`/`download`）、端口转发（`tunnel`）、会话列表（`list`）、录制回放（`replay`）。内置 AI 对话面板（Ctrl+G）。
+- **rmux-bridge** — 部署在每台 Linux 主机的 Agent。主动连接 Hub Server 注册，处理工具执行、文件 I/O、PTY 会话、录制推送。
+- **RMUX daemon** — 每台 Linux 主机上的终端多路复用器（基于 rmux）。
 
-**依赖关系：**
+**部署模型：**
 
-| 组件              | 运行位置                        | 依赖                                                             |
-| --------------- | --------------------------- | -------------------------------------------------------------- |
-| `yunying-mcp` | AI 客户端（macOS/Linux/Windows） | 编译后二进制（运行需 `hosts.yaml` + CA 证书） |
-| `yunying-cli` | 运维人员机器（macOS/Linux/Windows）        | 编译后二进制（运行需 `hosts.yaml` + CA 证书） |
-| `rmux-bridge`   | 每台目标 Linux 主机               | **RMUX daemon**（`curl -fsSL https://rmux.io/install.sh \| sh`） |
-| RMUX daemon     | 每台目标 Linux 主机               | rmux（需要安装）                                                     |
+| 组件 | 运行位置 | 连接目标 |
+|------|----------|----------|
+| `yunying-mcp --mode http` | 中心服务器（1 实例） | — |
+| `rmux-bridge` | 每台目标 Linux 主机 | Hub Server（QUIC 反向注册） |
+| AI 客户端 | 任意机器 | Hub Server（HTTP，MCP 协议） |
+| `yunying-cli` | 运维人员机器 | Hub Server（QUIC，`--server-addr`） |
+
+> 💡 新 Bridge 一键部署：`curl -fsSL http://SERVER:9778/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=xxx sh`
 
 > 💡 部署时 bridge 会自动检测 RMUX socket 路径，无需手动配置。
 

@@ -61,28 +61,31 @@ AI (via MCP)
 
 ```mermaid
 graph LR
-    A[AI Client] <-->|MCP stdio| B[yunying-mcp<br/>macOS/Linux/Windows]
-    H[Human] <-->|PTY passthrough| E[yunying-cli<br/>macOS/Linux/Windows]
-    B <-->|QUIC :9778<br/>terminal ops + file transfer| C[rmux-bridge<br/>Linux host]
-    E <-->|QUIC :9778<br/>terminal attach| C
-    C <-->|Unix Socket| D[RMUX daemon<br/>rmux-based]
+    A[AI Client<br/>opencode/Claude/Cursor] <-->|HTTP :9778<br/>MCP Streamable HTTP| S[Central MCP Server<br/>yunying-mcp --mode http]
+    H[Human] <-->|QUIC :9778<br/>PTY / upload / tunnel| S
+    S <-->|QUIC :9778<br/>reverse registration| C1[rmux-bridge<br/>host-1]
+    S <-->|QUIC :9778| C2[rmux-bridge<br/>host-2]
+    S <-->|QUIC :9778| C3[rmux-bridge<br/>host-N]
+    C1 <-->|Unix Socket| D1[RMUX daemon]
+    C2 <-->|Unix Socket| D2[RMUX daemon]
+    C3 <-->|Unix Socket| D3[RMUX daemon]
 ```
 
-- **yunying-mcp** — MCP Server running alongside the AI client, providing 66 terminal control tools + audit CLI
-- **yunying-cli** — CLI tool for humans: PTY-passthrough to remote rmux sessions (`connect`), plus built-in AI chat panel (Ctrl+G) with SSE streaming for real-time thinking/output. Supports vim/htop/TUI
-- **rmux-bridge** — QUIC-encrypted proxy deployed on each target Linux host, translating JSON requests to RMUX daemon calls
-- **RMUX daemon** — Terminal multiplexer on each Linux host (rmux-based)
+- **yunying-mcp (Hub Server)** — Central MCP Server: HTTP :9778 for AI clients (MCP protocol) + QUIC :9778 for Bridge registration and CLI data plane. Provides 67 tools, centralized audit, API Key auth, and static file serving.
+- **yunying-cli** — CLI for humans: PTY passthrough (`connect`), file transfer (`upload`/`download`), port forwarding (`tunnel`), session listing (`list`), recording playback (`replay`). Built-in AI chat panel (Ctrl+G).
+- **rmux-bridge** — Agent deployed on each Linux host. Reverse-connects to the Hub server, handles tool execution, file I/O, PTY sessions, and recording push.
+- **RMUX daemon** — Terminal multiplexer on each Linux host (rmux-based).
 
-**Dependencies by component:**
+**Deployment model:**
 
-| Component | Runs on | Depends on |
-|-----------|---------|------------|
-| `yunying-mcp` | AI client machine (macOS/Linux/Windows) | Compiled binary (needs `hosts.yaml` + CA cert at runtime) |
-| `yunying-cli` | Human operator machine (macOS/Linux/Windows) | Compiled binary (needs `hosts.yaml` + CA cert at runtime) |
-| `rmux-bridge` | Each target Linux host | **RMUX daemon** (`curl -fsSL https://rmux.io/install.sh \| sh`) |
-| RMUX daemon | Each target Linux host | rmux (needs installation) |
+| Component | Runs on | Connects to |
+|-----------|---------|-------------|
+| `yunying-mcp --mode http` | Central server (1 instance) | — |
+| `rmux-bridge` | Each target Linux host | Hub server (QUIC, reverse registration) |
+| AI clients | Any machine | Hub server (HTTP, MCP protocol) |
+| `yunying-cli` | Operator machine | Hub server (QUIC, `--server-addr`) |
 
-> 💡 The bridge auto-detects the RMUX socket path during deployment. Nothing to configure manually.
+> 💡 New bridges deploy with one command: `curl -fsSL http://SERVER:9778/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=xxx sh`
 
 ## Features
 
