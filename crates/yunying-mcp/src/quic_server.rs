@@ -15,6 +15,7 @@ pub struct QuicServerConfig {
     pub bridge_token_hashes: HashMap<String, String>,
     pub recordings_dir: std::path::PathBuf,
     pub api_key_store: Option<Arc<crate::api_keys::ApiKeyStore>>,
+    pub db_path: std::path::PathBuf,
 }
 
 pub async fn run_quic_server(
@@ -40,10 +41,29 @@ pub async fn run_quic_server(
     let endpoint = quinn::Endpoint::server(server_config, addr)?;
     tracing::info!("QUIC server listening on udp/{addr} (ALPN: yunying)");
 
-    let token_map = Arc::new(config.bridge_token_hashes);
+    let token_map: Arc<tokio::sync::RwLock<HashMap<String, String>>> =
+        Arc::new(tokio::sync::RwLock::new(config.bridge_token_hashes));
     let api_key_store = config.api_key_store.clone();
     let last_agents: Arc<tokio::sync::RwLock<HashMap<String, String>>> =
         Arc::new(tokio::sync::RwLock::new(HashMap::new()));
+
+    // Background token refresh from DB every 30s
+    let refresh_map = Arc::clone(&token_map);
+    let refresh_db = config.db_path.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
+        interval.tick().await; // skip first immediate tick
+        loop {
+            interval.tick().await;
+            if let Ok(store) = crate::bridge_store::BridgeStore::open(&refresh_db) {
+                let db_hashes = store.token_map().await;
+                if !db_hashes.is_empty() {
+                    let mut map = refresh_map.write().await;
+                    map.extend(db_hashes);
+                }
+            }
+        }
+    });
 
     while let Some(incoming) = endpoint.accept().await {
         let registry = Arc::clone(&registry);
@@ -66,7 +86,7 @@ pub async fn run_quic_server(
 async fn handle_connection(
     incoming: quinn::Incoming,
     registry: Arc<BridgeRegistry>,
-    token_map: Arc<HashMap<String, String>>,
+    token_map: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
     recordings_dir: std::path::PathBuf,
     api_key_store: Option<Arc<crate::api_keys::ApiKeyStore>>,
     last_agents: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
@@ -127,7 +147,7 @@ async fn handle_bridge_registration(
     mut recv: quinn::RecvStream,
     reg: serde_json::Value,
     registry: Arc<BridgeRegistry>,
-    token_map: Arc<HashMap<String, String>>,
+    token_map: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
     recordings_dir: std::path::PathBuf,
     last_agents: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
 ) -> anyhow::Result<()> {
@@ -137,7 +157,7 @@ async fn handle_bridge_registration(
         .unwrap_or_default();
     let token_hash = hex::encode(Sha256::digest(token.as_bytes()));
 
-    let hostname = match token_map.get(&token_hash) {
+    let hostname = match token_map.read().await.get(&token_hash) {
         Some(h) => h.clone(),
         None => {
             tracing::warn!(%remote_addr, "registration rejected: unknown token");
