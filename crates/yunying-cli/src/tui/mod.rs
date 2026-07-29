@@ -7,7 +7,7 @@ use std::time::Duration;
 #[cfg(unix)]
 use std::os::unix::io::AsRawFd;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use crossterm::event::{Event, EventStream, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use crossterm::ExecutableCommand;
@@ -293,16 +293,21 @@ async fn ai_loop(
 // ── PTY Mode (Main Screen — raw passthrough) ──
 
 pub async fn run_connect_with_ai(
-    config: &HostConfig,
+    config: Option<&HostConfig>,
     ca_cert_path: &str,
     session_name: &str,
     pane_id: &str,
     readonly: bool,
     opencode_dir: &str,
+    server: Option<(String, String)>,
 ) -> Result<()> {
     crate::ai::init_opencode_dir(opencode_dir);
-    let conn =
-        connect_to_bridge_quic(&config.bridge_addr, &config.bridge_token, ca_cert_path).await?;
+    let conn = if let Some((server_addr, host)) = &server {
+        crate::connect::connect_via_server(server_addr, ca_cert_path, host).await?
+    } else {
+        let config = config.context("either config or server must be provided")?;
+        connect_to_bridge_quic(&config.bridge_addr, &config.bridge_token, ca_cert_path).await?
+    };
 
     // JSON channel
     let (mut json_send_raw, json_recv_raw) = conn.open_bi().await?;

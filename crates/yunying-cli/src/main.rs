@@ -17,6 +17,10 @@ struct Cli {
 
     #[arg(long, default_value = "~/.yunying/ca.crt")]
     ca_cert: String,
+
+    /// Central server address. If set, connect via server relay instead of direct to bridge.
+    #[arg(long, env = "YUNYING_SERVER_ADDR")]
+    server_addr: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -94,20 +98,35 @@ async fn main() -> anyhow::Result<()> {
             readonly,
             opencode_dir,
         } => {
-            let config = load_host_config(&cli.hosts_file, &host)?;
-            let pane = match pane {
-                Some(p) => p,
-                None => connect::find_lowest_pane(&config, &cli.ca_cert, &session).await?,
-            };
-            crate::tui::run_connect_with_ai(
-                &config,
-                &cli.ca_cert,
-                &session,
-                &pane,
-                readonly,
-                &opencode_dir,
-            )
-            .await
+            if let Some(server_addr) = &cli.server_addr {
+                let pane = pane.unwrap_or_else(|| "%0".to_string());
+                crate::tui::run_connect_with_ai(
+                    None,
+                    &cli.ca_cert,
+                    &session,
+                    &pane,
+                    readonly,
+                    &opencode_dir,
+                    Some((server_addr.clone(), host.clone())),
+                )
+                .await
+            } else {
+                let config = load_host_config(&cli.hosts_file, &host)?;
+                let pane = match pane {
+                    Some(p) => p,
+                    None => connect::find_lowest_pane(&config, &cli.ca_cert, &session).await?,
+                };
+                crate::tui::run_connect_with_ai(
+                    Some(&config),
+                    &cli.ca_cert,
+                    &session,
+                    &pane,
+                    readonly,
+                    &opencode_dir,
+                    None,
+                )
+                .await
+            }
         }
         Commands::List { host } => {
             let config = load_host_config(&cli.hosts_file, &host)?;

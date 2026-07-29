@@ -66,23 +66,49 @@ async fn handle_connection(
 
     let (mut send, mut recv) = conn.accept_bi().await?;
 
-    let reg_msg = read_frame(&mut recv).await?;
-    let reg: serde_json::Value = serde_json::from_slice(&reg_msg)?;
+    let first_msg = read_frame(&mut recv).await?;
+    let msg: serde_json::Value = serde_json::from_slice(&first_msg)?;
 
-    if reg.get("type").and_then(|v| v.as_str()) != Some("bridge_register") {
-        write_frame(
-            &mut send,
-            &serde_json::json!({
-                "type": "register_ack",
-                "ok": false,
-                "error": "expected bridge_register"
-            }),
-        )
-        .await?;
-        conn.close(quinn::VarInt::from_u32(0), b"protocol error");
-        anyhow::bail!("unexpected first message from {remote_addr}");
+    match msg.get("type").and_then(|v| v.as_str()) {
+        Some("bridge_register") => {
+            handle_bridge_registration(
+                conn,
+                remote_addr,
+                send,
+                recv,
+                msg,
+                registry,
+                token_map,
+                recordings_dir,
+            )
+            .await
+        }
+        Some("agent_connect") => {
+            handle_agent_connection(conn, remote_addr, send, recv, msg, registry).await
+        }
+        _ => {
+            write_frame(
+                &mut send,
+                &serde_json::json!({"type": "error", "ok": false, "error": "unknown message type"}),
+            )
+            .await?;
+            conn.close(quinn::VarInt::from_u32(0), b"protocol error");
+            anyhow::bail!("unexpected first message from {remote_addr}");
+        }
     }
+}
 
+#[allow(clippy::too_many_arguments)]
+async fn handle_bridge_registration(
+    conn: quinn::Connection,
+    remote_addr: std::net::SocketAddr,
+    mut send: quinn::SendStream,
+    mut recv: quinn::RecvStream,
+    reg: serde_json::Value,
+    registry: Arc<BridgeRegistry>,
+    token_map: Arc<HashMap<String, String>>,
+    recordings_dir: std::path::PathBuf,
+) -> anyhow::Result<()> {
     let token = reg
         .get("token")
         .and_then(|v| v.as_str())
@@ -236,6 +262,101 @@ async fn handle_push_stream(
     send.write_all(&len).await?;
     send.write_all(&ack_data).await?;
 
+    Ok(())
+}
+
+async fn handle_agent_connection(
+    conn: quinn::Connection,
+    remote_addr: std::net::SocketAddr,
+    mut send: quinn::SendStream,
+    _recv: quinn::RecvStream,
+    msg: serde_json::Value,
+    registry: Arc<BridgeRegistry>,
+) -> anyhow::Result<()> {
+    let host = msg
+        .get("host")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+
+    if host.is_empty() {
+        write_frame(
+            &mut send,
+            &serde_json::json!({"type": "agent_ack", "ok": false, "error": "missing host"}),
+        )
+        .await?;
+        anyhow::bail!("agent_connect without host from {remote_addr}");
+    }
+
+    let bridge = match registry.get(&host).await {
+        Some(b) => b,
+        None => {
+            write_frame(&mut send, &serde_json::json!({"type": "agent_ack", "ok": false, "error": format!("host '{host}' not online")})).await?;
+            anyhow::bail!("agent requested offline host '{host}' from {remote_addr}");
+        }
+    };
+
+    write_frame(
+        &mut send,
+        &serde_json::json!({"type": "agent_ack", "ok": true, "host": host}),
+    )
+    .await?;
+    tracing::info!(%host, %remote_addr, "agent connected, starting relay");
+
+    // Relay loop: for each stream CLI opens, open corresponding stream to Bridge and relay
+    loop {
+        match conn.accept_bi().await {
+            Ok((cli_send, cli_recv)) => {
+                let bridge_conn = bridge.conn.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = relay_stream(cli_send, cli_recv, &bridge_conn).await {
+                        tracing::debug!("relay stream ended: {e}");
+                    }
+                });
+            }
+            Err(quinn::ConnectionError::ApplicationClosed { .. }) => break,
+            Err(quinn::ConnectionError::LocallyClosed) => break,
+            Err(_) => break,
+        }
+    }
+
+    tracing::info!(%host, %remote_addr, "agent disconnected");
+    Ok(())
+}
+
+async fn relay_stream(
+    cli_send: quinn::SendStream,
+    cli_recv: quinn::RecvStream,
+    bridge_conn: &quinn::Connection,
+) -> anyhow::Result<()> {
+    let (bridge_send, bridge_recv) = bridge_conn.open_bi().await?;
+
+    let mut cli_recv = cli_recv;
+    let mut bridge_send = bridge_send;
+    let mut bridge_recv = bridge_recv;
+    let mut cli_send = cli_send;
+
+    let c2b = async {
+        let mut buf = [0u8; 8192];
+        while let Ok(Some(n)) = cli_recv.read(&mut buf).await {
+            if bridge_send.write_all(&buf[..n]).await.is_err() {
+                break;
+            }
+        }
+        let _ = bridge_send.finish();
+    };
+
+    let b2c = async {
+        let mut buf = [0u8; 8192];
+        while let Ok(Some(n)) = bridge_recv.read(&mut buf).await {
+            if cli_send.write_all(&buf[..n]).await.is_err() {
+                break;
+            }
+        }
+        let _ = cli_send.finish();
+    };
+
+    tokio::join!(c2b, b2c);
     Ok(())
 }
 

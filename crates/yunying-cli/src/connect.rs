@@ -3,6 +3,71 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use yunying_core::HostConfig;
 
+pub async fn connect_via_server(
+    server_addr: &str,
+    ca_cert_path: &str,
+    host: &str,
+) -> Result<quinn::Connection> {
+    let ca_pem = std::fs::read(ca_cert_path)
+        .with_context(|| format!("failed to read CA cert: {}", ca_cert_path))?;
+
+    let mut roots = rustls::RootCertStore::empty();
+    for cert in rustls_pemfile::certs(&mut ca_pem.as_slice()) {
+        let cert = cert?;
+        roots.add(cert)?;
+    }
+
+    let mut tls_config = rustls::ClientConfig::builder()
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    tls_config.alpn_protocols = vec![b"yunying".to_vec()];
+
+    let quic_tls = quinn::crypto::rustls::QuicClientConfig::try_from(tls_config)
+        .map_err(|e| anyhow::anyhow!("QUIC TLS config error: {}", e))?;
+
+    let mut endpoint = quinn::Endpoint::client("0.0.0.0:0".parse()?)?;
+    let client_config = quinn::ClientConfig::new(Arc::new(quic_tls));
+    endpoint.set_default_client_config(client_config);
+
+    let addr: std::net::SocketAddr = server_addr
+        .parse()
+        .or_else(|_| Ok::<_, anyhow::Error>(format!("{server_addr}:9778").parse()?))?;
+    let server_name = server_addr.split(':').next().unwrap_or("localhost");
+
+    let conn = endpoint
+        .connect(addr, server_name)?
+        .await
+        .context("QUIC handshake to server failed")?;
+
+    let (mut send, mut recv) = conn.open_bi().await?;
+
+    let msg = serde_json::json!({
+        "type": "agent_connect",
+        "host": host,
+    });
+    let data = serde_json::to_vec(&msg)?;
+    let len = (data.len() as u32).to_le_bytes();
+    send.write_all(&len).await?;
+    send.write_all(&data).await?;
+
+    let mut ack_len_buf = [0u8; 4];
+    recv.read_exact(&mut ack_len_buf).await?;
+    let ack_len = u32::from_le_bytes(ack_len_buf) as usize;
+    let mut ack_buf = vec![0u8; ack_len];
+    recv.read_exact(&mut ack_buf).await?;
+    let ack: serde_json::Value = serde_json::from_slice(&ack_buf)?;
+
+    if ack.get("ok").and_then(|v| v.as_bool()) != Some(true) {
+        let err = ack
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
+        anyhow::bail!("server rejected connection: {err}");
+    }
+
+    Ok(conn)
+}
+
 pub async fn connect_to_bridge_quic(
     bridge_addr: &str,
     bridge_token: &str,
