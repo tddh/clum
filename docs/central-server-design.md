@@ -582,3 +582,12 @@ yunying 是运维操作工具，权限模型和常规 API 不同：
 - 全链路审计
 - API Key 吊销
 - TLS 1.3 强制
+
+---
+
+## 11. TODO（后续优化）
+
+- [ ] `bridge add` 改为调 Server HTTP API（`POST /admin/bridges`），download token 纯内存不落库
+- [ ] Token 热加载改为事件驱动（API 写入即生效），去掉 30s 轮询
+- [ ] stream_pane 接入 ProgressReporter 实现真正 SSE 流式输出
+- [ ] 录制文件 agent 标识：Server relay 时传递 agent context 给 Bridge

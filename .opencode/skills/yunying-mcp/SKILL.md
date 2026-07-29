@@ -579,11 +579,11 @@ Window 管理？
 
 ```bash
 # 环境变量（推荐，避免每次传参）
-export YUNYING_SERVER_ADDR=10.220.71.1:9778   # 中央 Server 地址
+export YUNYING_SERVER_ADDR=10.220.71.1:9788   # 中央 Server 地址
 export YUNYING_API_KEY=yk_tddh_...             # API Key
 
 # 或命令行传参
-yunying-cli --server-addr 10.220.71.1:9778 --api-key yk_tddh_... --ca-cert ~/.yunying/ca.crt <command>
+yunying-cli --server-addr 10.220.71.1:9788 --api-key yk_tddh_... --ca-cert ~/.yunying/ca.crt <command>
 ```
 
 - `--server-addr`：设置后走 Hub 模式（通过中央 Server 中继）；不设置走直连模式（需要 hosts.yaml）
