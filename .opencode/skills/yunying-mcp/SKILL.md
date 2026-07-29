@@ -195,7 +195,8 @@ close_pane(host="tf01", session_name="yunying", pane_id="%0")  # ❌ 违反规�
 | 批量文件传输 | `batch_upload` / `batch_download` |
 | 部署 bridge | `deploy_bridge`（升级部署，需已运行 bridge） |
 | 查询主机能力 | `host_capabilities`（检查 rmux 特性支持） |
-| 查询 bridge 审计 | `query_bridge_audit`（查询目标主机 bridge 侧事件日志） |
+| **查询 Server 审计** | `audit_query`（Server 侧集中审计：谁、何时、哪台机器、什么操作。Hub 模式首选） |
+| 查询 bridge 审计 | `query_bridge_audit`（Bridge 侧连接事件日志，Hub 模式下较少使用） |
 | 列出录制文件 | `list_recordings`（列出已同步到本地的 PTY 录制） |
 | 获取录制内容 | `get_recording`（获取 .cast 文件内容，访问被审计） |
 
@@ -569,3 +570,55 @@ Window 管理？
 ## 违反后果
 
 违反以上规则 = BUG，必须立即修正。
+
+## CLI 数据平面命令（通过 Bash 工具调用）
+
+文件传输、隧道、PTY 透传通过 `yunying-cli` 命令执行，不走 MCP 工具。Agent 通过 Bash 工具调用这些命令。
+
+### 文件传输
+
+```bash
+# 上传文件到远程主机
+yunying-cli upload <host> <local_path> <remote_path>
+
+# 下载文件到本地
+yunying-cli download <host> <remote_path> <local_path>
+
+# 示例
+yunying-cli upload tf01 ./nginx.conf /etc/nginx/nginx.conf
+yunying-cli download tf01 /var/log/syslog ./syslog.backup
+```
+
+### 端口转发（隧道）
+
+```bash
+# 创建本地端口转发到远程服务
+yunying-cli tunnel <host> --local <port> --remote <host:port>
+
+# 示例：转发远程 MySQL 到本地 3307
+yunying-cli tunnel db-01 --local 3307 --remote 127.0.0.1:3306
+```
+
+隧道建立后，本地应用连接 `localhost:<local_port>` 即等同于连接远程目标。Ctrl+C 关闭隧道。
+
+### PTY 透传（交互式终端）
+
+```bash
+# 连接到远程主机的 rmux 会话（交互式）
+yunying-cli connect <host> [--session <name>]
+
+# 示例
+yunying-cli connect tf01 --session yunying
+```
+
+连接后等同于 SSH 进入远程终端，支持 vim/htop 等全屏应用。断开后会话不丢失（rmux 持久化）。
+
+### 使用原则
+
+| 场景 | 用什么 |
+|------|--------|
+| 执行命令、读输出 | MCP 工具（exec/capture_pane） |
+| 传输文件 | `yunying-cli upload/download`（Bash） |
+| 访问远程内部服务 | `yunying-cli tunnel`（Bash） |
+| 交互式调试 | `yunying-cli connect`（Bash） |
+| 批量操作 | MCP 工具（batch_exec/batch_upload） |

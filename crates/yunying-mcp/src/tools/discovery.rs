@@ -2,24 +2,24 @@ use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
 use super::ToolContext;
-use crate::transport::{connect_to_bridge_hybrid, recv_json_frame, send_json_frame};
+use crate::transport::{connect_to_host, recv_json_frame, send_json_frame};
 use yunying_core::types::AuditAction;
 
 pub(crate) async fn host_list(ctx: &ToolContext) -> Result<Value> {
-    let hosts: Vec<Value> = ctx
-        .router
-        .list()
-        .iter()
-        .map(|h| {
-            json!({
-                "name": h.name,
-                "group": h.group,
-                "tags": h.tags,
-                "labels": h.labels,
-                "bridge_addr": h.bridge_addr,
-            })
-        })
-        .collect();
+    let mut hosts: Vec<Value> = Vec::new();
+    for h in ctx.router.list() {
+        let hub_online = ctx.bridge_registry.is_online(&h.name).await;
+        let online_val = if hub_online { json!(true) } else { Value::Null };
+        hosts.push(json!({
+            "name": h.name,
+            "group": h.group,
+            "tags": h.tags,
+            "labels": h.labels,
+            "bridge_addr": h.bridge_addr,
+            "online": online_val,
+            "via": if hub_online { "hub" } else { "direct" },
+        }));
+    }
     super::audit(
         ctx,
         AuditAction::HostList,
@@ -57,10 +57,17 @@ pub(crate) async fn host_filter(ctx: &ToolContext, args: Value) -> Result<Value>
         }
     }
 
-    let result: Vec<Value> = hosts
-        .iter()
-        .map(|h| json!({ "name": h.name, "group": h.group, "tags": h.tags, "labels": h.labels, "bridge_addr": h.bridge_addr }))
-        .collect();
+    let mut result: Vec<Value> = Vec::new();
+    for h in &hosts {
+        let hub_online = ctx.bridge_registry.is_online(&h.name).await;
+        let online_val = if hub_online { json!(true) } else { Value::Null };
+        result.push(json!({
+            "name": h.name, "group": h.group, "tags": h.tags, "labels": h.labels,
+            "bridge_addr": h.bridge_addr,
+            "online": online_val,
+            "via": if hub_online { "hub" } else { "direct" },
+        }));
+    }
     super::audit(
         ctx,
         AuditAction::HostFilter,
@@ -89,9 +96,7 @@ pub(crate) async fn find_panes(ctx: &ToolContext, args: Value) -> Result<Value> 
         .router
         .get(host_name)
         .with_context(|| format!("host not found: {}", host_name))?;
-    let mut tls =
-        connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
-            .await?;
+    let mut tls = connect_to_host(ctx, &host).await?;
 
     let mut request = json!({"type": "find_panes"});
     if let Some(v) = args.get("session_name") {
@@ -143,9 +148,7 @@ pub(crate) async fn find_sessions(ctx: &ToolContext, args: Value) -> Result<Valu
         .router
         .get(host_name)
         .with_context(|| format!("host not found: {}", host_name))?;
-    let mut tls =
-        connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
-            .await?;
+    let mut tls = connect_to_host(ctx, &host).await?;
 
     let mut request = json!({"type": "find_sessions"});
     if let Some(v) = args.get("name") {
@@ -177,9 +180,7 @@ pub(crate) async fn host_capabilities(ctx: &ToolContext, args: Value) -> Result<
         .router
         .get(host_name)
         .with_context(|| format!("host not found: {}", host_name))?;
-    let mut tls =
-        connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
-            .await?;
+    let mut tls = connect_to_host(ctx, &host).await?;
     let mut req = json!({ "type": "capabilities" });
     if let Some(c) = check {
         req["check"] = json!(c);

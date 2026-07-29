@@ -5,7 +5,7 @@ use super::common::{collect_batch_results, make_semaphore, resolve_hosts};
 use super::exec::exec_in_session;
 use super::ToolContext;
 use crate::files::OverwriteMode;
-use crate::transport::connect_to_bridge_hybrid;
+use crate::transport::connect_via_registry;
 use yunying_core::types::AuditAction;
 
 pub(crate) async fn batch_exec(ctx: &ToolContext, args: Value) -> Result<Value> {
@@ -34,6 +34,7 @@ pub(crate) async fn batch_exec(ctx: &ToolContext, args: Value) -> Result<Value> 
     let targets = resolve_hosts(ctx, &hosts_arg);
     let semaphore = make_semaphore(concurrency_limit);
     let ca_cert = ctx.ca_cert_path.clone();
+    let registry = std::sync::Arc::clone(&ctx.bridge_registry);
     let cmd = command.to_string();
     let start = std::time::Instant::now();
 
@@ -41,6 +42,7 @@ pub(crate) async fn batch_exec(ctx: &ToolContext, args: Value) -> Result<Value> 
 
     for (host_name, host_opt) in targets {
         let ca_cert = ca_cert.clone();
+        let registry = registry.clone();
         let cmd = cmd.clone();
         let sem = semaphore.clone();
 
@@ -64,21 +66,18 @@ pub(crate) async fn batch_exec(ctx: &ToolContext, args: Value) -> Result<Value> 
                 }
             };
 
-            let mut stream =
-                match connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ca_cert, 3)
-                    .await
-                {
-                    Ok(s) => s,
-                    Err(e) => {
-                        return (
-                            host_name,
-                            json!({
-                                "ok": false, "output": "", "exit_code": null,
-                                "duration_ms": 0, "error": format!("connect: {e}"),
-                            }),
-                        )
-                    }
-                };
+            let mut stream = match connect_via_registry(&registry, &host, &ca_cert).await {
+                Ok(s) => s,
+                Err(e) => {
+                    return (
+                        host_name,
+                        json!({
+                            "ok": false, "output": "", "exit_code": null,
+                            "duration_ms": 0, "error": format!("connect: {e}"),
+                        }),
+                    )
+                }
+            };
 
             let session_name = "yunying";
 

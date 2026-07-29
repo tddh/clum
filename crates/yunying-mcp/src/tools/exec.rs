@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use super::ToolContext;
-use crate::transport::{connect_to_bridge_hybrid, recv_json_frame, send_json_frame};
+use crate::transport::{connect_to_host, recv_json_frame, send_json_frame};
 use yunying_core::types::AuditAction;
 
 /// 将字面量转义序列转为实际控制字符。
@@ -53,9 +53,7 @@ pub(crate) async fn spawn_command(ctx: &ToolContext, args: Value) -> Result<Valu
         .router
         .get(host_name)
         .with_context(|| format!("host not found: {}", host_name))?;
-    let mut tls =
-        connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
-            .await?;
+    let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =
         super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
     send_json_frame(&mut tls, &json!({ "type": "spawn_command", "session_name": session_name, "pane_id": pane_id, "command": command, "args": cmd_args })).await?;
@@ -88,9 +86,7 @@ pub(crate) async fn shell_command(ctx: &ToolContext, args: Value) -> Result<Valu
         .router
         .get(host_name)
         .with_context(|| format!("host not found: {}", host_name))?;
-    let mut tls =
-        connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
-            .await?;
+    let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =
         super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
     send_json_frame(&mut tls, &json!({ "type": "shell_command", "session_name": session_name, "pane_id": pane_id, "command": command })).await?;
@@ -124,9 +120,7 @@ pub(crate) async fn broadcast_keys(ctx: &ToolContext, args: Value) -> Result<Val
         .router
         .get(host_name)
         .with_context(|| format!("host not found: {}", host_name))?;
-    let mut tls =
-        connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
-            .await?;
+    let mut tls = connect_to_host(ctx, &host).await?;
     send_json_frame(&mut tls, &json!({ "type": "broadcast_keys", "session_name": session_name, "pane_ids": pane_ids, "keys": keys })).await?;
     let response = recv_json_frame(&mut tls).await?;
     super::audit(
@@ -152,9 +146,7 @@ pub(crate) async fn cmd_escape(ctx: &ToolContext, args: Value) -> Result<Value> 
         .router
         .get(host_name)
         .with_context(|| format!("host not found: {}", host_name))?;
-    let mut tls =
-        connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
-            .await?;
+    let mut tls = connect_to_host(ctx, &host).await?;
     send_json_frame(
         &mut tls,
         &json!({ "type": "cmd_escape", "host": host_name, "args": cmd_args }),
@@ -715,9 +707,7 @@ pub(crate) async fn exec(ctx: &ToolContext, args: Value) -> Result<Value> {
         .router
         .get(host_name)
         .with_context(|| format!("host not found: {}", host_name))?;
-    let mut tls =
-        connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
-            .await?;
+    let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =
         super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
 
@@ -757,14 +747,7 @@ pub(crate) async fn exec(ctx: &ToolContext, args: Value) -> Result<Value> {
                                 );
                             }
                             tokio::time::sleep(backoff.min(deadline - now)).await;
-                            match connect_to_bridge_hybrid(
-                                &host.bridge_addr,
-                                &host.bridge_token,
-                                &ctx.ca_cert_path,
-                                3,
-                            )
-                            .await
-                            {
+                            match connect_to_host(ctx, &host).await {
                                 Ok(new_tls) => {
                                     tls = new_tls;
                                     break;
@@ -831,9 +814,7 @@ pub(crate) async fn collect_until_exit(ctx: &ToolContext, args: Value) -> Result
         .router
         .get(host_name)
         .with_context(|| format!("host not found: {}", host_name))?;
-    let mut tls =
-        connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
-            .await?;
+    let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =
         super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
     send_json_frame(

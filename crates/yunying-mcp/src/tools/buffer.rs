@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
 use super::ToolContext;
-use crate::transport::{connect_to_bridge_hybrid, recv_json_frame, send_json_frame};
+use crate::transport::{connect_to_host, recv_json_frame, send_json_frame};
 use yunying_core::types::AuditAction;
 
 pub(crate) async fn list_buffers(ctx: &ToolContext, args: Value) -> Result<Value> {
@@ -11,9 +11,7 @@ pub(crate) async fn list_buffers(ctx: &ToolContext, args: Value) -> Result<Value
         .router
         .get(host_name)
         .with_context(|| format!("host not found: {}", host_name))?;
-    let mut tls =
-        connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
-            .await?;
+    let mut tls = connect_to_host(ctx, &host).await?;
     send_json_frame(&mut tls, &json!({ "type": "list_buffers" })).await?;
     let response = recv_json_frame(&mut tls).await?;
     super::audit(
@@ -43,9 +41,7 @@ pub(crate) async fn paste_buffer(ctx: &ToolContext, args: Value) -> Result<Value
         .router
         .get(host_name)
         .with_context(|| format!("host not found: {}", host_name))?;
-    let mut tls =
-        connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
-            .await?;
+    let mut tls = connect_to_host(ctx, &host).await?;
     send_json_frame(&mut tls, &json!({ "type": "paste_buffer", "session_name": session_name, "pane_id": pane_id, "buffer_name": buffer_name })).await?;
     let response = recv_json_frame(&mut tls).await?;
     super::audit(
@@ -73,9 +69,7 @@ pub(crate) async fn delete_buffer(ctx: &ToolContext, args: Value) -> Result<Valu
         .router
         .get(host_name)
         .with_context(|| format!("host not found: {}", host_name))?;
-    let mut tls =
-        connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
-            .await?;
+    let mut tls = connect_to_host(ctx, &host).await?;
     send_json_frame(
         &mut tls,
         &json!({ "type": "delete_buffer", "buffer_name": buffer_name }),

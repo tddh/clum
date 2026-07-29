@@ -6,6 +6,7 @@ mod files;
 mod interactive;
 mod protocol;
 mod proxy;
+mod register;
 mod terminal_state;
 mod tls;
 
@@ -231,6 +232,37 @@ async fn main() -> anyhow::Result<()> {
     }
     // ─── end recording cleanup ───
 
+    // ─── Central server registration ───
+    if let Some(server_addr) = &config.server_addr {
+        let token = load_registration_token(&config.auth_token);
+        let reg_config = register::RegisterConfig {
+            server_addr: server_addr.clone(),
+            ca_cert: config
+                .ca_cert
+                .as_ref()
+                .map(|p| p.to_string_lossy().to_string()),
+            token,
+            rmux_socket: config.rmux_socket.clone(),
+            recording_enabled: config.recording_enabled,
+            recording_dir: config.resolve_recording_dir(),
+            recording_fsync_interval_secs: config.recording_fsync_interval_secs,
+            idle_timeout_secs: config.idle_timeout_secs,
+            audit_db: audit_db.clone(),
+        };
+        tokio::spawn(register::run_registration_loop(reg_config));
+    }
+    // ─── end registration ───
+
     // Block forever — QUIC listener runs in background task
     std::future::pending::<anyhow::Result<()>>().await
+}
+
+fn load_registration_token(env_token: &str) -> String {
+    if let Ok(file_token) = std::fs::read_to_string("/etc/yunying/token") {
+        let trimmed = file_token.trim().to_string();
+        if !trimmed.is_empty() {
+            return trimmed;
+        }
+    }
+    env_token.to_string()
 }

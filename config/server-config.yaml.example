@@ -1,0 +1,18 @@
+# yunying central server configuration
+# Usage: yunying-mcp --mode http --config config/server-config.yaml
+
+listen: "0.0.0.0:9778"
+server_cert: "certs/server.crt"
+server_key: "certs/server.key"
+ca_cert: "certs/ca.crt"
+hosts_file: "config/hosts.yaml"
+audit_db: "~/.yunying/audit.db"
+token_ttl_hours: 24
+
+bridges:
+  - hostname: tf01
+    token: "8f3a..."
+    tags: [gpu, training]
+    labels:
+      dc: shanghai
+      rack: A03

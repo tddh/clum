@@ -1,0 +1,272 @@
+use std::sync::Arc;
+use std::time::Duration;
+
+use anyhow::Context;
+
+use crate::bridge_audit::BridgeAuditDb;
+use crate::interactive::InteractiveSession;
+use crate::protocol::ProtocolProxy;
+
+pub struct RegisterConfig {
+    pub server_addr: String,
+    pub ca_cert: Option<String>,
+    pub token: String,
+    pub rmux_socket: String,
+    pub recording_enabled: bool,
+    pub recording_dir: std::path::PathBuf,
+    pub recording_fsync_interval_secs: u64,
+    pub idle_timeout_secs: u64,
+    pub audit_db: Arc<BridgeAuditDb>,
+}
+
+pub async fn run_registration_loop(config: RegisterConfig) {
+    let mut backoff = Duration::from_millis(500);
+    let max_backoff = Duration::from_secs(30);
+
+    loop {
+        match connect_and_register(&config).await {
+            Ok(()) => {
+                tracing::info!("registration session ended, reconnecting");
+                backoff = Duration::from_millis(500);
+            }
+            Err(e) => {
+                tracing::warn!("registration failed: {e:#}, retrying in {backoff:?}");
+            }
+        }
+        tokio::time::sleep(backoff).await;
+        backoff = (backoff * 2).min(max_backoff);
+    }
+}
+
+async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
+    let tls_config = build_client_tls(config.ca_cert.as_deref())?;
+
+    let crypto = Arc::new(
+        quinn::crypto::rustls::QuicClientConfig::try_from(Arc::new(tls_config))
+            .map_err(|e| anyhow::anyhow!("QUIC client crypto: {e}"))?,
+    );
+    let client_config = quinn::ClientConfig::new(crypto);
+
+    let mut endpoint = quinn::Endpoint::client("[::]:0".parse()?)?;
+    endpoint.set_default_client_config(client_config);
+
+    let server_addr = resolve_addr(&config.server_addr).await?;
+    let server_name = extract_server_name(&config.server_addr);
+
+    tracing::info!(addr = %server_addr, "connecting to server");
+    let conn = endpoint
+        .connect(server_addr, &server_name)?
+        .await
+        .context("QUIC handshake failed")?;
+
+    tracing::info!("connected, sending registration");
+
+    let (mut send, mut recv) = conn.open_bi().await?;
+
+    let machine_id = read_machine_id();
+    let os_info = read_os_info();
+
+    let reg_msg = serde_json::json!({
+        "type": "bridge_register",
+        "token": config.token,
+        "version": env!("CARGO_PKG_VERSION"),
+        "capabilities": ["exec", "file", "tunnel", "interactive"],
+        "machine_id": machine_id,
+        "os_info": os_info,
+    });
+    write_frame(&mut send, &reg_msg).await?;
+
+    let ack_data = read_frame(&mut recv).await?;
+    let ack: serde_json::Value = serde_json::from_slice(&ack_data)?;
+
+    if ack.get("ok").and_then(|v| v.as_bool()) != Some(true) {
+        let err = ack
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
+        anyhow::bail!("registration rejected: {err}");
+    }
+
+    let hostname = ack
+        .get("hostname")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+    tracing::info!(hostname = %hostname, "registered, starting heartbeat + stream handler");
+
+    let protocol_proxy = match ProtocolProxy::connect(&config.rmux_socket).await {
+        Ok(p) => Arc::new(p),
+        Err(e) => {
+            tracing::error!("rmux connect failed: {e}");
+            return Err(e);
+        }
+    };
+
+    let session_state: Arc<tokio::sync::Mutex<Option<InteractiveSession>>> =
+        Arc::new(tokio::sync::Mutex::new(None));
+
+    // Heartbeat task: send pings on the control stream
+    let heartbeat_conn = conn.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(15));
+        loop {
+            interval.tick().await;
+            let ping = serde_json::json!({"type": "ping"});
+            if write_frame(&mut send, &ping).await.is_err() {
+                break;
+            }
+        }
+        heartbeat_conn.close(quinn::VarInt::from_u32(0), b"heartbeat ended");
+    });
+
+    // Control stream reader: handle server pushes (token rotation)
+    tokio::spawn(async move {
+        while let Ok(data) = read_frame(&mut recv).await {
+            let msg: serde_json::Value = match serde_json::from_slice(&data) {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
+            if msg.get("type").and_then(|v| v.as_str()) == Some("token_rotate") {
+                if let Some(new_token) = msg.get("new_token").and_then(|v| v.as_str()) {
+                    match persist_token(new_token).await {
+                        Ok(()) => tracing::info!("token rotated and persisted"),
+                        Err(e) => tracing::error!("failed to persist rotated token: {e}"),
+                    }
+                }
+            }
+        }
+    });
+
+    // Accept incoming streams from Server (tool execution requests)
+    loop {
+        match conn.accept_bi().await {
+            Ok((stream_send, stream_recv)) => {
+                let proxy = protocol_proxy.clone();
+                let state = session_state.clone();
+                let rec_dir = config.recording_dir.clone();
+                let rec_enabled = config.recording_enabled;
+                let rec_fsync = config.recording_fsync_interval_secs;
+                let audit_db = config.audit_db.clone();
+                let idle_timeout = config.idle_timeout_secs;
+                tokio::spawn(async move {
+                    if let Err(e) = crate::files::handle_quic_stream(
+                        stream_send,
+                        stream_recv,
+                        proxy,
+                        state,
+                        rec_enabled,
+                        rec_dir,
+                        rec_fsync,
+                        audit_db,
+                        idle_timeout,
+                    )
+                    .await
+                    {
+                        tracing::debug!("hub stream handler ended: {e}");
+                    }
+                });
+            }
+            Err(quinn::ConnectionError::ApplicationClosed { .. }) => break,
+            Err(quinn::ConnectionError::LocallyClosed) => break,
+            Err(e) => {
+                tracing::warn!("accept_bi error: {e}");
+                break;
+            }
+        }
+    }
+
+    tracing::info!("connection closed, will reconnect");
+    Ok(())
+}
+
+fn build_client_tls(ca_cert_path: Option<&str>) -> anyhow::Result<rustls::ClientConfig> {
+    let root_store = match ca_cert_path {
+        Some(path) => {
+            let pem = std::fs::read(path).with_context(|| format!("read CA cert: {path}"))?;
+            let certs: Vec<_> = rustls_pemfile::certs(&mut &pem[..])
+                .collect::<Result<Vec<_>, _>>()
+                .context("parse CA PEM")?;
+            let mut store = rustls::RootCertStore::empty();
+            store.add_parsable_certificates(certs);
+            store
+        }
+        None => {
+            let mut store = rustls::RootCertStore::empty();
+            store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+            store
+        }
+    };
+
+    let mut config = rustls::ClientConfig::builder()
+        .with_root_certificates(root_store)
+        .with_no_client_auth();
+    config.alpn_protocols = vec![b"yunying".to_vec()];
+    Ok(config)
+}
+
+async fn resolve_addr(addr: &str) -> anyhow::Result<std::net::SocketAddr> {
+    if let Ok(sock) = addr.parse::<std::net::SocketAddr>() {
+        return Ok(sock);
+    }
+    let addrs: Vec<_> = tokio::net::lookup_host(addr).await?.collect();
+    addrs.into_iter().next().context("DNS resolution failed")
+}
+
+fn extract_server_name(addr: &str) -> String {
+    addr.split(':').next().unwrap_or("localhost").to_string()
+}
+
+fn read_machine_id() -> String {
+    std::fs::read_to_string("/etc/machine-id")
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default()
+}
+
+fn read_os_info() -> String {
+    std::fs::read_to_string("/etc/os-release")
+        .ok()
+        .and_then(|content| {
+            content
+                .lines()
+                .find(|l| l.starts_with("PRETTY_NAME="))
+                .map(|l| {
+                    l.trim_start_matches("PRETTY_NAME=")
+                        .trim_matches('"')
+                        .to_string()
+                })
+        })
+        .unwrap_or_else(|| format!("unknown {}", std::env::consts::ARCH))
+}
+
+async fn persist_token(token: &str) -> anyhow::Result<()> {
+    let path = std::path::Path::new("/etc/yunying/token");
+    if let Some(parent) = path.parent() {
+        tokio::fs::create_dir_all(parent).await.ok();
+    }
+    tokio::fs::write(path, token).await?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        tokio::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).await?;
+    }
+    Ok(())
+}
+
+async fn read_frame(recv: &mut quinn::RecvStream) -> anyhow::Result<Vec<u8>> {
+    let mut len_buf = [0u8; 4];
+    recv.read_exact(&mut len_buf).await?;
+    let len = u32::from_le_bytes(len_buf) as usize;
+    if len > 1024 * 1024 {
+        anyhow::bail!("frame too large: {len}");
+    }
+    let mut buf = vec![0u8; len];
+    recv.read_exact(&mut buf).await?;
+    Ok(buf)
+}
+
+async fn write_frame(send: &mut quinn::SendStream, msg: &serde_json::Value) -> anyhow::Result<()> {
+    let data = serde_json::to_vec(msg)?;
+    let len = (data.len() as u32).to_le_bytes();
+    send.write_all(&len).await?;
+    send.write_all(&data).await?;
+    Ok(())
+}

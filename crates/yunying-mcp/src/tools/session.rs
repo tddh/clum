@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
 use super::ToolContext;
-use crate::transport::{connect_to_bridge_hybrid, recv_json_frame, send_json_frame};
+use crate::transport::{connect_to_host, recv_json_frame, send_json_frame};
 use yunying_core::types::AuditAction;
 
 pub(crate) async fn reload_config(ctx: &ToolContext) -> Result<Value> {
@@ -58,9 +58,7 @@ pub(crate) async fn session_create(ctx: &ToolContext, args: Value) -> Result<Val
         .get(host_name)
         .with_context(|| format!("host not found: {}", host_name))?;
 
-    let mut tls =
-        connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
-            .await?;
+    let mut tls = connect_to_host(ctx, &host).await?;
 
     let request = json!({ "type": "new_session", "name": session_name, "detached": true });
     send_json_frame(&mut tls, &request).await?;
@@ -88,9 +86,7 @@ pub(crate) async fn session_list(ctx: &ToolContext, args: Value) -> Result<Value
         .router
         .get(host_name)
         .with_context(|| format!("host not found: {}", host_name))?;
-    let mut tls =
-        connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
-            .await?;
+    let mut tls = connect_to_host(ctx, &host).await?;
 
     send_json_frame(&mut tls, &json!({ "type": "list_sessions" })).await?;
     let response = recv_json_frame(&mut tls).await?;
@@ -119,9 +115,7 @@ pub(crate) async fn session_attach(ctx: &ToolContext, args: Value) -> Result<Val
         .router
         .get(host_name)
         .with_context(|| format!("host not found: {}", host_name))?;
-    let mut tls =
-        connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
-            .await?;
+    let mut tls = connect_to_host(ctx, &host).await?;
 
     send_json_frame(
         &mut tls,
@@ -154,9 +148,7 @@ pub(crate) async fn session_detach(ctx: &ToolContext, args: Value) -> Result<Val
         .router
         .get(host_name)
         .with_context(|| format!("host not found: {}", host_name))?;
-    let mut tls =
-        connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
-            .await?;
+    let mut tls = connect_to_host(ctx, &host).await?;
 
     send_json_frame(
         &mut tls,
@@ -189,9 +181,7 @@ pub(crate) async fn kill_session(ctx: &ToolContext, args: Value) -> Result<Value
         .router
         .get(host_name)
         .with_context(|| format!("host not found: {}", host_name))?;
-    let mut tls =
-        connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
-            .await?;
+    let mut tls = connect_to_host(ctx, &host).await?;
     send_json_frame(
         &mut tls,
         &json!({ "type": "kill_session", "session_name": session_name }),
@@ -224,9 +214,7 @@ pub(crate) async fn respawn_pane(ctx: &ToolContext, args: Value) -> Result<Value
         .router
         .get(host_name)
         .with_context(|| format!("host not found: {}", host_name))?;
-    let mut tls =
-        connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, &ctx.ca_cert_path, 3)
-            .await?;
+    let mut tls = connect_to_host(ctx, &host).await?;
 
     let mut request = json!({
         "type": "respawn_pane",

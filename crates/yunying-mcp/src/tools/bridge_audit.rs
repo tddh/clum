@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
 use super::ToolContext;
-use crate::transport::{connect_to_bridge_hybrid_stream, recv_json_frame, send_json_frame};
+use crate::transport::{connect_to_host_stream, recv_json_frame, send_json_frame};
 
 /// Query the bridge-side connection event log on a remote host.
 ///
@@ -41,16 +41,9 @@ pub(crate) async fn query_bridge_audit(ctx: &ToolContext, args: Value) -> Result
         "params": params,
     });
 
-    let mut stream = connect_to_bridge_hybrid_stream(
-        &host.bridge_addr,
-        &host.bridge_token,
-        &ctx.ca_cert_path,
-        3,
-        30,
-        10,
-    )
-    .await
-    .with_context(|| format!("failed to connect to bridge: {}", host_name))?;
+    let mut stream = connect_to_host_stream(ctx, &host, 30, 10)
+        .await
+        .with_context(|| format!("failed to connect to bridge: {}", host_name))?;
 
     send_json_frame(&mut stream, &command)
         .await

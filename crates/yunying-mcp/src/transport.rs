@@ -394,3 +394,83 @@ pub async fn connect_to_bridge_hybrid_stream(
         }
     }
 }
+
+// ══════════════════════════════════════════════════════════════════
+// Registry-aware connection (Hub mode)
+// ══════════════════════════════════════════════════════════════════
+
+pub async fn connect_to_host(
+    ctx: &crate::tools::ToolContext,
+    host: &yunying_core::types::HostConfig,
+) -> Result<BridgeStream> {
+    connect_via_registry(&ctx.bridge_registry, host, &ctx.ca_cert_path).await
+}
+
+pub async fn connect_to_host_stream(
+    ctx: &crate::tools::ToolContext,
+    host: &yunying_core::types::HostConfig,
+    idle_timeout_secs: u64,
+    keepalive_secs: u64,
+) -> Result<BridgeStream> {
+    if let Some(bridge) = ctx.bridge_registry.get(&host.name).await {
+        if bridge.conn.close_reason().is_none() {
+            match open_json_stream(&bridge.conn).await {
+                Ok(stream) => {
+                    tracing::debug!("routed via registry (stream) to {}", host.name);
+                    return Ok(stream);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "registry stream to {} failed, falling back: {}",
+                        host.name,
+                        e
+                    );
+                }
+            }
+        }
+    }
+    connect_to_bridge_hybrid_stream(
+        &host.bridge_addr,
+        &host.bridge_token,
+        &ctx.ca_cert_path,
+        3,
+        idle_timeout_secs,
+        keepalive_secs,
+    )
+    .await
+}
+
+pub async fn connect_via_registry(
+    registry: &std::sync::Arc<crate::registry::BridgeRegistry>,
+    host: &yunying_core::types::HostConfig,
+    ca_cert_path: &str,
+) -> Result<BridgeStream> {
+    if let Some(bridge) = registry.get(&host.name).await {
+        if bridge.conn.close_reason().is_none() {
+            match open_json_stream(&bridge.conn).await {
+                Ok(stream) => {
+                    tracing::debug!("routed via registry to {}", host.name);
+                    return Ok(stream);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "registry stream to {} failed, falling back: {}",
+                        host.name,
+                        e
+                    );
+                }
+            }
+        }
+    }
+    connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, ca_cert_path, 3).await
+}
+
+async fn open_json_stream(conn: &quinn::Connection) -> Result<BridgeStream> {
+    let (mut send, recv) = conn.open_bi().await.context("open_bi on registered conn")?;
+    tokio::io::AsyncWriteExt::write_all(&mut send, &[0x01]).await?;
+    Ok(BridgeStream::Quic {
+        conn: conn.clone(),
+        send,
+        recv,
+    })
+}
