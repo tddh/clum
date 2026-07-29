@@ -279,7 +279,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "file_upload",
-                "description": "Upload files/directories to remote host via QUIC. Auto-creates target dirs. overwrite: overwrite(default)|skip|rename|error. exclude: glob patterns. Paths containing '..' are rejected by the bridge (path traversal protection). ⚠️ Do NOT add exclude/overwrite unless user explicitly requests.",
+                "description": "Upload files/directories to remote host via QUIC. Hub mode: local_path refers to the SERVER filesystem, not the client machine. For client-to-remote transfers use yunying-cli upload. Auto-creates target dirs. overwrite: overwrite(default)|skip|rename|error. exclude: glob patterns. Paths containing '..' are rejected by the bridge (path traversal protection). ⚠️ Do NOT add exclude/overwrite unless user explicitly requests.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -294,7 +294,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "file_download",
-                "description": "Download a file or directory from remote host via QUIC. Auto-detects path type: single file downloads directly; directory recursively downloads all files preserving structure. Returns size and SHA256 for files, or file list for directories. Paths containing '..' are rejected by the bridge; MCP validates relative paths from bridge. ⚠️ Do NOT modify paths or add filters unless user explicitly requests.",
+                "description": "Download a file or directory from remote host via QUIC. Hub mode: local_path writes to the SERVER filesystem, not the client machine. For remote-to-client downloads use yunying-cli download. Auto-detects path type: single file downloads directly; directory recursively downloads all files preserving structure. Returns size and SHA256 for files, or file list for directories. Paths containing '..' are rejected by the bridge; MCP validates relative paths from bridge. ⚠️ Do NOT modify paths or add filters unless user explicitly requests.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -612,7 +612,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "tunnel_create",
-                "description": "Create a local port forwarding tunnel to access remote services through an encrypted QUIC channel. Opens a local TCP listener on the specified port that forwards all connections to a remote host:port via the bridge. The remote_host can be an internal address (e.g., 127.0.0.1, 10.x.x.x) not directly reachable from your machine. If the host has 'allowed_tunnel_targets' configured in hosts.yaml, only matching targets are allowed (glob patterns supported). Returns a tunnel_id that can be used with tunnel_close. Tunnels persist until explicitly closed or the MCP server restarts.",
+                "description": "Create a port forwarding tunnel through an encrypted QUIC channel. Hub mode: the TCP listener is created on the SERVER side, not the client machine. For client-side local port forwarding use yunying-cli tunnel. Opens a TCP listener on the specified port that forwards all connections to a remote host:port via the bridge. The remote_host can be an internal address (e.g., 127.0.0.1, 10.x.x.x) not directly reachable from your machine. If the host has 'allowed_tunnel_targets' configured in hosts.yaml, only matching targets are allowed (glob patterns supported). Returns a tunnel_id that can be used with tunnel_close. Tunnels persist until explicitly closed or the MCP server restarts.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
