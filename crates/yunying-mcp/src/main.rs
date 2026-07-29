@@ -32,7 +32,7 @@ struct Cli {
     #[arg(long, default_value = "stdio")]
     mode: String,
 
-    #[arg(long, default_value = "0.0.0.0:9778")]
+    #[arg(long, default_value = "0.0.0.0:9788")]
     listen: String,
 
     #[arg(long, value_delimiter = ',')]

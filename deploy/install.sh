@@ -2,7 +2,7 @@
 set -e
 
 # yunying Bridge installer
-# Usage: curl -fsSL https://SERVER:9778/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=10.0.0.1:9778 sh
+# Usage: curl -fsSL https://SERVER:9788/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=10.0.0.1:9788 sh
 
 if [ -z "${BRIDGE_TOKEN}" ]; then
     echo "ERROR: BRIDGE_TOKEN environment variable is required" >&2
@@ -23,7 +23,7 @@ esac
 
 SERVER_HOST=$(echo "$SERVER_ADDR" | cut -d: -f1)
 SERVER_PORT=$(echo "$SERVER_ADDR" | cut -d: -f2)
-SERVER_PORT=${SERVER_PORT:-9778}
+SERVER_PORT=${SERVER_PORT:-9788}
 BASE_URL="http://${SERVER_HOST}:${SERVER_PORT}"
 
 echo ">>> Installing yunying bridge (${ARCH})"
