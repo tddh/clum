@@ -32,6 +32,7 @@ futures.workspace = true
 quinn = { workspace = true, features = ["rustls"] }
 rmcp.workspace = true
 axum.workspace = true
+axum-server = { version = "0.7", features = ["tls-rustls"] }
 
 [dev-dependencies]
 tempfile = "3"

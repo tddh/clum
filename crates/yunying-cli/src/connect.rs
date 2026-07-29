@@ -32,7 +32,7 @@ pub async fn connect_via_server(
 
     let addr: std::net::SocketAddr = server_addr
         .parse()
-        .or_else(|_| Ok::<_, anyhow::Error>(format!("{server_addr}:9778").parse()?))?;
+        .or_else(|_| Ok::<_, anyhow::Error>(format!("{server_addr}:9788").parse()?))?;
     let server_name = server_addr.split(':').next().unwrap_or("localhost");
 
     let conn = endpoint

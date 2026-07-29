@@ -1208,6 +1208,20 @@ tunnel_create host="tf01" local_port=8080 remote_host="api.internal" remote_port
 
 ## 审计与录制
 
+### `audit_query`
+
+查询 Server 侧集中审计日志。记录所有 MCP 工具调用（谁、什么时间、哪台机器、什么操作、是否成功）。Hub 模式下查询操作历史的首选工具。
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:----:|------|
+| `host` | string | | 按主机名过滤 |
+| `action` | string | | 按操作类型过滤（如 Exec, SessionCreate） |
+| `agent` | string | | 按 agent 名过滤 |
+| `since` | string | | 起始时间（RFC3339） |
+| `until` | string | | 截止时间（RFC3339） |
+| `success` | boolean | | 按成功/失败过滤 |
+| `limit` | integer | | 返回条数上限（默认 50） |
+
 ### `query_bridge_audit`
 
 查询目标主机 bridge 侧的连接事件日志（认证失败、CLI 会话 attach/detach/exit、录制清理等）。

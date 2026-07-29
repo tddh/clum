@@ -61,17 +61,17 @@ AI (via MCP)
 
 ```mermaid
 graph LR
-    A[AI Client<br/>opencode/Claude/Cursor] <-->|HTTP :9778<br/>MCP Streamable HTTP| S[Central MCP Server<br/>yunying-mcp --mode http]
-    H[Human] <-->|QUIC :9778<br/>PTY / upload / tunnel| S
-    S <-->|QUIC :9778<br/>reverse registration| C1[rmux-bridge<br/>host-1]
-    S <-->|QUIC :9778| C2[rmux-bridge<br/>host-2]
-    S <-->|QUIC :9778| C3[rmux-bridge<br/>host-N]
+    A[AI Client<br/>opencode/Claude/Cursor] <-->|HTTP :9788<br/>MCP Streamable HTTP| S[Central MCP Server<br/>yunying-mcp --mode http]
+    H[Human] <-->|QUIC :9788<br/>PTY / upload / tunnel| S
+    S <-->|QUIC :9788<br/>reverse registration| C1[rmux-bridge<br/>host-1]
+    S <-->|QUIC :9788| C2[rmux-bridge<br/>host-2]
+    S <-->|QUIC :9788| C3[rmux-bridge<br/>host-N]
     C1 <-->|Unix Socket| D1[RMUX daemon]
     C2 <-->|Unix Socket| D2[RMUX daemon]
     C3 <-->|Unix Socket| D3[RMUX daemon]
 ```
 
-- **yunying-mcp (Hub Server)** — Central MCP Server: HTTP :9778 for AI clients (MCP protocol) + QUIC :9778 for Bridge registration and CLI data plane. Provides 67 tools, centralized audit, API Key auth, and static file serving.
+- **yunying-mcp (Hub Server)** — Central MCP Server: HTTP :9788 for AI clients (MCP protocol) + QUIC :9788 for Bridge registration and CLI data plane. Provides 67 tools, centralized audit, API Key auth, and static file serving.
 - **yunying-cli** — CLI for humans: PTY passthrough (`connect`), file transfer (`upload`/`download`), port forwarding (`tunnel`), session listing (`list`), recording playback (`replay`). Built-in AI chat panel (Ctrl+G).
 - **rmux-bridge** — Agent deployed on each Linux host. Reverse-connects to the Hub server, handles tool execution, file I/O, PTY sessions, and recording push.
 - **RMUX daemon** — Terminal multiplexer on each Linux host (rmux-based).
@@ -85,7 +85,7 @@ graph LR
 | AI clients | Any machine | Hub server (HTTP, MCP protocol) |
 | `yunying-cli` | Operator machine | Hub server (QUIC, `--server-addr`) |
 
-> 💡 New bridges deploy with one command: `curl -fsSL http://SERVER:9778/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=xxx sh`
+> 💡 New bridges deploy with one command: `curl -fsSL curl -fsSL -H "Authorization: Bearer <download_token>" http://SERVER:9788/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=SERVER:9788 DOWNLOAD_TOKEN=<download_token> sh`
 
 ## Features
 
@@ -157,7 +157,7 @@ Create `config/hosts.yaml` (see `config/hosts.example.yaml`):
 ```yaml
 hosts:
   - name: prod-web-01
-    bridge_addr: 10.0.1.10:9778
+    bridge_addr: 10.0.1.10:9788
     bridge_token: "your-token-here"
     group: production
     tags: [web, nginx]
@@ -294,7 +294,7 @@ This design keeps yunying focused on operations while enabling teams to build th
 
 ## Tools
 
-66 MCP tools covering the full terminal lifecycle, plus `audit query/stats/cleanup` CLI subcommands for human operators:
+67 MCP tools covering the full terminal lifecycle, plus `audit query/stats/cleanup` CLI subcommands for human operators:
 
 | Category | Tools |
 |----------|-------|
@@ -339,7 +339,7 @@ just build       # cargo build --workspace
 
 ## Docs
 
-- [Tool Reference](docs/TOOLS.md) — 66 MCP tools with parameters and return values
+- [Tool Reference](docs/TOOLS.md) — 67 MCP tools with parameters and return values
 - [Deployment Guide](docs/DEPLOY.md) — Architecture, build, deploy, operations, security
 - [Connect Design](docs/connect-design.md) — CLI PTY passthrough + AI chat panel design
 - [Terminal State Design](docs/terminal-state-design.md) — Terminal state awareness heuristic engine

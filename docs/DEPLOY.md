@@ -5,12 +5,12 @@
 ## 架构（Hub 模式）
 
 ```
-┌─────────────────┐  HTTP :9778 (MCP)   ┌────────────────────────────────────────┐
+┌─────────────────┐  HTTP :9788 (MCP)   ┌────────────────────────────────────────┐
 │  AI 客户端        │◄──────────────────►│        Central MCP Server              │
 │ (OpenCode/Claude) │                     │        yunying-mcp --mode http        │
 └─────────────────┘                     │                                        │
-┌─────────────────┐  QUIC :9778         │  TCP :9778  HTTP/2 (MCP 生态)          │
-│  人类运维         │◄──────────────────►│  UDP :9778  QUIC (Bridge/CLI)          │
+┌─────────────────┐  QUIC :9788         │  TCP :9788  HTTP/2 (MCP 生态)          │
+│  人类运维         │◄──────────────────►│  UDP :9788  QUIC (Bridge/CLI)          │
 │  (yunying-cli)   │  PTY/upload/tunnel  │                                        │
 └─────────────────┘                     │  集中审计 + API Key + 注册表 + 静态文件  │
                                         └───────────┬──────────┬─────────────────┘
@@ -38,7 +38,7 @@
 # 在中心服务器上
 scp target/x86_64-unknown-linux-musl/release/yunying-mcp server:/opt/yunying/
 ssh server '/opt/yunying/yunying-mcp --mode http \
-  --listen 0.0.0.0:9778 \
+  --listen 0.0.0.0:9788 \
   --server-cert /etc/yunying/server.crt \
   --server-key /etc/yunying/server.key \
   --ca-cert /etc/yunying/ca.crt \
@@ -54,8 +54,8 @@ yunying-mcp bridge add my-host --tags gpu,web
 # 输出 token 和安装命令
 
 # 目标机器一键安装
-curl -fsSL http://SERVER:9778/install.sh | \
-  BRIDGE_TOKEN=<token> SERVER_ADDR=SERVER:9778 sh
+curl -fsSL http://SERVER:9788/install.sh | \
+  BRIDGE_TOKEN=<token> SERVER_ADDR=SERVER:9788 sh
 ```
 
 ### 3. 配置 AI 客户端
@@ -65,7 +65,7 @@ curl -fsSL http://SERVER:9778/install.sh | \
   "mcp": {
     "yunying": {
       "type": "remote",
-      "url": "http://SERVER:9778/mcp",
+      "url": "http://SERVER:9788/mcp",
       "headers": { "Authorization": "Bearer yk_tddh_..." }
     }
   }
@@ -160,7 +160,7 @@ Requires=rmux-daemon.service
 Type=simple
 EnvironmentFile=/opt/yunying/bridge.env
 ExecStart=/opt/yunying/rmux-bridge \
-    --quic-listen-addr 0.0.0.0:9778 \
+    --quic-listen-addr 0.0.0.0:9788 \
     --max-connections 256 \
     --rmux-socket /root/.rmux/rmux-0/default \
     --tls-cert /opt/yunying/certs/<ip>.crt \
@@ -191,7 +191,7 @@ ssh root@<your-bridge-ip> "systemctl status rmux-bridge --no-pager"
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `--quic-listen-addr` | `0.0.0.0:9778` | QUIC/UDP 监听地址（终端操作 + 文件传输） |
+| `--quic-listen-addr` | `0.0.0.0:9788` | QUIC/UDP 监听地址（终端操作 + 文件传输） |
 | `--max-connections` | `256` | 最大并发连接数，0=无限制（`MAX_CONNECTIONS` 环境变量） |
 | `--rmux-socket` | `/tmp/rmux-1000/default` | RMUX daemon Unix socket 路径 |
 | `--tls-cert` | `certs/bridge.crt` | TLS 证书路径（CA 签发） |
@@ -206,7 +206,7 @@ ssh root@<your-bridge-ip> "systemctl status rmux-bridge --no-pager"
 | `--recording-fsync-interval-secs` | `5` | 录制 fsync 间隔秒（`RECORDING_FSYNC_INTERVAL_SECS` 环境变量） |
 | `--bridge-audit-db` | 自动检测 | Bridge 侧审计数据库路径（`BRIDGE_AUDIT_DB` 环境变量） |
 
-> **QUIC 协议**：所有通信走 QUIC（UDP :9778），内置 TLS 1.3 加密。确保防火墙放行 UDP 9778 端口。
+> **QUIC 协议**：所有通信走 QUIC（UDP :9788），内置 TLS 1.3 加密。确保防火墙放行 UDP 9788（Server）和 9778（Bridge 直连回退）端口。
 
 ### 5. MCP Server CLI 参数参考
 
@@ -231,7 +231,7 @@ Bridge 使用静态 token 认证，通过常数时间比较（防时序攻击）
 # config/hosts.yaml
 hosts:
   - name: tf01
-    bridge_addr: 10.0.1.10:9778
+    bridge_addr: 10.0.1.10:9788
     bridge_token: "your-secure-token"
 ```
 
@@ -244,7 +244,7 @@ hosts:
 ```yaml
 hosts:
   - name: tf01                         # MCP 工具中引用的主机名
-    bridge_addr: <your-bridge-ip>:9778     # bridge 地址
+    bridge_addr: <your-bridge-ip>:9788     # bridge 地址
     bridge_token: "<your-token>"              # 认证 token
     group: production                  # 分组（host_filter 用）
     tags: [web, nginx]                  # 标签

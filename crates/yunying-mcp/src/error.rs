@@ -108,7 +108,7 @@ pub fn classify_message(msg: &str) -> Classified {
     if has("timeout") || has("timed out") {
         return c(
             "TIMEOUT",
-            "exec 超时不杀进程：capture_pane 查看进度、wait_for_text 等完成，不要盲目重跑；若是连接超时则确认主机在线、9778 端口可达",
+            "exec 超时不杀进程：capture_pane 查看进度、wait_for_text 等完成，不要盲目重跑；若是连接超时则确认主机在线、Server 9788 端口可达",
             false,
         );
     }

@@ -3,7 +3,7 @@
 ## [0.9.0] — 2026-07-30
 
 ### Added — Central Server (Hub Mode)
-- **中央 MCP Server**：双栈监听 TCP :9778（HTTP/2，rmcp StreamableHttpService）+ UDP :9778（QUIC，ALPN "yunying"）。AI 客户端只需配置一个 URL + API Key 即可连接。
+- **中央 MCP Server**：双栈监听 TCP :9788（HTTP/2，rmcp StreamableHttpService）+ UDP :9788（QUIC，ALPN "yunying"）。AI 客户端只需配置一个 URL + API Key 即可连接。
 - **Bridge 反向注册**：Bridge 主动连接 Server 并注册（token 认证），心跳保活（15s），断连指数退避重连（500ms→30s）。
 - **连接注册表**：Server 内存注册表（`BridgeRegistry`），工具调用优先走 Hub 路由，未注册主机回退直连。
 - **API Key 认证**：`yk_{name}_{32hex}` 格式，SQLite 存储，SHA-256 哈希。HTTP（Bearer）+ QUIC（agent_connect）双通道认证。
@@ -215,7 +215,7 @@
 ### Added
 - 39 MCP 工具（38 可用 + 1 开发中 `stream_pane`）
 - 3 个批量操作工具：`batch_exec`、`batch_upload`、`batch_download`（多主机并发执行/上传/下载）
-- QUIC 协议传输（UDP :9778）
+- QUIC 协议传输（UDP :9788）
 - CA 签发 + 按主机独立证书的多主机 PKI 体系
 - Windows/macOS/Linux 客户端原生支持
 - Bridge 并发连接限制（`--max-connections`，默认 256）

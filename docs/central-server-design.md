@@ -30,11 +30,11 @@
                         ┌──────────────────────────────────────┐
                         │          Central MCP Server            │
                         │                                        │
-  AI Agent ──TCP───────→│  TCP :9778  HTTP/2                     │
+  AI Agent ──TCP───────→│  TCP :9788  HTTP/2                     │
   (opencode/Claude/     │          rmcp StreamableHttpService    │
    Cursor/Codex)        │          MCP 标准 Streamable HTTP      │
                         │                                        │
-  yunying-cli ──QUIC───→│  UDP :9778 QUIC                       │
+  yunying-cli ──QUIC───→│  UDP :9788 QUIC                       │
   自建 Agent ──QUIC────→│          ALPN 协商：                   │
                         │            "h3"      → HTTP/3 (可选)   │
   Bridge-1 ──QUIC──────→│            "yunying" → 原生帧协议      │
@@ -45,8 +45,8 @@
 
 **双栈：TCP 给 MCP 生态，QUIC 给自己的组件。**
 
-- **TCP :9778**（HTTP/2）：opencode、Claude Desktop、Cursor、Codex 等标准 MCP 客户端。rmcp `StreamableHttpService` 直接支持。
-- **UDP :9778**（QUIC）：Bridge 反向注册 + yunying CLI PTY 透传 + 自建 Agent。ALPN 区分 `h3`（HTTP/3，可选）和 `yunying`（原生帧协议）。
+- **TCP :9788**（HTTP/2）：opencode、Claude Desktop、Cursor、Codex 等标准 MCP 客户端。rmcp `StreamableHttpService` 直接支持。
+- **UDP :9788**（QUIC）：Bridge 反向注册 + yunying CLI PTY 透传 + 自建 Agent。ALPN 区分 `h3`（HTTP/3，可选）和 `yunying`（原生帧协议）。
 - 同一端口号，TCP/UDP 互不干扰。两个入口，一套工具执行逻辑。
 
 ### 1.4 范围界定
@@ -82,8 +82,8 @@
 
 | 端口 | 协议 | 使用者 | 说明 |
 |------|------|--------|------|
-| **TCP :9778** | HTTP/2 | opencode / Claude / Cursor / Codex / 标准 MCP SDK | rmcp `StreamableHttpService` 直接支持 |
-| **UDP :9778** | QUIC（ALPN 路由） | Bridge / yunying-cli / 自建 Agent | 长连接、多路复用、连接迁移 |
+| **TCP :9788** | HTTP/2 | opencode / Claude / Cursor / Codex / 标准 MCP SDK | rmcp `StreamableHttpService` 直接支持 |
+| **UDP :9788** | QUIC（ALPN 路由） | Bridge / yunying-cli / 自建 Agent | 长连接、多路复用、连接迁移 |
 
 QUIC 端口 ALPN 协商：
 
@@ -117,11 +117,11 @@ while let Some(connecting) = endpoint.accept().await {
 
 ```
 控制平面（MCP 工具调用）：
-  Agent → MCP tools/call exec → TCP :9778 → Server → Bridge
+  Agent → MCP tools/call exec → TCP :9788 → Server → Bridge
 
 数据平面（CLI 命令，Agent 通过 Bash 工具执行）：
   Agent → Bash("yunying-cli upload tf01 ./a.conf /etc/a.conf")
-        → CLI 进程 → QUIC :9778 → Server 流式中继 → Bridge → Linux 磁盘
+        → CLI 进程 → QUIC :9788 → Server 流式中继 → Bridge → Linux 磁盘
 ```
 
 **Server 仍然做流式中继**（文件 1MB 分块，隧道 64KB 分块，不缓冲整文件）。区别只是 Agent 侧的触发方式：通过 skill 指导 Agent 调用 CLI，而非直接调 MCP 工具。
@@ -222,7 +222,7 @@ rmux 本身支持多客户端 attach 到同一个 session。Sidecar 模式下"�
 
 ```
 Bridge 启动
-  → QUIC 连到 Server :9778（ALPN "yunying"，0-RTT 如果之前连过）
+  → QUIC 连到 Server :9788（ALPN "yunying"，0-RTT 如果之前连过）
   → 发送注册消息（不含 hostname）：
     {
       "type": "bridge_register",
@@ -302,13 +302,13 @@ Token TTL：  24 小时
 ```bash
 # yunying-server bridge add tf01 --tags gpu,training 输出：
 # 安装命令（在目标机器上执行）：
-curl -fsSL https://10.0.0.1:9778/install.sh | \
+curl -fsSL https://10.0.0.1:9788/install.sh | \
   BRIDGE_TOKEN=8f3a... \
-  SERVER_ADDR=10.0.0.1:9778 \
+  SERVER_ADDR=10.0.0.1:9788 \
   sh
 ```
 
-Server 在 TCP :9778 端口通过 HTTP/2 提供静态文件（install.sh、二进制、CA 证书）。
+Server 在 TCP :9788 端口通过 HTTP/2 提供静态文件（install.sh、二进制、CA 证书）。
 
 后续更新（全自动，无需 SSH）：
 
@@ -353,7 +353,7 @@ yunying-server release upload --version 0.9.0 --linux-x86_64 ./rmux-bridge
 
 ### 4.1 模型
 
-**有 API Key 就通过，持有有效 Key 即拥有全部 66 个工具的权限。**
+**有 API Key 就通过，持有有效 Key 即拥有全部 67 个工具的权限。**
 
 Key 的作用是**标识身份**（审计追溯"谁做了什么"），不是授权。
 
@@ -455,7 +455,7 @@ yunying-server agent revoke ci-bot      # 立即失效
 
 ### 6.1 不受影响（~70% 代码量）
 
-66 个工具的业务逻辑（`tools/*.rs`）、`schema.rs`、`error.rs`、审计逻辑。
+67 个工具的业务逻辑（`tools/*.rs`）、`schema.rs`、`error.rs`、审计逻辑。
 
 ### 6.2 需要重写（~15%）
 
@@ -463,7 +463,7 @@ yunying-server agent revoke ci-bot      # 立即失效
 | -------------- | ---------------------------------------------- |
 | `transport.rs` | MCP 主动连 Bridge → Server 监听 + Bridge 反向连入 + 连接注册表 |
 | `router.rs`    | 静态 hosts.yaml → 动态注册表                          |
-| `main.rs`      | stdio 循环 → 双栈监听（TCP :9778 + QUIC :9778）+ 注册表    |
+| `main.rs`      | stdio 循环 → 双栈监听（TCP :9788 + QUIC :9788）+ 注册表    |
 | `handler.rs`   | 手写 JSON-RPC → rmcp v3.0.0                      |
 
 ### 6.3 需要适配（~15%）
@@ -503,7 +503,7 @@ yunying-server agent revoke ci-bot      # 立即失效
 
 - [ ] rmcp v3.0.0 集成（MCP 协议层，2026-07-28 stateless）
 - [ ] Bridge 反向注册 + 连接注册表
-- [ ] 双栈监听：TCP :9778（HTTP/2，rmcp StreamableHttpService）+ UDP :9778（QUIC ALPN）
+- [ ] 双栈监听：TCP :9788（HTTP/2，rmcp StreamableHttpService）+ UDP :9788（QUIC ALPN）
 - [ ] Server 配置（server-config.yaml）
 - [ ] Agent API Key 认证（有 key 就过，标识身份）
 - [ ] 请求路由（agent → Server → Bridge）
@@ -539,8 +539,8 @@ yunying-server agent revoke ci-bot      # 立即失效
 
 | 组件 | 选型 | 理由 |
 |------|------|------|
-| MCP 生态入口 | **TCP :9778 (axum + rmcp)** | HTTP/2，opencode/Claude/Cursor 直接连 |
-| Bridge/CLI 入口 | **UDP :9778 (quinn)** | QUIC 长连接、多路复用、连接迁移 |
+| MCP 生态入口 | **TCP :9788 (axum + rmcp)** | HTTP/2，opencode/Claude/Cursor 直接连 |
+| Bridge/CLI 入口 | **UDP :9788 (quinn)** | QUIC 长连接、多路复用、连接迁移 |
 | MCP 协议层 | **rmcp v3.0.0** | 2026-07-28 spec，stateless HTTP，Transport trait 可插拔 |
 | TLS | rustls | 已有，无 OpenSSL 依赖，TLS 1.3 |
 | 审计存储 | rusqlite (SQLite) | 已有，集中到 Server 侧 |

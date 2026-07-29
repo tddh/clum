@@ -61,17 +61,17 @@ AI（通过 MCP）
 
 ```mermaid
 graph LR
-    A[AI 客户端<br/>opencode/Claude/Cursor] <-->|HTTP :9778<br/>MCP Streamable HTTP| S[中央 MCP Server<br/>yunying-mcp --mode http]
-    H[人类运维] <-->|QUIC :9778<br/>PTY / 文件 / 隧道| S
-    S <-->|QUIC :9778<br/>反向注册| C1[rmux-bridge<br/>主机-1]
-    S <-->|QUIC :9778| C2[rmux-bridge<br/>主机-2]
-    S <-->|QUIC :9778| C3[rmux-bridge<br/>主机-N]
+    A[AI 客户端<br/>opencode/Claude/Cursor] <-->|HTTP :9788<br/>MCP Streamable HTTP| S[中央 MCP Server<br/>yunying-mcp --mode http]
+    H[人类运维] <-->|QUIC :9788<br/>PTY / 文件 / 隧道| S
+    S <-->|QUIC :9788<br/>反向注册| C1[rmux-bridge<br/>主机-1]
+    S <-->|QUIC :9788| C2[rmux-bridge<br/>主机-2]
+    S <-->|QUIC :9788| C3[rmux-bridge<br/>主机-N]
     C1 <-->|Unix Socket| D1[RMUX daemon]
     C2 <-->|Unix Socket| D2[RMUX daemon]
     C3 <-->|Unix Socket| D3[RMUX daemon]
 ```
 
-- **yunying-mcp（Hub Server）** — 中央 MCP Server：HTTP :9778 面向 AI 客户端（MCP 协议）+ QUIC :9778 面向 Bridge 注册和 CLI 数据平面。提供 67 个工具、集中审计、API Key 认证、静态文件服务。
+- **yunying-mcp（Hub Server）** — 中央 MCP Server：HTTP :9788 面向 AI 客户端（MCP 协议）+ QUIC :9788 面向 Bridge 注册和 CLI 数据平面。提供 67 个工具、集中审计、API Key 认证、静态文件服务。
 - **yunying-cli** — 命令行工具：PTY 透传（`connect`）、文件传输（`upload`/`download`）、端口转发（`tunnel`）、会话列表（`list`）、录制回放（`replay`）。内置 AI 对话面板（Ctrl+G）。
 - **rmux-bridge** — 部署在每台 Linux 主机的 Agent。主动连接 Hub Server 注册，处理工具执行、文件 I/O、PTY 会话、录制推送。
 - **RMUX daemon** — 每台 Linux 主机上的终端多路复用器（基于 rmux）。
@@ -85,7 +85,7 @@ graph LR
 | AI 客户端 | 任意机器 | Hub Server（HTTP，MCP 协议） |
 | `yunying-cli` | 运维人员机器 | Hub Server（QUIC，`--server-addr`） |
 
-> 💡 新 Bridge 一键部署：`curl -fsSL http://SERVER:9778/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=xxx sh`
+> 💡 新 Bridge 一键部署：`curl -fsSL curl -fsSL -H "Authorization: Bearer <download_token>" http://SERVER:9788/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=SERVER:9788 DOWNLOAD_TOKEN=<download_token> sh`
 
 > 💡 部署时 bridge 会自动检测 RMUX socket 路径，无需手动配置。
 
@@ -159,7 +159,7 @@ just deploy host=root@<your-bridge-ip> token=<your-token>
 ```yaml
 hosts:
   - name: prod-web-01
-    bridge_addr: 10.0.1.10:9778
+    bridge_addr: 10.0.1.10:9788
     bridge_token: "your-token-here"
     group: production
     tags: [web, nginx]
@@ -295,7 +295,7 @@ echo "$(cat)" >> knowledge.jsonl && git commit -am "新增排障经验条目"
 
 ## 工具列表
 
-共 66 个 MCP 工具，覆盖完整终端生命周期；另有 `audit query/stats/cleanup` CLI 子命令供人类直接查询审计日志：
+共 67 个 MCP 工具，覆盖完整终端生命周期；另有 `audit query/stats/cleanup` CLI 子命令供人类直接查询审计日志：
 
 | 类别 | 工具 |
 |------|------|
@@ -340,7 +340,7 @@ just build       # cargo build --workspace
 
 ## 文档
 
-- [工具文档](docs/TOOLS.md) — 66 个 MCP 工具的完整参数与返回值
+- [工具文档](docs/TOOLS.md) — 67 个 MCP 工具的完整参数与返回值
 - [部署文档](docs/DEPLOY.md) — 架构、构建、部署、运维、安全
 - [Connect 设计方案](docs/connect-design.md) — CLI PTY 透传 + AI 对话面板设计
 - [终端状态感知设计](docs/terminal-state-design.md) — 终端状态启发式检测引擎
