@@ -8,7 +8,7 @@ const THROTTLE_INTERVAL: Duration = Duration::from_millis(200);
 
 pub struct ProgressReporter {
     token: Option<Value>,
-    writer: Arc<Mutex<tokio::io::Stdout>>,
+    writer: Option<Arc<Mutex<tokio::io::Stdout>>>,
     last_sent: Instant,
     failed: bool,
 }
@@ -30,7 +30,19 @@ impl ProgressReporter {
     pub fn new(token: Option<Value>, writer: Arc<Mutex<tokio::io::Stdout>>) -> Self {
         Self {
             token,
-            writer,
+            writer: Some(writer),
+            last_sent: Instant::now()
+                .checked_sub(THROTTLE_INTERVAL)
+                .unwrap_or_else(Instant::now),
+            failed: false,
+        }
+    }
+
+    /// No-op reporter for HTTP mode (no stdout, no progress notifications).
+    pub fn noop() -> Self {
+        Self {
+            token: None,
+            writer: None,
             last_sent: Instant::now()
                 .checked_sub(THROTTLE_INTERVAL)
                 .unwrap_or_else(Instant::now),
@@ -42,6 +54,10 @@ impl ProgressReporter {
         let token = match &self.token {
             Some(t) if !self.failed => t,
             _ => return,
+        };
+        let writer = match &self.writer {
+            Some(w) => w,
+            None => return,
         };
         if self.last_sent.elapsed() < THROTTLE_INTERVAL && progress < total {
             return;
@@ -58,7 +74,7 @@ impl ProgressReporter {
                 "message": message,
             }
         });
-        let mut w = self.writer.lock().await;
+        let mut w = writer.lock().await;
         let result = async {
             w.write_all(notification.to_string().as_bytes()).await?;
             w.write_all(b"\n").await?;

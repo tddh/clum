@@ -4,6 +4,7 @@ mod audit_cli;
 mod error;
 mod files;
 mod handler;
+mod http_server;
 mod progress;
 mod recording_sync;
 mod router;
@@ -22,6 +23,15 @@ use anyhow::Context;
 #[derive(Parser)]
 #[command(name = "yunying-mcp", version, about)]
 struct Cli {
+    #[arg(long, default_value = "stdio")]
+    mode: String,
+
+    #[arg(long, default_value = "0.0.0.0:9778")]
+    listen: String,
+
+    #[arg(long, value_delimiter = ',')]
+    api_keys: Vec<String>,
+
     #[arg(long, default_value = "config/hosts.yaml")]
     hosts_file: PathBuf,
 
@@ -171,7 +181,15 @@ async fn main() -> anyhow::Result<()> {
         recordings_dir,
     });
 
-    let tools_definition = schema::tools_definition();
-    tracing::info!("yunying-mcp server starting (stdio mode)");
-    handler::run_mcp_stdio_loop(ctx, tools_definition).await
+    match cli.mode.as_str() {
+        "http" => {
+            tracing::info!("yunying-mcp server starting (http mode on {})", cli.listen);
+            http_server::run_http_server(ctx, &cli.listen, cli.api_keys).await
+        }
+        _ => {
+            let tools_definition = schema::tools_definition();
+            tracing::info!("yunying-mcp server starting (stdio mode)");
+            handler::run_mcp_stdio_loop(ctx, tools_definition).await
+        }
+    }
 }
