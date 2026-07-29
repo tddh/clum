@@ -119,43 +119,6 @@ pub async fn connect_to_bridge_quic(
     Ok(conn)
 }
 
-pub async fn list_sessions(config: &HostConfig, ca_cert_path: &str) -> Result<()> {
-    let conn =
-        connect_to_bridge_quic(&config.bridge_addr, &config.bridge_token, ca_cert_path).await?;
-    let (mut send, mut recv) = conn.open_bi().await?;
-    send.write_all(&[0x01]).await?;
-
-    let request = serde_json::json!({ "type": "list_sessions" });
-    crate::protocol::send_json_frame(&mut send, &request).await?;
-    let response = crate::protocol::recv_json_frame(&mut recv).await?;
-
-    if response.get("ok").and_then(|v| v.as_bool()) != Some(true) {
-        let err = response["error"].as_str().unwrap_or("unknown error");
-        anyhow::bail!("failed to list sessions: {}", err);
-    }
-
-    if let Some(sessions) = response.get("sessions").and_then(|s| s.as_array()) {
-        if sessions.is_empty() {
-            println!("No active sessions on {}", config.name);
-            return Ok(());
-        }
-        println!("{:<30} HOST", "SESSION");
-        println!("{}", "-".repeat(50));
-        for session in sessions {
-            println!(
-                "{:<30} {}",
-                session["session_name"].as_str().unwrap_or("-"),
-                config.name,
-            );
-        }
-        println!("\n{} session(s) on {}", sessions.len(), config.name);
-    } else {
-        println!("No sessions found on {}", config.name);
-    }
-
-    Ok(())
-}
-
 pub async fn find_lowest_pane(
     config: &HostConfig,
     ca_cert_path: &str,
