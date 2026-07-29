@@ -573,26 +573,37 @@ Window 管理？
 
 ## CLI 数据平面命令（通过 Bash 工具调用）
 
-文件传输、隧道、PTY 透传通过 `yunying-cli` 命令执行，不走 MCP 工具。Agent 通过 Bash 工具调用这些命令。
+文件传输、隧道、PTY 透传、回放通过 `yunying-cli` 命令执行，不走 MCP 工具。Agent 通过 Bash 工具调用这些命令。
+
+### 全局选项与环境变量
+
+```bash
+# 环境变量（推荐，避免每次传参）
+export YUNYING_SERVER_ADDR=10.220.71.1:9778   # 中央 Server 地址
+export YUNYING_API_KEY=yk_tddh_...             # API Key
+
+# 或命令行传参
+yunying-cli --server-addr 10.220.71.1:9778 --api-key yk_tddh_... --ca-cert ~/.yunying/ca.crt <command>
+```
+
+- `--server-addr`：设置后走 Hub 模式（通过中央 Server 中继）；不设置走直连模式（需要 hosts.yaml）
+- `--api-key`：Server 认证（Hub 模式必须）
+- `--ca-cert`：TLS 证书验证
 
 ### 文件传输
 
 ```bash
-# 上传文件到远程主机
 yunying-cli upload <host> <local_path> <remote_path>
-
-# 下载文件到本地
 yunying-cli download <host> <remote_path> <local_path>
 
 # 示例
-yunying-cli upload tf01 ./nginx.conf /etc/nginx/nginx.conf
-yunying-cli download tf01 /var/log/syslog ./syslog.backup
+yunying-cli upload dns-backup ./nginx.conf /etc/nginx/nginx.conf
+yunying-cli download dns-backup /var/log/syslog ./syslog.backup
 ```
 
 ### 端口转发（隧道）
 
 ```bash
-# 创建本地端口转发到远程服务
 yunying-cli tunnel <host> --local <port> --remote <host:port>
 
 # 示例：转发远程 MySQL 到本地 3307
@@ -604,14 +615,29 @@ yunying-cli tunnel db-01 --local 3307 --remote 127.0.0.1:3306
 ### PTY 透传（交互式终端）
 
 ```bash
-# 连接到远程主机的 rmux 会话（交互式）
 yunying-cli connect <host> [--session <name>]
 
 # 示例
-yunying-cli connect tf01 --session yunying
+yunying-cli connect dns-backup --session yunying
 ```
 
 连接后等同于 SSH 进入远程终端，支持 vim/htop 等全屏应用。断开后会话不丢失（rmux 持久化）。
+
+### 会话列表
+
+```bash
+yunying-cli list <host>
+```
+
+### 录制回放
+
+```bash
+# 远程回放（从 Server 拉取）
+yunying-cli replay <host>/<filename.cast> [--speed 2.0] [--idle 2]
+
+# 本地回放
+yunying-cli replay ./recording.cast
+```
 
 ### 使用原则
 
@@ -622,3 +648,5 @@ yunying-cli connect tf01 --session yunying
 | 访问远程内部服务 | `yunying-cli tunnel`（Bash） |
 | 交互式调试 | `yunying-cli connect`（Bash） |
 | 批量操作 | MCP 工具（batch_exec/batch_upload） |
+| 查看操作历史 | MCP 工具（audit_query） |
+| 回放终端录制 | `yunying-cli replay`（Bash） |
