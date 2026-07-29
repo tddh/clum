@@ -32,6 +32,7 @@ pub(crate) async fn tunnel_create(ctx: &ToolContext, args: Value) -> Result<Valu
             remote_host.clone(),
             remote_port,
             &ctx.ca_cert_path,
+            &ctx.bridge_registry,
         )
         .await;
 

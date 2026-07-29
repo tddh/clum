@@ -94,6 +94,7 @@ impl TunnelManager {
         remote_host: String,
         remote_port: u16,
         ca_cert_path: &str,
+        registry: &std::sync::Arc<crate::registry::BridgeRegistry>,
     ) -> Result<TunnelInfo> {
         if remote_host.len() > MAX_HOST_LEN {
             anyhow::bail!(
@@ -111,17 +112,21 @@ impl TunnelManager {
             .await
             .with_context(|| format!("failed to bind to {}", bind_addr))?;
 
-        let (conn, auth_send, auth_recv) =
-            connect_to_bridge_quic_tunnel(&host.bridge_addr, &host.bridge_token, ca_cert_path)
-                .await
-                .with_context(|| "failed to connect to bridge")?;
-
-        tokio::spawn(async move {
-            let mut auth_send = auth_send;
-            let mut auth_recv = auth_recv;
-            auth_send.finish().ok();
-            let _ = auth_recv.read_to_end(0).await;
-        });
+        let conn = if let Some(bridge) = registry.get(&host.name).await {
+            bridge.conn.clone()
+        } else {
+            let (conn, auth_send, auth_recv) =
+                connect_to_bridge_quic_tunnel(&host.bridge_addr, &host.bridge_token, ca_cert_path)
+                    .await
+                    .with_context(|| "failed to connect to bridge")?;
+            tokio::spawn(async move {
+                let mut auth_send = auth_send;
+                let mut auth_recv = auth_recv;
+                auth_send.finish().ok();
+                let _ = auth_recv.read_to_end(0).await;
+            });
+            conn
+        };
 
         let tunnel_id = format!("t_{}", Uuid::new_v4());
         let active_connections = Arc::new(AtomicUsize::new(0));
