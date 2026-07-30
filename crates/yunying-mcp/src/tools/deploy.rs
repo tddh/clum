@@ -157,6 +157,7 @@ pub(crate) async fn deploy_bridge(
                 &ca_cert,
                 crate::files::OverwriteMode::Overwrite, &[],
                 &mut task_progress,
+                &registry,
             ).await;
 
             match upload_result {

@@ -76,7 +76,7 @@ pub(crate) async fn batch_exec(
                             "ok": false, "output": "", "exit_code": null,
                             "duration_ms": 0, "error": "host not found in registry",
                         }),
-                    )
+                    );
                 }
             };
 
@@ -93,7 +93,7 @@ pub(crate) async fn batch_exec(
                             "ok": false, "output": "", "exit_code": null,
                             "duration_ms": 0, "error": format!("connect: {e}"),
                         }),
-                    )
+                    );
                 }
             };
 
@@ -118,7 +118,7 @@ pub(crate) async fn batch_exec(
                             "ok": false, "output": "", "exit_code": null,
                             "duration_ms": 0, "error": format!("session_create: {e}"),
                         }),
-                    )
+                    );
                 }
             };
 
@@ -233,6 +233,7 @@ pub(crate) async fn batch_upload(
     let targets = resolve_hosts(ctx, &hosts_arg);
     let semaphore = make_semaphore(concurrency_limit);
     let ca_cert = ctx.ca_cert_path.clone();
+    let registry = std::sync::Arc::clone(&ctx.bridge_registry);
     let start = std::time::Instant::now();
 
     let mut handles: Vec<tokio::task::JoinHandle<(String, Value)>> = Vec::new();
@@ -243,6 +244,7 @@ pub(crate) async fn batch_upload(
         let exclude = exclude.clone();
         let sem = semaphore.clone();
         let mut task_progress = progress.clone();
+        let registry = registry.clone();
 
         handles.push(tokio::spawn(async move {
             let _permit = if let Some(s) = &sem {
@@ -262,6 +264,7 @@ pub(crate) async fn batch_upload(
                 overwrite,
                 &exclude,
                 &mut task_progress,
+                &registry,
             )
             .await
             {
@@ -337,6 +340,7 @@ pub(crate) async fn batch_download(
     let targets = resolve_hosts(ctx, &hosts_arg);
     let semaphore = make_semaphore(concurrency_limit);
     let ca_cert = ctx.ca_cert_path.clone();
+    let registry = std::sync::Arc::clone(&ctx.bridge_registry);
     let start = std::time::Instant::now();
 
     let mut handles: Vec<tokio::task::JoinHandle<(String, Value)>> = Vec::new();
@@ -347,6 +351,7 @@ pub(crate) async fn batch_download(
         let file_name = file_name.clone();
         let sem = semaphore.clone();
         let mut task_progress = progress.clone();
+        let registry = registry.clone();
 
         handles.push(tokio::spawn(async move {
             let _permit = if let Some(s) = &sem {
@@ -378,6 +383,7 @@ pub(crate) async fn batch_download(
                 &local_path,
                 &ca_cert,
                 &mut task_progress,
+                &registry,
             )
             .await
             {

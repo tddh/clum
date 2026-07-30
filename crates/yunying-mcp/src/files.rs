@@ -10,6 +10,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Semaphore;
 use yunying_core::types::HostConfig;
 
+use crate::registry::BridgeRegistry;
+
 const MAX_UPLOAD_CONCURRENCY: usize = 16;
 const MAX_FILE_SIZE: usize = 2 * 1024 * 1024 * 1024; // 2 GB
 const COPY_BUF_SIZE: usize = 1024 * 1024; // 1 MB — 与 bridge CHUNK_SIZE 对齐
@@ -38,6 +40,23 @@ pub struct FileResult {
     pub error: Option<String>,
 }
 
+async fn get_conn(
+    host: &HostConfig,
+    registry: &Arc<BridgeRegistry>,
+    ca_cert_path: &str,
+) -> Result<quinn::Connection> {
+    if let Some(bridge) = registry.get(&host.name).await {
+        if bridge.conn.close_reason().is_none() {
+            return Ok(bridge.conn.clone());
+        }
+    }
+    let (conn, _auth_send, _auth_recv) =
+        crate::transport::connect_to_bridge_quic(&host.bridge_addr, &host.bridge_token, ca_cert_path)
+            .await?;
+    Ok(conn)
+}
+
+#[allow(clippy::too_many_arguments)]
 pub async fn upload_file(
     host: &HostConfig,
     local_path: &str,
@@ -46,6 +65,7 @@ pub async fn upload_file(
     overwrite: OverwriteMode,
     exclude: &[String],
     progress: &mut crate::progress::ProgressReporter,
+    registry: &Arc<BridgeRegistry>,
 ) -> Result<Vec<FileResult>> {
     let meta = tokio::fs::metadata(local_path)
         .await
@@ -60,6 +80,7 @@ pub async fn upload_file(
             overwrite,
             exclude,
             progress,
+            registry,
         )
         .await
     } else {
@@ -74,6 +95,7 @@ pub async fn upload_file(
             ca_cert_path,
             overwrite,
             progress,
+            registry,
         )
         .await?;
         Ok(vec![result])
@@ -87,18 +109,13 @@ async fn upload_single(
     ca_cert_path: &str,
     overwrite: OverwriteMode,
     progress: &mut crate::progress::ProgressReporter,
+    registry: &Arc<BridgeRegistry>,
 ) -> Result<FileResult> {
     let meta = tokio::fs::metadata(local_path).await?;
     let file_size = meta.len();
 
-    let (_conn, _auth_send, _auth_recv) = crate::transport::connect_to_bridge_quic(
-        &host.bridge_addr,
-        &host.bridge_token,
-        ca_cert_path,
-    )
-    .await?;
-
-    let (mut send, mut recv) = _conn.open_bi().await?;
+    let conn = get_conn(host, registry, ca_cert_path).await?;
+    let (mut send, mut recv) = conn.open_bi().await?;
 
     send.write_all(&[STREAM_UPLOAD]).await?;
     send.write_all(&[overwrite as u8]).await?;
@@ -137,6 +154,7 @@ async fn upload_single(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn upload_dir(
     host: &HostConfig,
     local_path: &str,
@@ -145,6 +163,7 @@ async fn upload_dir(
     overwrite: OverwriteMode,
     exclude: &[String],
     progress: &crate::progress::ProgressReporter,
+    registry: &Arc<BridgeRegistry>,
 ) -> Result<Vec<FileResult>> {
     let base = Path::new(local_path).to_path_buf();
     let mut files = Vec::new();
@@ -153,13 +172,7 @@ async fn upload_dir(
         return Ok(Vec::new());
     }
 
-    let (conn, _auth_send, _auth_recv) = crate::transport::connect_to_bridge_quic(
-        &host.bridge_addr,
-        &host.bridge_token,
-        ca_cert_path,
-    )
-    .await?;
-    let conn = Arc::new(conn);
+    let conn = Arc::new(get_conn(host, registry, ca_cert_path).await?);
 
     let semaphore = Arc::new(Semaphore::new(MAX_UPLOAD_CONCURRENCY));
     let mut handles = Vec::new();
@@ -238,14 +251,9 @@ pub async fn download_file(
     local_path: &str,
     ca_cert_path: &str,
     progress: &mut crate::progress::ProgressReporter,
+    registry: &Arc<BridgeRegistry>,
 ) -> Result<Vec<FileResult>> {
-    let (conn, _auth_send, _auth_recv) = crate::transport::connect_to_bridge_quic(
-        &host.bridge_addr,
-        &host.bridge_token,
-        ca_cert_path,
-    )
-    .await?;
-
+    let conn = get_conn(host, registry, ca_cert_path).await?;
     let (mut send, mut recv) = conn.open_bi().await?;
 
     send.write_all(&[STREAM_DOWNLOAD]).await?;

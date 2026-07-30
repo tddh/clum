@@ -44,6 +44,7 @@ pub(crate) async fn file_upload(
         overwrite,
         &exclude,
         progress,
+        &ctx.bridge_registry,
     )
     .await;
     super::audit(
@@ -91,7 +92,7 @@ pub(crate) async fn file_download(
         .with_context(|| format!("host not found: {}", host_name))?;
 
     let result =
-        crate::files::download_file(&host, remote_path, local_path, &ctx.ca_cert_path, progress)
+        crate::files::download_file(&host, remote_path, local_path, &ctx.ca_cert_path, progress, &ctx.bridge_registry)
             .await;
     super::audit(
         ctx,
