@@ -63,6 +63,7 @@ pub async fn run_quic_server(
                 let db_hashes = store.token_map().await;
                 if !db_hashes.is_empty() {
                     let mut map = refresh_map.write().await;
+                    map.clear();
                     map.extend(db_hashes);
                 }
             }
