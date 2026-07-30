@@ -79,11 +79,6 @@ impl BridgeRegistry {
         self.connections.read().await.get(hostname).cloned()
     }
 
-    pub async fn is_online(&self, hostname: &str) -> bool {
-        self.connections.read().await.contains_key(hostname)
-    }
-
-    #[allow(dead_code)]
     pub async fn list(&self) -> Vec<BridgeInfo> {
         let map = self.connections.read().await;
         map.values()

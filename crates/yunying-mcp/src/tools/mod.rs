@@ -36,6 +36,7 @@ pub struct ToolContext {
     pub recordings_dir: PathBuf,
     #[allow(dead_code)]
     pub bridge_registry: Arc<crate::registry::BridgeRegistry>,
+    pub bridge_store: Arc<crate::bridge_store::BridgeStore>,
 }
 
 pub async fn execute_tool(
@@ -48,6 +49,7 @@ pub async fn execute_tool(
         "yunying_usage_rules" => Ok(json!({})),
         "host_list" => discovery::host_list(ctx).await,
         "host_filter" => discovery::host_filter(ctx, args).await,
+        "host_set_meta" => discovery::host_set_meta(ctx, args).await,
         "session_create" => session::session_create(ctx, args).await,
         "session_list" => session::session_list(ctx, args).await,
         "session_attach" => session::session_attach(ctx, args).await,

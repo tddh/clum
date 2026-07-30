@@ -204,6 +204,7 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     let bridge_registry = Arc::new(registry::BridgeRegistry::new());
+    let bridge_store = Arc::new(bridge_store::BridgeStore::open(&db_path)?);
 
     let ctx = Arc::new(tools::ToolContext {
         router,
@@ -214,6 +215,7 @@ async fn main() -> anyhow::Result<()> {
         stream_manager: Arc::new(stream::StreamManager::new()),
         recordings_dir,
         bridge_registry: Arc::clone(&bridge_registry),
+        bridge_store: Arc::clone(&bridge_store),
     });
 
     match cli.mode.as_str() {
@@ -258,8 +260,7 @@ async fn main() -> anyhow::Result<()> {
                     })
                     .collect();
 
-                let bridge_db = bridge_store::BridgeStore::open(&db_path)?;
-                let db_hashes = bridge_db.token_map().await;
+                let db_hashes = bridge_store.token_map().await;
                 hash_map.extend(db_hashes);
 
                 tracing::info!("loaded {} bridge tokens", hash_map.len());
@@ -280,21 +281,18 @@ async fn main() -> anyhow::Result<()> {
                     }
                 });
 
-                let bridge_db = Arc::new(bridge_db);
                 let rot_reg = Arc::clone(&bridge_registry);
-                let rot_db = Arc::clone(&bridge_db);
+                let rot_db = Arc::clone(&bridge_store);
                 tokio::spawn(token_rotation::run_rotation_loop(rot_reg, rot_db, 24));
             } else {
                 tracing::warn!("server cert/key not configured, QUIC listener disabled");
             }
 
             let key_store = api_keys::ApiKeyStore::open(&db_path)?;
-            let bridge_store = Arc::new(bridge_store::BridgeStore::open(&db_path)?);
             http_server::run_http_server(
                 ctx,
                 &cli.listen,
                 key_store,
-                bridge_store,
                 cli.static_dir,
                 cert,
                 key,
@@ -364,6 +362,27 @@ async fn run_agent_command(args: &[String]) -> anyhow::Result<()> {
     Ok(())
 }
 
+async fn fetch_download_token(server_addr: &str, api_key: &str) -> anyhow::Result<String> {
+    let url = format!("https://{server_addr}/admin/download-token");
+    let output = tokio::process::Command::new("curl")
+        .args([
+            "-sf", "-X", "POST",
+            "-H", &format!("Authorization: Bearer {api_key}"),
+            "--cacert", "/etc/yunying/ca.crt",
+            &url,
+        ])
+        .output()
+        .await?;
+    if !output.status.success() {
+        anyhow::bail!("server returned {}", output.status);
+    }
+    let body: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    body["token"]
+        .as_str()
+        .map(String::from)
+        .ok_or_else(|| anyhow::anyhow!("no token in response"))
+}
+
 async fn run_bridge_command(args: &[String]) -> anyhow::Result<()> {
     let db_path = resolve_audit_db_path(None);
     let store = bridge_store::BridgeStore::open(&db_path)?;
@@ -381,14 +400,23 @@ async fn run_bridge_command(args: &[String]) -> anyhow::Result<()> {
                 .unwrap_or_default();
             let token = bridge_store::generate_bridge_token();
             store.add(hostname, &token, &tags).await?;
-            let dl_token = store.generate_download_token().await?;
+
+            let server_addr = std::env::var("YUNYING_SERVER_ADDR")
+                .unwrap_or_else(|_| "127.0.0.1:9788".to_string());
+            let api_key = std::env::var("YUNYING_API_KEY").unwrap_or_default();
+            let dl_token = fetch_download_token(&server_addr, &api_key).await;
+
             println!("Bridge: {hostname}");
             println!("Token:  {token}");
-            println!("Download token (1h expiry): {dl_token}");
+            match &dl_token {
+                Ok(t) => println!("Download token (1h expiry): {t}"),
+                Err(e) => println!("Download token: FAILED ({e}) — get manually: curl -X POST -H 'Authorization: Bearer $API_KEY' https://{server_addr}/admin/download-token"),
+            }
             println!();
+            let dl = dl_token.as_deref().unwrap_or("<DOWNLOAD_TOKEN>");
             println!("Install command (on target machine):");
-            println!("  curl -fsSL -H \"Authorization: Bearer {dl_token}\" http://<SERVER>:9788/install.sh | \\");
-            println!("    BRIDGE_TOKEN={token} SERVER_ADDR=<SERVER>:9788 DOWNLOAD_TOKEN={dl_token} sh");
+            println!("  curl -fsSL -H \"Authorization: Bearer {dl}\" https://{server_addr}/install.sh | \\");
+            println!("    BRIDGE_TOKEN={token} SERVER_ADDR={server_addr} DOWNLOAD_TOKEN={dl} sh");
         }
         Some("list") => {
             let bridges = store.list().await;

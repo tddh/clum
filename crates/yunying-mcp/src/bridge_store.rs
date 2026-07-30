@@ -13,6 +13,13 @@ pub struct BridgeEntry {
     pub revoked: bool,
 }
 
+pub struct HostMeta {
+    pub hostname: String,
+    pub group: String,
+    pub tags: Vec<String>,
+    pub labels: HashMap<String, String>,
+}
+
 pub struct BridgeStore {
     db: tokio::sync::Mutex<rusqlite::Connection>,
 }
@@ -32,12 +39,11 @@ impl BridgeStore {
                 os_info      TEXT,
                 created_at   TEXT NOT NULL,
                 revoked_at   TEXT
-            );
-            CREATE TABLE IF NOT EXISTS download_tokens (
-                token_hash TEXT PRIMARY KEY,
-                expires_at TEXT NOT NULL
             );",
         )?;
+        let _ = conn.execute_batch(
+            "ALTER TABLE bridges ADD COLUMN host_group TEXT NOT NULL DEFAULT '';",
+        );
         Ok(Self {
             db: tokio::sync::Mutex::new(conn),
         })
@@ -131,42 +137,69 @@ impl BridgeStore {
         Ok(())
     }
 
-    pub async fn generate_download_token(&self) -> Result<String> {
-        let mut bytes = [0u8; 16];
-        getrandom::getrandom(&mut bytes).expect("CSPRNG failed");
-        let token = format!("dl_{}", hex::encode(bytes));
-        let hash = hex::encode(Sha256::digest(token.as_bytes()));
-        let expires = (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339();
-
+    pub async fn set_host_meta(
+        &self,
+        hostname: &str,
+        group: Option<&str>,
+        tags: Option<&[String]>,
+        labels: Option<&HashMap<String, String>>,
+    ) -> Result<bool> {
         let db = self.db.lock().await;
-        db.execute(
-            "INSERT OR REPLACE INTO download_tokens (token_hash, expires_at) VALUES (?1, ?2)",
-            rusqlite::params![hash, expires],
-        )?;
-        Ok(token)
-    }
-
-    pub async fn validate_download_token(&self, token: &str) -> bool {
-        let hash = hex::encode(Sha256::digest(token.as_bytes()));
-        let db = self.db.lock().await;
-        let result: Option<String> = db
+        let exists: bool = db
             .query_row(
-                "SELECT expires_at FROM download_tokens WHERE token_hash = ?1",
-                rusqlite::params![hash],
-                |row| row.get(0),
+                "SELECT 1 FROM bridges WHERE hostname = ?1",
+                rusqlite::params![hostname],
+                |_| Ok(()),
             )
-            .ok();
-        match result {
-            Some(expires) => {
-                if let Ok(exp) = chrono::DateTime::parse_from_rfc3339(&expires) {
-                    chrono::Utc::now() < exp
-                } else {
-                    false
-                }
-            }
-            None => false,
+            .is_ok();
+        if !exists {
+            return Ok(false);
         }
+        if let Some(g) = group {
+            db.execute(
+                "UPDATE bridges SET host_group = ?1 WHERE hostname = ?2",
+                rusqlite::params![g, hostname],
+            )?;
+        }
+        if let Some(t) = tags {
+            let json = serde_json::to_string(t)?;
+            db.execute(
+                "UPDATE bridges SET tags = ?1 WHERE hostname = ?2",
+                rusqlite::params![json, hostname],
+            )?;
+        }
+        if let Some(l) = labels {
+            let json = serde_json::to_string(l)?;
+            db.execute(
+                "UPDATE bridges SET labels = ?1 WHERE hostname = ?2",
+                rusqlite::params![json, hostname],
+            )?;
+        }
+        Ok(true)
     }
+
+    pub async fn get_all_host_meta(&self) -> Vec<HostMeta> {
+        let db = self.db.lock().await;
+        let mut stmt = db
+            .prepare(
+                "SELECT hostname, host_group, tags, labels FROM bridges WHERE revoked_at IS NULL",
+            )
+            .unwrap();
+        stmt.query_map([], |row| {
+            let tags_json: String = row.get(2)?;
+            let labels_json: String = row.get(3)?;
+            Ok(HostMeta {
+                hostname: row.get(0)?,
+                group: row.get(1)?,
+                tags: serde_json::from_str(&tags_json).unwrap_or_default(),
+                labels: serde_json::from_str(&labels_json).unwrap_or_default(),
+            })
+        })
+        .unwrap()
+        .filter_map(|r| r.ok())
+        .collect()
+    }
+
 }
 
 pub fn generate_bridge_token() -> String {

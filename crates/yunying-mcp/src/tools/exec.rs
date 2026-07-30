@@ -49,6 +49,7 @@ pub(crate) async fn spawn_command(ctx: &ToolContext, args: Value) -> Result<Valu
     let pane_id_arg = args["pane_id"].as_str();
     let command = args["command"].as_str().context("missing 'command'")?;
     let cmd_args = args["args"].as_array().cloned().unwrap_or_default();
+    let new_pane = args["new_pane"].as_bool().unwrap_or(false);
     let host = ctx
         .router
         .get(host_name)
@@ -56,8 +57,28 @@ pub(crate) async fn spawn_command(ctx: &ToolContext, args: Value) -> Result<Valu
     let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =
         super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
-    send_json_frame(&mut tls, &json!({ "type": "spawn_command", "session_name": session_name, "pane_id": pane_id, "command": command, "args": cmd_args })).await?;
-    let mut response = recv_json_frame(&mut tls).await?;
+
+    let response = if new_pane {
+        send_json_frame(&mut tls, &json!({ "type": "spawn_command", "session_name": session_name, "pane_id": pane_id, "command": command, "args": cmd_args })).await?;
+        recv_json_frame(&mut tls).await?
+    } else {
+        let full_cmd = if cmd_args.is_empty() {
+            command.to_string()
+        } else {
+            let args_str: Vec<String> = cmd_args
+                .iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect();
+            format!("{} {}", command, args_str.join(" "))
+        };
+        let keys = format!("{}\n", full_cmd);
+        send_json_frame(&mut tls, &json!({ "type": "send_keys", "session_name": session_name, "pane_id": pane_id, "keys": keys })).await?;
+        let mut resp = recv_json_frame(&mut tls).await?;
+        resp["spawned"] = json!(false);
+        resp
+    };
+
+    let mut response = response;
     super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
     super::audit(
         ctx,

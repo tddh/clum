@@ -19,11 +19,13 @@ use rmcp::{
 use crate::api_keys::ApiKeyStore;
 use crate::tools::{self, ToolContext};
 
+pub type DownloadTokenMap = Arc<tokio::sync::RwLock<std::collections::HashMap<String, std::time::Instant>>>;
+
 #[derive(Clone)]
 struct AuthState {
     store: Arc<ApiKeyStore>,
     agent_name: Arc<std::sync::Mutex<String>>,
-    bridge_store: Arc<crate::bridge_store::BridgeStore>,
+    download_tokens: DownloadTokenMap,
 }
 
 #[derive(Clone)]
@@ -123,9 +125,15 @@ async fn auth_middleware(
                 }
                 return Ok(next.run(request).await);
             }
-            if !is_mcp && t.starts_with("dl_") && auth.bridge_store.validate_download_token(t).await
-            {
-                return Ok(next.run(request).await);
+            if !is_mcp && t.starts_with("dl_") {
+                use sha2::{Digest, Sha256};
+                let hash = hex::encode(Sha256::digest(t.as_bytes()));
+                let tokens = auth.download_tokens.read().await;
+                if let Some(expires) = tokens.get(&hash) {
+                    if *expires > std::time::Instant::now() {
+                        return Ok(next.run(request).await);
+                    }
+                }
             }
             Err(StatusCode::UNAUTHORIZED)
         }
@@ -137,7 +145,6 @@ pub async fn run_http_server(
     ctx: Arc<ToolContext>,
     listen_addr: &str,
     key_store: Arc<ApiKeyStore>,
-    bridge_store: Arc<crate::bridge_store::BridgeStore>,
     static_dir: Option<std::path::PathBuf>,
     tls_cert: Option<String>,
     tls_key: Option<String>,
@@ -160,6 +167,9 @@ pub async fn run_http_server(
         Arc::new(LocalSessionManager::default()),
         config,
     );
+
+    let download_tokens: DownloadTokenMap =
+        Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
 
     let mut app = Router::new().nest_service("/mcp", service);
 
@@ -198,10 +208,28 @@ pub async fn run_http_server(
             );
     }
 
+    let admin_tokens = Arc::clone(&download_tokens);
+    app = app.route(
+        "/admin/download-token",
+        axum::routing::post(move || {
+            let tokens = Arc::clone(&admin_tokens);
+            async move {
+                use sha2::{Digest, Sha256};
+                let mut bytes = [0u8; 16];
+                getrandom::getrandom(&mut bytes).expect("CSPRNG failed");
+                let token = format!("dl_{}", hex::encode(bytes));
+                let hash = hex::encode(Sha256::digest(token.as_bytes()));
+                let expires = std::time::Instant::now() + std::time::Duration::from_secs(3600);
+                tokens.write().await.insert(hash, expires);
+                axum::Json(serde_json::json!({"token": token, "expires_in_secs": 3600}))
+            }
+        }),
+    );
+
     let auth_state = AuthState {
         store: key_store,
         agent_name,
-        bridge_store,
+        download_tokens,
     };
     let app = app.layer(middleware::from_fn_with_state(auth_state, auth_middleware));
 

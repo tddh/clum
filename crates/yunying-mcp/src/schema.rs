@@ -88,6 +88,20 @@ pub fn tools_definition() -> Value {
                 }
             },
             {
+                "name": "host_set_meta",
+                "description": "Set metadata (group, tags, labels) for an enrolled bridge host. Changes are persisted to SQLite and take effect immediately in host_list/host_filter. Only works for hosts that have a bridge registered via `bridge add`.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "host": { "type": "string", "description": "Hostname of the enrolled bridge" },
+                        "group": { "type": "string", "description": "Group name, e.g. production, infra" },
+                        "tags": { "type": "array", "items": { "type": "string" }, "description": "Replace tags list, e.g. [\"k8s\", \"gpu\"]" },
+                        "labels": { "type": "object", "description": "Key-value labels, e.g. {\"role\": \"mcp-server\"}" }
+                    },
+                    "required": ["host"]
+                }
+            },
+            {
                 "name": "reload_config",
                 "description": "Reload the host registry from the hosts.yaml configuration file without restarting the MCP server. Use this after editing hosts.yaml to pick up new, removed, or modified host entries. Returns the number of hosts loaded.",
                 "inputSchema": { "type": "object", "properties": {}, "required": [] }
@@ -189,7 +203,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "spawn_command",
-                "description": "Start a new process in a pane using exec semantics (replaces the current shell process). The pane MUST be idle (no running process) — if a process is running, use exec or respawn_pane with kill=true instead. Use this for long-running processes that need to run in the foreground (e.g., top, htop, vim, tail -f). Unlike exec, this does NOT wait for completion or capture output — use stream_pane or capture_pane to monitor output. Args are passed directly to the command without shell interpretation.",
+                "description": "Run a command in the existing pane (fire-and-forget, does not wait for completion). By default sends the command as keystrokes to the resolved pane — no new pane is created. Use stream_pane or capture_pane to monitor output. Set new_pane=true to create a separate pane via exec semantics (replaces shell process). Use this for long-running foreground processes (top, htop, tail -f).",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -197,7 +211,8 @@ pub fn tools_definition() -> Value {
                         "session_name": { "type": "string", "description": "Session name, e.g. yunying" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "command": { "type": "string", "description": "Command to execute (e.g., 'top', 'vim', 'tail')" },
-                        "args": { "type": "array", "items": { "type": "string" }, "description": "Command arguments (e.g., ['-f', '/var/log/syslog'])" }
+                        "args": { "type": "array", "items": { "type": "string" }, "description": "Command arguments (e.g., ['-f', '/var/log/syslog'])" },
+                        "new_pane": { "type": "boolean", "description": "Create a new pane for the command (default: false, reuses existing pane)" }
                     },
                     "required": ["host", "session_name", "command"]
                 }

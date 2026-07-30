@@ -587,7 +587,7 @@ yunying 是运维操作工具，权限模型和常规 API 不同：
 
 ## 11. TODO（后续优化）
 
-- [ ] `bridge add` 改为调 Server HTTP API（`POST /admin/bridges`），download token 纯内存不落库
 - [ ] Token 热加载改为事件驱动（API 写入即生效），去掉 30s 轮询
-- [ ] stream_pane 接入 ProgressReporter 实现真正 SSE 流式输出
-- [ ] 录制文件 agent 标识：Server relay 时传递 agent context 给 Bridge
+- [ ] stream_pane 流式推送（blocked：等 MCP 客户端支持 progress/streaming，OpenCode 当前未声明 progress 能力）
+- [x] spawn_command 默认复用已有 pane（不再新开），避免残留 dead pane
+- [x] 录制文件 agent 标识：Server relay 时传递 agent context 给 Bridge

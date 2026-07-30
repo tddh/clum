@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
@@ -5,21 +7,77 @@ use super::ToolContext;
 use crate::transport::{connect_to_host, recv_json_frame, send_json_frame};
 use yunying_core::types::AuditAction;
 
-pub(crate) async fn host_list(ctx: &ToolContext) -> Result<Value> {
-    let mut hosts: Vec<Value> = Vec::new();
-    for h in ctx.router.list() {
-        let hub_online = ctx.bridge_registry.is_online(&h.name).await;
-        let online_val = if hub_online { json!(true) } else { Value::Null };
-        hosts.push(json!({
-            "name": h.name,
-            "group": h.group,
-            "tags": h.tags,
-            "labels": h.labels,
-            "bridge_addr": h.bridge_addr,
-            "online": online_val,
-            "via": if hub_online { "enrolled" } else { "direct" },
-        }));
+struct UnifiedHost {
+    name: String,
+    group: String,
+    tags: Vec<String>,
+    labels: HashMap<String, String>,
+    bridge_addr: String,
+    online: bool,
+    via: &'static str,
+}
+
+async fn build_unified_hosts(ctx: &ToolContext) -> Vec<UnifiedHost> {
+    let meta_list = ctx.bridge_store.get_all_host_meta().await;
+    let meta_map: HashMap<String, crate::bridge_store::HostMeta> = meta_list
+        .into_iter()
+        .map(|m| (m.hostname.clone(), m))
+        .collect();
+
+    let mut seen = std::collections::HashSet::new();
+    let mut hosts = Vec::new();
+
+    for info in ctx.bridge_registry.list().await {
+        seen.insert(info.hostname.clone());
+        let meta = meta_map.get(&info.hostname);
+        hosts.push(UnifiedHost {
+            name: info.hostname.clone(),
+            group: meta.map(|m| m.group.clone()).unwrap_or_default(),
+            tags: meta
+                .map(|m| m.tags.clone())
+                .unwrap_or_else(|| info.tags.clone()),
+            labels: meta
+                .map(|m| m.labels.clone())
+                .unwrap_or_else(|| info.labels.clone()),
+            bridge_addr: String::new(),
+            online: true,
+            via: "enrolled",
+        });
     }
+
+    for h in ctx.router.list() {
+        if seen.contains(&h.name) {
+            continue;
+        }
+        hosts.push(UnifiedHost {
+            name: h.name,
+            group: h.group,
+            tags: h.tags,
+            labels: h.labels,
+            bridge_addr: h.bridge_addr,
+            online: false,
+            via: "direct",
+        });
+    }
+
+    hosts
+}
+
+fn host_to_json(h: &UnifiedHost) -> Value {
+    json!({
+        "name": h.name,
+        "group": h.group,
+        "tags": h.tags,
+        "labels": h.labels,
+        "bridge_addr": h.bridge_addr,
+        "online": if h.online { json!(true) } else { Value::Null },
+        "via": h.via,
+    })
+}
+
+pub(crate) async fn host_list(ctx: &ToolContext) -> Result<Value> {
+    let unified = build_unified_hosts(ctx).await;
+    let hosts: Vec<Value> = unified.iter().map(host_to_json).collect();
     super::audit(
         ctx,
         AuditAction::HostList,
@@ -37,7 +95,7 @@ pub(crate) async fn host_list(ctx: &ToolContext) -> Result<Value> {
 }
 
 pub(crate) async fn host_filter(ctx: &ToolContext, args: Value) -> Result<Value> {
-    let mut hosts: Vec<yunying_core::types::HostConfig> = ctx.router.list();
+    let mut hosts = build_unified_hosts(ctx).await;
 
     if let Some(group) = args["group"].as_str() {
         hosts.retain(|h| h.group == group);
@@ -57,17 +115,7 @@ pub(crate) async fn host_filter(ctx: &ToolContext, args: Value) -> Result<Value>
         }
     }
 
-    let mut result: Vec<Value> = Vec::new();
-    for h in &hosts {
-        let hub_online = ctx.bridge_registry.is_online(&h.name).await;
-        let online_val = if hub_online { json!(true) } else { Value::Null };
-        result.push(json!({
-            "name": h.name, "group": h.group, "tags": h.tags, "labels": h.labels,
-            "bridge_addr": h.bridge_addr,
-            "online": online_val,
-            "via": if hub_online { "enrolled" } else { "direct" },
-        }));
-    }
+    let result: Vec<Value> = hosts.iter().map(host_to_json).collect();
     super::audit(
         ctx,
         AuditAction::HostFilter,
@@ -88,6 +136,37 @@ pub(crate) async fn host_filter(ctx: &ToolContext, args: Value) -> Result<Value>
     )
     .await;
     Ok(json!({ "hosts": result, "count": result.len() }))
+}
+
+pub(crate) async fn host_set_meta(ctx: &ToolContext, args: Value) -> Result<Value> {
+    let hostname = args["host"].as_str().context("missing 'host'")?;
+    let group = args.get("group").and_then(|v| v.as_str());
+    let tags: Option<Vec<String>> = args.get("tags").and_then(|v| v.as_array()).map(|a| {
+        a.iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect()
+    });
+    let labels: Option<HashMap<String, String>> =
+        args.get("labels").and_then(|v| v.as_object()).map(|obj| {
+            obj.iter()
+                .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                .collect()
+        });
+
+    if group.is_none() && tags.is_none() && labels.is_none() {
+        return Ok(json!({"ok": false, "error": "nothing to update: provide group, tags, or labels"}));
+    }
+
+    let found = ctx
+        .bridge_store
+        .set_host_meta(hostname, group, tags.as_deref(), labels.as_ref())
+        .await?;
+
+    if !found {
+        return Ok(json!({"ok": false, "error": format!("host '{}' not found in enrolled bridges", hostname)}));
+    }
+
+    Ok(json!({"ok": true, "host": hostname, "updated": {"group": group, "tags": tags, "labels": labels}}))
 }
 
 pub(crate) async fn find_panes(ctx: &ToolContext, args: Value) -> Result<Value> {
