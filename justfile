@@ -64,7 +64,7 @@ certs-host host:
 
 # 部署 bridge（首次或重新配置）mode=hub|direct
 deploy-bridge host mode='hub':
-    BRIDGE_TOKEN="{{BRIDGE_TOKEN}}" bash deploy/deploy-bridge.sh ./target/x86_64-unknown-linux-musl/release/rmux-bridge {{host}} {{mode}}
+    BRIDGE_TOKEN="${BRIDGE_TOKEN:?set BRIDGE_TOKEN env var}" bash deploy/deploy-bridge.sh ./target/x86_64-unknown-linux-musl/release/rmux-bridge {{host}} {{mode}}
 
 # 更新 bridge 二进制（不动配置）
 update-bridge host:
