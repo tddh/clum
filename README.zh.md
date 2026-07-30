@@ -85,7 +85,7 @@ graph LR
 | AI 客户端 | 任意机器 | Hub Server（HTTP，MCP 协议） |
 | `yunying-cli` | 运维人员机器 | Hub Server（QUIC，`--server-addr`） |
 
-> 💡 新 Bridge 一键部署：`curl -fsSL curl -fsSL -H "Authorization: Bearer <download_token>" http://SERVER:9788/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=SERVER:9788 DOWNLOAD_TOKEN=<download_token> sh`
+> 💡 新 Bridge 一键部署：`curl -fsSL curl -fsSL -H "Authorization: Bearer <download_token>" https://SERVER:9788/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=SERVER:9788 DOWNLOAD_TOKEN=<download_token> sh`
 
 > 💡 部署时 bridge 会自动检测 RMUX socket 路径，无需手动配置。
 
@@ -303,7 +303,7 @@ echo "$(cat)" >> knowledge.jsonl && git commit -am "新增排障经验条目"
 | 会话管理 | `session_create`, `session_list`, `session_attach`, `session_detach`, `kill_session` |
 | 终端输入 | `send_keys`, `send_text`, `broadcast_keys` |
 | 终端输出 | `capture_pane`, `capture_region`, `wait_for_text`, `wait_for_bytes`, `find_pane_text`, `find_text_all`, `stream_pane` |
-| 命令执行 | `exec`, `wait_exit`, `wait_stable`, `collect_until_exit`, `spawn_command`, `shell_command`, `respawn_pane`, `cmd_escape` |
+| 命令执行 | `exec`, `wait_exit`, `wait_stable`, `collect_until_exit`, , `shell_command`, `respawn_pane`, `cmd_escape` |
 | 窗格操作 | `split_pane`, `split_pane_with`, `break_pane`, `join_pane`, `swap_pane`, `resize_pane`, `set_pane_title`, `get_pane_title`, `clear_history`, `close_pane`, `pane_info`, `pane_exists` |
 | 窗口操作 | `split_window`, `close_window`, `rename_window`, `resize_window`, `select_window`, `select_layout`, `window_info`, `list_window_panes` |
 | 发现与查询 | `find_panes`, `find_sessions`, `get_pane_by_title`, `host_capabilities` |

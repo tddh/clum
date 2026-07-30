@@ -409,7 +409,7 @@
 
 > **断连自愈**：等待期间连接断开（bridge 重启、网络抖动、QUIC idle）时，exec 自动退避重连并继续等待——sentinel 标记存在于远端 pane 上，重连不影响命令执行，整个恢复过程计入同一时间预算。
 
-> ⚠️ **超长时间命令**（如 `ansible-playbook`、`terraform apply`、超大型编译等可能超过 10 分钟的任务）：推荐用 `shell_command`/`spawn_command` 启动 + `collect_until_exit`/`stream_pane` 收集结果，比 exec 更合适。`exec` 超时后**命令仍在远端运行**，session 保留，可以后期 `capture_pane` 查看进度、`wait_for_text("PLAY RECAP")` 等完成标志 |
+> ⚠️ **超长时间命令**（如 `ansible-playbook`、`terraform apply`、超大型编译等可能超过 10 分钟的任务）：推荐用 `send_keys`/`shell_command` 启动 + `collect_until_exit`/`stream_pane` 收集结果，比 exec 更合适。`exec` 超时后**命令仍在远端运行**，session 保留，可以后期 `capture_pane` 查看进度、`wait_for_text("PLAY RECAP")` 等完成标志 |
 
 ### `wait_exit`
 
@@ -428,7 +428,7 @@
 
 收集 pane 从此刻到进程退出的全部输出。适合大输出量的命令。
 
-> ⚠️ Pane 进程**必须先已运行**（通过 `spawn_command` 或 `exec` 启动）。输出以 base64 编码返回。
+> ⚠️ Pane 进程**必须先已运行**（通过 `send_keys` 或 `shell_command` 启动）。输出以 base64 编码返回。
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|

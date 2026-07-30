@@ -54,7 +54,7 @@ yunying-mcp bridge add my-host --tags gpu,web
 # 输出 token 和安装命令
 
 # 目标机器一键安装
-curl -fsSL http://SERVER:9788/install.sh | \
+curl -fsSL https://SERVER:9788/install.sh | \
   BRIDGE_TOKEN=<token> SERVER_ADDR=SERVER:9788 sh
 ```
 
@@ -65,7 +65,7 @@ curl -fsSL http://SERVER:9788/install.sh | \
   "mcp": {
     "yunying": {
       "type": "remote",
-      "url": "http://SERVER:9788/mcp",
+      "url": "https://SERVER:9788/mcp",
       "headers": { "Authorization": "Bearer yk_tddh_..." }
     }
   }

@@ -197,7 +197,7 @@ AI Agent 继续通过 MCP exec 操作同一个 pane %0：
 │  │ • send_keys         │    │ • yunying download │    │
 │  │ • file_upload       │    │ • yunying tunnel   │    │
 │  │ • batch_exec        │    │                      │    │
-│  │ • ...（66 个工具）   │    │                      │    │
+│  │ • ...（67 个工具）   │    │                      │    │
 │  └─────────────────────┘    └─────────────────────┘    │
 │                                                         │
 │  共享基础设施：                                           │

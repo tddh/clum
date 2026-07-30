@@ -85,7 +85,7 @@ graph LR
 | AI clients | Any machine | Hub server (HTTP, MCP protocol) |
 | `yunying-cli` | Operator machine | Hub server (QUIC, `--server-addr`) |
 
-> 💡 New bridges deploy with one command: `curl -fsSL curl -fsSL -H "Authorization: Bearer <download_token>" http://SERVER:9788/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=SERVER:9788 DOWNLOAD_TOKEN=<download_token> sh`
+> 💡 New bridges deploy with one command: `curl -fsSL curl -fsSL -H "Authorization: Bearer <download_token>" https://SERVER:9788/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=SERVER:9788 DOWNLOAD_TOKEN=<download_token> sh`
 
 ## Features
 
@@ -302,7 +302,7 @@ This design keeps yunying focused on operations while enabling teams to build th
 | Session | `session_create`, `session_list`, `session_attach`, `session_detach`, `kill_session` |
 | Input | `send_keys`, `send_text`, `broadcast_keys` |
 | Output | `capture_pane`, `capture_region`, `wait_for_text`, `wait_for_bytes`, `find_pane_text`, `find_text_all`, `stream_pane` |
-| Execution | `exec`, `wait_exit`, `wait_stable`, `collect_until_exit`, `spawn_command`, `shell_command`, `respawn_pane`, `cmd_escape` |
+| Execution | `exec`, `wait_exit`, `wait_stable`, `collect_until_exit`, , `shell_command`, `respawn_pane`, `cmd_escape` |
 | Pane | `split_pane`, `split_pane_with`, `break_pane`, `join_pane`, `swap_pane`, `resize_pane`, `set_pane_title`, `get_pane_title`, `clear_history`, `close_pane`, `pane_info`, `pane_exists` |
 | Window | `split_window`, `close_window`, `rename_window`, `resize_window`, `select_window`, `select_layout`, `window_info`, `list_window_panes` |
 | Discovery | `find_panes`, `find_sessions`, `get_pane_by_title`, `host_capabilities` |
