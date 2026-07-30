@@ -91,9 +91,15 @@ pub(crate) async fn file_download(
         .get(host_name)
         .with_context(|| format!("host not found: {}", host_name))?;
 
-    let result =
-        crate::files::download_file(&host, remote_path, local_path, &ctx.ca_cert_path, progress, &ctx.bridge_registry)
-            .await;
+    let result = crate::files::download_file(
+        &host,
+        remote_path,
+        local_path,
+        &ctx.ca_cert_path,
+        progress,
+        &ctx.bridge_registry,
+    )
+    .await;
     super::audit(
         ctx,
         AuditAction::FileDownload,

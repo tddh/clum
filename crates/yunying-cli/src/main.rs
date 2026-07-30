@@ -186,7 +186,8 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Commands::List { host } => {
-            let conn = get_connection(&server_addr, &ca_cert, &api_key, &hosts_file, &host, "list").await?;
+            let conn = get_connection(&server_addr, &ca_cert, &api_key, &hosts_file, &host, "list")
+                .await?;
             let (mut send, mut recv) = conn.open_bi().await?;
             send.write_all(&[0x01]).await?;
             let request = serde_json::json!({ "type": "list_sessions" });
@@ -253,7 +254,15 @@ async fn main() -> anyhow::Result<()> {
             local_path,
             remote_path,
         } => {
-            let conn = get_connection(&server_addr, &ca_cert, &api_key, &hosts_file, &host, "upload").await?;
+            let conn = get_connection(
+                &server_addr,
+                &ca_cert,
+                &api_key,
+                &hosts_file,
+                &host,
+                "upload",
+            )
+            .await?;
             let (mut send, mut recv) = conn.open_bi().await?;
 
             let file_data = tokio::fs::read(&local_path)
@@ -305,7 +314,15 @@ async fn main() -> anyhow::Result<()> {
             remote_path,
             local_path,
         } => {
-            let conn = get_connection(&server_addr, &ca_cert, &api_key, &hosts_file, &host, "download").await?;
+            let conn = get_connection(
+                &server_addr,
+                &ca_cert,
+                &api_key,
+                &hosts_file,
+                &host,
+                "download",
+            )
+            .await?;
             let (mut send, mut recv) = conn.open_bi().await?;
 
             send.write_all(&[0x03]).await?; // STREAM_DOWNLOAD
@@ -353,7 +370,15 @@ async fn main() -> anyhow::Result<()> {
                 .ok_or_else(|| anyhow::anyhow!("invalid --remote format, expected host:port"))?;
             let remote_port: u16 = remote_port.parse()?;
 
-            let conn = get_connection(&server_addr, &ca_cert, &api_key, &hosts_file, &host, "tunnel").await?;
+            let conn = get_connection(
+                &server_addr,
+                &ca_cert,
+                &api_key,
+                &hosts_file,
+                &host,
+                "tunnel",
+            )
+            .await?;
             let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{local}")).await?;
             println!(
                 "tunnel: 127.0.0.1:{local} → {host}:{remote_host}:{remote_port} (Ctrl+C to stop)"

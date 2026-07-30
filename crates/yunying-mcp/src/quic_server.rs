@@ -83,8 +83,10 @@ pub async fn run_quic_server(
         let ca_cert = config.ca_cert_path.clone();
         let audit = Arc::clone(&config.audit_db);
         tokio::spawn(async move {
-            if let Err(e) =
-                handle_connection(incoming, registry, token_map, rec_dir, store, agents, router, ca_cert, audit).await
+            if let Err(e) = handle_connection(
+                incoming, registry, token_map, rec_dir, store, agents, router, ca_cert, audit,
+            )
+            .await
             {
                 tracing::debug!("QUIC connection handler ended: {e}");
             }
@@ -385,10 +387,13 @@ async fn handle_agent_connection(
     let bridge_conn: quinn::Connection = if let Some(b) = registry.get(&host).await {
         b.conn.clone()
     } else if let Some(h) = router.get(&host) {
-        let (direct_conn, _auth_send, _auth_recv) =
-            crate::transport::connect_to_bridge_quic(&h.bridge_addr, &h.bridge_token, &ca_cert_path)
-                .await
-                .with_context(|| format!("direct connect to {}:{} failed", host, h.bridge_addr))?;
+        let (direct_conn, _auth_send, _auth_recv) = crate::transport::connect_to_bridge_quic(
+            &h.bridge_addr,
+            &h.bridge_token,
+            &ca_cert_path,
+        )
+        .await
+        .with_context(|| format!("direct connect to {}:{} failed", host, h.bridge_addr))?;
         direct_conn
     } else {
         write_frame(&mut send, &serde_json::json!({"type": "agent_ack", "ok": false, "error": format!("host '{host}' not found")})).await?;
@@ -406,21 +411,26 @@ async fn handle_agent_connection(
         .insert(host.clone(), agent_name.clone());
     tracing::info!(%host, %remote_addr, %agent_name, "agent connected, starting relay");
 
-    let purpose = msg.get("purpose").and_then(|v| v.as_str()).unwrap_or("unknown");
-    audit_db.log(yunying_core::types::AuditEvent {
-        event_id: uuid::Uuid::new_v4(),
-        timestamp: chrono::Utc::now(),
-        agent_name: agent_name.clone(),
-        host_name: host.clone(),
-        session_name: String::new(),
-        pane_id: None,
-        action: yunying_core::types::AuditAction::AgentRelay,
-        detail: format!("purpose={purpose} addr={remote_addr}"),
-        output_summary: None,
-        success: true,
-        duration_ms: 0,
-        error_message: None,
-    }).await;
+    let purpose = msg
+        .get("purpose")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+    audit_db
+        .log(yunying_core::types::AuditEvent {
+            event_id: uuid::Uuid::new_v4(),
+            timestamp: chrono::Utc::now(),
+            agent_name: agent_name.clone(),
+            host_name: host.clone(),
+            session_name: String::new(),
+            pane_id: None,
+            action: yunying_core::types::AuditAction::AgentRelay,
+            detail: format!("purpose={purpose} addr={remote_addr}"),
+            output_summary: None,
+            success: true,
+            duration_ms: 0,
+            error_message: None,
+        })
+        .await;
 
     // Relay loop: for each stream CLI opens, open corresponding stream to Bridge and relay
     loop {

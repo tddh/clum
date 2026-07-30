@@ -50,9 +50,12 @@ async fn get_conn(
             return Ok(bridge.conn.clone());
         }
     }
-    let (conn, _auth_send, _auth_recv) =
-        crate::transport::connect_to_bridge_quic(&host.bridge_addr, &host.bridge_token, ca_cert_path)
-            .await?;
+    let (conn, _auth_send, _auth_recv) = crate::transport::connect_to_bridge_quic(
+        &host.bridge_addr,
+        &host.bridge_token,
+        ca_cert_path,
+    )
+    .await?;
     Ok(conn)
 }
 

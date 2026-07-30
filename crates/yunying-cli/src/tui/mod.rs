@@ -305,7 +305,8 @@ pub async fn run_connect_with_ai(
 ) -> Result<()> {
     crate::ai::init_opencode_dir(opencode_dir);
     let conn = if let Some((server_addr, host)) = &server {
-        crate::connect::connect_via_server(server_addr, ca_cert_path, host, api_key, "connect").await?
+        crate::connect::connect_via_server(server_addr, ca_cert_path, host, api_key, "connect")
+            .await?
     } else {
         let config = config.context("either config or server must be provided")?;
         connect_to_bridge_quic(&config.bridge_addr, &config.bridge_token, ca_cert_path).await?

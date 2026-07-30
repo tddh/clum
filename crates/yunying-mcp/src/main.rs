@@ -170,16 +170,13 @@ async fn main() -> anyhow::Result<()> {
     );
     tracing::info!("loaded {} hosts", router.len());
 
-    let db_path = cli
-        .audit_db
-        .unwrap_or(file_audit_db);
+    let db_path = cli.audit_db.unwrap_or(file_audit_db);
     let audit_db = Arc::new(audit::AuditDb::open(&db_path)?);
     tracing::info!("audit database: {}", db_path.display());
 
     let cleanup_db = audit_db.clone();
     tokio::spawn(async move {
-        let mut timer =
-            tokio::time::interval(std::time::Duration::from_secs(cleanup_interval));
+        let mut timer = tokio::time::interval(std::time::Duration::from_secs(cleanup_interval));
         loop {
             timer.tick().await;
             if let Err(e) = cleanup_db
@@ -411,7 +408,9 @@ async fn run_bridge_command(args: &[String]) -> anyhow::Result<()> {
     match args.first().map(|s| s.as_str()) {
         Some("add") => {
             let hostname = args.get(1).ok_or_else(|| {
-                anyhow::anyhow!("usage: yunying-mcp bridge add <hostname> --tags infra,server [--config path]")
+                anyhow::anyhow!(
+                    "usage: yunying-mcp bridge add <hostname> --tags infra,server [--config path]"
+                )
             })?;
             let tags: Vec<String> = args
                 .iter()
