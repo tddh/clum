@@ -725,24 +725,9 @@
 
 ## 进程控制
 
-### `spawn_command`
-
-在已有窗格中执行命令（fire-and-forget，不等待完成）。默认将命令作为按键发送到已解析的 pane，不创建新 pane。设置 `new_pane=true` 可使用旧行为（exec 语义，替换当前进程）。
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|:---:|------|
-| `host` | string | ✅ | |
-| `session_name` | string | ✅ | |
-| `pane_id` | string | | 可选，省略时自动探测 |
-| `command` | string | ✅ | 要执行的命令 |
-| `args` | string[] | | 命令参数 |
-| `new_pane` | boolean | | 创建新 pane 执行（默认 false，复用已有 pane） |
-
-**典型用法**：启动长程前台进程（top, tail -f），然后用 `stream_pane` 或 `capture_pane` 监控输出。
-
 ### `shell_command`
 
-通过 shell 执行命令（`/bin/sh -c`）。其余同 `spawn_command`。
+通过 shell 执行命令（`/bin/sh -c`），替换当前 pane 的进程。Pane 必须空闲。
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|

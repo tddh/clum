@@ -58,7 +58,6 @@ pub async fn execute_tool(
         "capture_pane" => pane::capture_pane(ctx, args).await,
         "wait_for_text" => output::wait_for_text(ctx, args).await,
         "wait_exit" => output::wait_exit(ctx, args).await,
-        "spawn_command" => exec::spawn_command(ctx, args).await,
         "shell_command" => exec::shell_command(ctx, args).await,
         "respawn_pane" => session::respawn_pane(ctx, args).await,
         "broadcast_keys" => exec::broadcast_keys(ctx, args).await,

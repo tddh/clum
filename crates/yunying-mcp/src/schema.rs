@@ -202,22 +202,6 @@ pub fn tools_definition() -> Value {
                 }
             },
             {
-                "name": "spawn_command",
-                "description": "Run a command in the existing pane (fire-and-forget, does not wait for completion). By default sends the command as keystrokes to the resolved pane — no new pane is created. Use stream_pane or capture_pane to monitor output. Set new_pane=true to create a separate pane via exec semantics (replaces shell process). Use this for long-running foreground processes (top, htop, tail -f).",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. yunying" },
-                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
-                        "command": { "type": "string", "description": "Command to execute (e.g., 'top', 'vim', 'tail')" },
-                        "args": { "type": "array", "items": { "type": "string" }, "description": "Command arguments (e.g., ['-f', '/var/log/syslog'])" },
-                        "new_pane": { "type": "boolean", "description": "Create a new pane for the command (default: false, reuses existing pane)" }
-                    },
-                    "required": ["host", "session_name", "command"]
-                }
-            },
-            {
                 "name": "shell_command",
                 "description": "Run a command via /bin/sh -c in a pane, replacing the current shell process. The pane MUST be idle (no running process). Unlike spawn_command, this interprets the command through a shell, so you can use shell features like pipes, redirects, and variable expansion. Use this for complex shell one-liners. Unlike exec, this does NOT wait for completion or capture output — use stream_pane or capture_pane to monitor. For simple commands that need output captured, prefer exec.",
                 "inputSchema": {

@@ -367,7 +367,7 @@ split_pane_with(
 ```
 # 适合大输出命令
 # ⚠️ 超时后收集被取消（已收集字节丢失），但远端进程继续运行。不要用于 fire-and-forget 长任务
-1. spawn_command(host, session_name, pane_id, command="find / -name '*.log'")
+1. send_keys(host, session_name, keys="find / -name '*.log'\n")
 2. collect_until_exit(host, session_name, pane_id, max_bytes=10485760)
    → 流式收集所有输出直到进程退出
    → 返回收集的字节和退出信息
@@ -526,8 +526,8 @@ capture_region(host, session_name, pane_id)
 跑命令？
 ├── 会自行退出（ls, cat, grep）→ `exec`
 ├── 长程任务（ansible-playbook, terraform, 编译）→ `shell_command` + `wait_for_text` / `stream_pane`
-├── 不会退出（tail -f, ping）→ `spawn_command`（默认复用已有 pane，fire-and-forget）+ `stream_pane`
-├── 大输出命令（find, du）→ `spawn_command` + `collect_until_exit`
+├── 不会退出（tail -f, ping）→ `send_keys("tail -f /var/log/syslog\n")` + `stream_pane`
+├── 大输出命令（find, du）→ `send_keys` + `collect_until_exit`
 │   ⚠️ 超时后收集被取消，远端进程继续运行
 ├── 需要实时监控输出 → `send_keys` + `stream_pane` 循环
 ├── 多台主机 → `batch_exec`
