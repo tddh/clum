@@ -587,7 +587,7 @@ yunying 是运维操作工具，权限模型和常规 API 不同：
 
 ## 11. TODO（后续优化）
 
-- [ ] Token 热加载改为事件驱动（API 写入即生效），去掉 30s 轮询
+- [x] Token 热加载：30s 轮询 SQLite + clear/extend 替换内存 map，bridge add 后无需重启（9984d01）
 - [ ] stream_pane 流式推送（blocked：等 MCP 客户端支持 progress/streaming，OpenCode 当前未声明 progress 能力）
-- [x] spawn_command 默认复用已有 pane（不再新开），避免残留 dead pane
+- [x] spawn_command 废弃移除（rmux-sdk spawn 是 respawn 语义，会杀 shell 导致 dead pane；用 send_keys/split_pane_with 替代）
 - [x] 录制文件 agent 标识：Server relay 时传递 agent context 给 Bridge
