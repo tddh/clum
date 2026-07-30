@@ -1,7 +1,21 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use yunying_core::HostConfig;
+
+const QUIC_WINDOW_SIZE: u32 = 16 * 1024 * 1024;
+
+fn build_transport_config() -> quinn::TransportConfig {
+    let mut transport = quinn::TransportConfig::default();
+    transport.max_idle_timeout(Some(Duration::from_secs(3600).try_into().unwrap()));
+    transport.keep_alive_interval(Some(Duration::from_secs(15)));
+    transport.stream_receive_window(quinn::VarInt::from_u32(QUIC_WINDOW_SIZE));
+    transport.send_window(QUIC_WINDOW_SIZE as u64);
+    transport.receive_window(quinn::VarInt::from_u32(QUIC_WINDOW_SIZE));
+    transport.congestion_controller_factory(Arc::new(quinn::congestion::BbrConfig::default()));
+    transport
+}
 
 pub async fn connect_via_server(
     server_addr: &str,
@@ -27,7 +41,8 @@ pub async fn connect_via_server(
         .map_err(|e| anyhow::anyhow!("QUIC TLS config error: {}", e))?;
 
     let mut endpoint = quinn::Endpoint::client("0.0.0.0:0".parse()?)?;
-    let client_config = quinn::ClientConfig::new(Arc::new(quic_tls));
+    let mut client_config = quinn::ClientConfig::new(Arc::new(quic_tls));
+    client_config.transport_config(Arc::new(build_transport_config()));
     endpoint.set_default_client_config(client_config);
 
     let addr: std::net::SocketAddr = server_addr
@@ -91,8 +106,7 @@ pub async fn connect_to_bridge_quic(
     let quic_tls = quinn::crypto::rustls::QuicClientConfig::try_from(tls_config)
         .map_err(|e| anyhow::anyhow!("QUIC TLS config error: {}", e))?;
 
-    let mut transport = quinn::TransportConfig::default();
-    transport.max_idle_timeout(Some(quinn::IdleTimeout::from(quinn::VarInt::from_u32(0))));
+    let transport = build_transport_config();
 
     let mut endpoint = quinn::Endpoint::client("0.0.0.0:0".parse()?)?;
     let mut client_config = quinn::ClientConfig::new(Arc::new(quic_tls));

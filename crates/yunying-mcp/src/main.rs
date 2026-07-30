@@ -290,8 +290,16 @@ async fn main() -> anyhow::Result<()> {
 
             let key_store = api_keys::ApiKeyStore::open(&db_path)?;
             let bridge_store = Arc::new(bridge_store::BridgeStore::open(&db_path)?);
-            http_server::run_http_server(ctx, &cli.listen, key_store, bridge_store, cli.static_dir)
-                .await
+            http_server::run_http_server(
+                ctx,
+                &cli.listen,
+                key_store,
+                bridge_store,
+                cli.static_dir,
+                cert,
+                key,
+            )
+            .await
         }
         _ => {
             let tools_definition = schema::tools_definition();

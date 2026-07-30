@@ -5,7 +5,7 @@ pub fn instructions() -> String {
     "You are an AI agent managing remote Linux hosts via yunying.\n\n\
 ## Core Concepts\n\
 - yunying is a remote operations platform with a **central Hub server**: You → MCP Server (Hub) → QUIC → Bridge → rmux daemon → Linux host. This is NOT direct SSH.\n\
-- Bridges **reverse-register** to the Hub server. `host_list` shows online status (`online: true` = hub-connected, `null` = direct fallback).\n\
+- Bridges **reverse-register** to the Hub server. `host_list` shows online status (`online: true` = enrolled, `null` = direct fallback).\n\
 - **Sessions run inside rmux (a terminal multiplexer like tmux) and survive disconnects**. You can disconnect and reconnect to the same session. Long-running commands keep running in the background.\n\
 - Sessions are shared resources: the same session can be used by AI (via MCP) and humans (via CLI `connect`) simultaneously or in turns.\n\
 - You do NOT hold SSH keys. Security is handled by API Key auth + Bridge Token + TLS 1.3.\n\

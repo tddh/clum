@@ -139,6 +139,8 @@ pub async fn run_http_server(
     key_store: Arc<ApiKeyStore>,
     bridge_store: Arc<crate::bridge_store::BridgeStore>,
     static_dir: Option<std::path::PathBuf>,
+    tls_cert: Option<String>,
+    tls_key: Option<String>,
 ) -> anyhow::Result<()> {
     let config = StreamableHttpServerConfig::default()
         .with_json_response(true)
@@ -203,9 +205,25 @@ pub async fn run_http_server(
     };
     let app = app.layer(middleware::from_fn_with_state(auth_state, auth_middleware));
 
-    let listener = tokio::net::TcpListener::bind(listen_addr).await?;
-    tracing::info!("yunying-mcp HTTP server listening on {listen_addr}");
-    axum::serve(listener, app).await?;
+    match (tls_cert, tls_key) {
+        (Some(cert), Some(key)) => {
+            let rustls_config = axum_server::tls_rustls::RustlsConfig::from_pem_file(
+                std::path::PathBuf::from(&cert),
+                std::path::PathBuf::from(&key),
+            )
+            .await?;
+            let addr: std::net::SocketAddr = listen_addr.parse()?;
+            tracing::info!("yunying-mcp HTTPS server listening on {listen_addr}");
+            axum_server::bind_rustls(addr, rustls_config)
+                .serve(app.into_make_service())
+                .await?;
+        }
+        _ => {
+            let listener = tokio::net::TcpListener::bind(listen_addr).await?;
+            tracing::info!("yunying-mcp HTTP server listening on {listen_addr} (no TLS)");
+            axum::serve(listener, app).await?;
+        }
+    }
     Ok(())
 }
 

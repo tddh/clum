@@ -17,7 +17,7 @@ pub(crate) async fn host_list(ctx: &ToolContext) -> Result<Value> {
             "labels": h.labels,
             "bridge_addr": h.bridge_addr,
             "online": online_val,
-            "via": if hub_online { "hub" } else { "direct" },
+            "via": if hub_online { "enrolled" } else { "direct" },
         }));
     }
     super::audit(
@@ -65,7 +65,7 @@ pub(crate) async fn host_filter(ctx: &ToolContext, args: Value) -> Result<Value>
             "name": h.name, "group": h.group, "tags": h.tags, "labels": h.labels,
             "bridge_addr": h.bridge_addr,
             "online": online_val,
-            "via": if hub_online { "hub" } else { "direct" },
+            "via": if hub_online { "enrolled" } else { "direct" },
         }));
     }
     super::audit(

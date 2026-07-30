@@ -177,6 +177,7 @@ pub(crate) async fn deploy_bridge(
 
             let replace_cmd = format!("chmod +x {new} && mv {new} {path}",
                 new = upload_new_path, path = remote_path);
+            task_progress.report(0, 3, "replacing").await;
             let replace_result = exec_in_session(&mut stream, session_name, &pane_id,
                 &replace_cmd, 10000, 50).await;
             if !replace_result.ok || replace_result.error.is_some() {
@@ -189,6 +190,7 @@ pub(crate) async fn deploy_bridge(
             }
 
             // Fire-and-forget: bridge dies immediately, don't wait for sentinel
+            task_progress.report(1, 3, "restarting").await;
             let _ = send_json_frame(&mut stream, &json!({
                 "type": "send_keys",
                 "session_name": session_name,
@@ -210,6 +212,7 @@ pub(crate) async fn deploy_bridge(
             };
 
             // 重启后旧 session/pane 可能已不存在，重新创建以确保验证命令可执行
+            task_progress.report(2, 3, "verifying").await;
             let verify_pane_id = match create_session_inner(&mut new_stream, session_name).await {
                 Ok(resp) => resp.get("pane_id")
                     .and_then(|v| v.as_str())
@@ -221,6 +224,7 @@ pub(crate) async fn deploy_bridge(
             let verify_result = exec_in_session(&mut new_stream, session_name, &verify_pane_id,
                 "systemctl is-active rmux-bridge", 10000, 50).await;
             let is_active = verify_result.output.lines().any(|l| l.trim() == "active");
+            task_progress.report(3, 3, "done").await;
 
             (host_name.clone(), json!({
                 "ok": is_active,

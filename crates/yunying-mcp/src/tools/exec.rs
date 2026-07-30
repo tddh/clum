@@ -689,7 +689,11 @@ where
     }
 }
 
-pub(crate) async fn exec(ctx: &ToolContext, args: Value) -> Result<Value> {
+pub(crate) async fn exec(
+    ctx: &ToolContext,
+    args: Value,
+    progress: &mut crate::progress::ProgressReporter,
+) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
     let session_name = args["session_name"]
         .as_str()
@@ -707,6 +711,7 @@ pub(crate) async fn exec(ctx: &ToolContext, args: Value) -> Result<Value> {
         .router
         .get(host_name)
         .with_context(|| format!("host not found: {}", host_name))?;
+    progress.report(0, 3, "connecting").await;
     let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =
         super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
@@ -724,6 +729,7 @@ pub(crate) async fn exec(ctx: &ToolContext, args: Value) -> Result<Value> {
         let _ = recv_json_frame(&mut tls).await;
     }
 
+    progress.report(1, 3, "executing").await;
     let result = match exec_send(&mut tls, session_name, &pane_id, command, timeout_ms).await {
         SendOutcome::Done(r) => r,
         SendOutcome::Sent(sent) => {
@@ -762,6 +768,7 @@ pub(crate) async fn exec(ctx: &ToolContext, args: Value) -> Result<Value> {
             }
         }
     };
+    progress.report(3, 3, "done").await;
 
     let output_summary: String = result.output.chars().take(500).collect();
     super::audit(

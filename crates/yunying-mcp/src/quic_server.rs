@@ -7,6 +7,10 @@ use sha2::{Digest, Sha256};
 
 use crate::registry::{BridgeConn, BridgeRegistry};
 
+/// Relay buffer size for CLI file transfer streams through Hub.
+/// Must align with bridge CHUNK_SIZE and MCP COPY_BUF_SIZE (both 1 MB).
+const RELAY_BUF_SIZE: usize = 1024 * 1024; // 1 MB
+
 pub struct QuicServerConfig {
     pub listen_addr: String,
     pub cert_path: String,
@@ -414,7 +418,7 @@ async fn relay_stream(
     let mut cli_send = cli_send;
 
     let c2b = async {
-        let mut buf = [0u8; 8192];
+        let mut buf = vec![0u8; RELAY_BUF_SIZE];
         while let Ok(Some(n)) = cli_recv.read(&mut buf).await {
             if bridge_send.write_all(&buf[..n]).await.is_err() {
                 break;
@@ -424,7 +428,7 @@ async fn relay_stream(
     };
 
     let b2c = async {
-        let mut buf = [0u8; 8192];
+        let mut buf = vec![0u8; RELAY_BUF_SIZE];
         while let Ok(Some(n)) = bridge_recv.read(&mut buf).await {
             if cli_send.write_all(&buf[..n]).await.is_err() {
                 break;

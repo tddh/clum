@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
@@ -8,7 +10,11 @@ use crate::files::OverwriteMode;
 use crate::transport::connect_via_registry;
 use yunying_core::types::AuditAction;
 
-pub(crate) async fn batch_exec(ctx: &ToolContext, args: Value) -> Result<Value> {
+pub(crate) async fn batch_exec(
+    ctx: &ToolContext,
+    args: Value,
+    progress: &crate::progress::ProgressReporter,
+) -> Result<Value> {
     let hosts_arg: Vec<String> = args["hosts"]
         .as_array()
         .context("missing 'hosts'")?
@@ -37,6 +43,8 @@ pub(crate) async fn batch_exec(ctx: &ToolContext, args: Value) -> Result<Value> 
     let registry = std::sync::Arc::clone(&ctx.bridge_registry);
     let cmd = command.to_string();
     let start = std::time::Instant::now();
+    let total_hosts = targets.len();
+    let completed = std::sync::Arc::new(AtomicUsize::new(0));
 
     let mut handles: Vec<tokio::task::JoinHandle<(String, Value)>> = Vec::new();
 
@@ -45,6 +53,8 @@ pub(crate) async fn batch_exec(ctx: &ToolContext, args: Value) -> Result<Value> 
         let registry = registry.clone();
         let cmd = cmd.clone();
         let sem = semaphore.clone();
+        let completed = completed.clone();
+        let mut task_progress = progress.clone();
 
         let handle = tokio::spawn(async move {
             let _permit = if let Some(s) = &sem {
@@ -56,6 +66,10 @@ pub(crate) async fn batch_exec(ctx: &ToolContext, args: Value) -> Result<Value> 
             let host = match host_opt {
                 Some(h) => h,
                 None => {
+                    let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
+                    task_progress
+                        .report(done as u64, total_hosts as u64, &host_name)
+                        .await;
                     return (
                         host_name,
                         json!({
@@ -69,6 +83,10 @@ pub(crate) async fn batch_exec(ctx: &ToolContext, args: Value) -> Result<Value> 
             let mut stream = match connect_via_registry(&registry, &host, &ca_cert).await {
                 Ok(s) => s,
                 Err(e) => {
+                    let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
+                    task_progress
+                        .report(done as u64, total_hosts as u64, &host_name)
+                        .await;
                     return (
                         host_name,
                         json!({
@@ -90,6 +108,10 @@ pub(crate) async fn batch_exec(ctx: &ToolContext, args: Value) -> Result<Value> 
                     .unwrap_or("%0")
                     .to_string(),
                 Err(e) => {
+                    let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
+                    task_progress
+                        .report(done as u64, total_hosts as u64, &host_name)
+                        .await;
                     return (
                         host_name,
                         json!({
@@ -129,6 +151,11 @@ pub(crate) async fn batch_exec(ctx: &ToolContext, args: Value) -> Result<Value> 
             if result.refused {
                 per_host["refused"] = json!(true);
             }
+
+            let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
+            task_progress
+                .report(done as u64, total_hosts as u64, &host_name)
+                .await;
 
             (host_name, per_host)
         });
