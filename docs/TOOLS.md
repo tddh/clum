@@ -55,7 +55,7 @@
 
 ### `host_list`
 
-列出所有已注册主机。
+列出所有主机（enrolled 优先）。Enrolled 主机来自 bridge 注册（`via: "enrolled"`, `online: true`），直连主机来自 hosts.yaml（`via: "direct"`, `online: null`）。同一主机两边都有时，enrolled 元数据优先。
 
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
@@ -74,6 +74,17 @@
 | `label_key` | string | | 标签键 |
 | `label_value` | string | | 标签值 |
 | `pattern` | string | | 主机名 glob 模式，如 `prod-web-*` |
+
+### `host_set_meta`
+
+设置 enrolled 主机的元数据（group/tags/labels），持久化到 SQLite，立即生效于 `host_list`/`host_filter`。仅对通过 `bridge add` 注册的主机有效。
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `host` | string | ✅ | 主机名 |
+| `group` | string | | 分组名，如 production, infra |
+| `tags` | string[] | | 替换 tags 列表 |
+| `labels` | object | | 键值对标签，如 `{"role": "mcp-server"}` |
 
 ---
 
@@ -716,7 +727,7 @@
 
 ### `spawn_command`
 
-在窗格中启动新进程（直接 exec，替换当前进程）。
+在已有窗格中执行命令（fire-and-forget，不等待完成）。默认将命令作为按键发送到已解析的 pane，不创建新 pane。设置 `new_pane=true` 可使用旧行为（exec 语义，替换当前进程）。
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
@@ -725,8 +736,9 @@
 | `pane_id` | string | | 可选，省略时自动探测 |
 | `command` | string | ✅ | 要执行的命令 |
 | `args` | string[] | | 命令参数 |
+| `new_pane` | boolean | | 创建新 pane 执行（默认 false，复用已有 pane） |
 
-**限制**：运行中的 pane 会拒绝（"pane still active"），需要先 `close_pane` 再 `session_create`。
+**典型用法**：启动长程前台进程（top, tail -f），然后用 `stream_pane` 或 `capture_pane` 监控输出。
 
 ### `shell_command`
 

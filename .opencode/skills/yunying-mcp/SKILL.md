@@ -17,7 +17,7 @@ yunying is a **remote Linux operations platform** — not a simple SSH tool. Und
 | **Persistent sessions** | Sessions run inside **rmux** (a terminal multiplexer like tmux). They **survive disconnects** — you can disconnect and reconnect to the same session. Long-running commands keep running in the background. |
 | **Shared sessions** | The same session can be used by AI (via MCP) and humans (via CLI `connect`) simultaneously or in turns. After you run a command, a human can attach and see the results. |
 | **Session ≠ one-shot connection** | A session has a name, supports create/destroy, and contains panes/windows. Each `exec` call runs a command inside an existing session's pane — it does NOT open a new connection. |
-| **Multi-host registry** | All operable hosts are registered in `hosts.yaml`. Use `host_list` to see them. Operations are uniform across hosts — same tools, different `host` parameter. |
+| **Multi-host registry** | Hosts come from two sources: **enrolled bridges** (auto-registered via QUIC, shown as `via: "enrolled"`) and **hosts.yaml** (static config, `via: "direct"`). Use `host_list` to see all. Use `host_set_meta` to tag/label enrolled hosts. |
 | **Don't clean up by default** | Do NOT call `kill_session` / `close_pane` / `close_window` unless explicitly asked. Sessions are shared resources — a human or another AI might be using them. |
 
 ### Tool Selection Principles
@@ -190,6 +190,7 @@ close_pane(host="tf01", session_name="yunying", pane_id="%0")  # ❌ 违反规�
 | 等特定字节序列 | `wait_for_bytes`（匹配 ANSI 序列等原始字节） |
 | 区域截图 | `capture_region`（截取屏幕特定区域） |
 | 多机并发 | `batch_exec` / `batch_upload` / `batch_download` |
+| 设置主机元数据 | `host_set_meta`（为 enrolled 主机设置 group/tags/labels，持久化到 SQLite） |
 | 端口转发 | `tunnel_create` / `tunnel_list` / `tunnel_close` |
 | 文件传输 | `file_upload` / `file_download` |
 | 批量文件传输 | `batch_upload` / `batch_download` |
@@ -525,7 +526,7 @@ capture_region(host, session_name, pane_id)
 跑命令？
 ├── 会自行退出（ls, cat, grep）→ `exec`
 ├── 长程任务（ansible-playbook, terraform, 编译）→ `shell_command` + `wait_for_text` / `stream_pane`
-├── 不会退出（tail -f, ping）→ `send_keys` + `capture_pane`
+├── 不会退出（tail -f, ping）→ `spawn_command`（默认复用已有 pane，fire-and-forget）+ `stream_pane`
 ├── 大输出命令（find, du）→ `spawn_command` + `collect_until_exit`
 │   ⚠️ 超时后收集被取消，远端进程继续运行
 ├── 需要实时监控输出 → `send_keys` + `stream_pane` 循环
