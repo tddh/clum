@@ -360,8 +360,60 @@ impl ProtocolProxy {
                     .collect();
                 json!({"ok": true, "panes": list, "count": list.len()})
             }
-            Err(e) => json!({"ok": false, "error": e.to_string()}),
+            Err(e) => {
+                tracing::warn!("find_panes SDK failed, falling back to CLI: {e}");
+                self.find_panes_cli_fallback(args).await
+            }
         }
+    }
+
+    async fn find_panes_cli_fallback(&self, args: &serde_json::Value) -> serde_json::Value {
+        let socket = self.socket_path();
+        let session_filter = args["session_name"].as_str();
+        let title_filter = args["title"].as_str();
+
+        let mut cmd_args = vec!["-S", socket, "list-panes", "-s"];
+        let target_val;
+        if let Some(s) = session_filter {
+            cmd_args.push("-t");
+            target_val = s.to_string();
+            cmd_args.push(&target_val);
+        }
+        cmd_args.push("-F");
+        cmd_args.push("#{session_name}\t#{window_index}\t#{pane_index}\t#{pane_id}\t#{pane_title}\t#{pane_current_command}\t#{pane_dead}\t#{pane_pid}\t#{pane_current_path}");
+
+        let output = match tokio::process::Command::new("rmux")
+            .args(&cmd_args)
+            .output()
+            .await
+        {
+            Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
+            Ok(o) => return json!({"ok": false, "error": format!("rmux CLI failed: {}", String::from_utf8_lossy(&o.stderr))}),
+            Err(e) => return json!({"ok": false, "error": format!("rmux CLI spawn failed: {e}")}),
+        };
+
+        let mut panes: Vec<serde_json::Value> = Vec::new();
+        for line in output.lines() {
+            let parts: Vec<&str> = line.splitn(9, '\t').collect();
+            if parts.len() < 9 { continue; }
+            let title = parts[4];
+            if let Some(f) = title_filter {
+                if title != f { continue; }
+            }
+            let dead = parts[6] == "1";
+            panes.push(json!({
+                "pane_id": parts[3],
+                "session_name": parts[0],
+                "window_index": parts[1].parse::<u32>().unwrap_or(0),
+                "pane_index": parts[2].parse::<u32>().unwrap_or(0),
+                "title": title,
+                "command": parts[5],
+                "working_directory": parts[8],
+                "process": if dead { "exited" } else { "running" },
+                "pid": parts[7].parse::<u32>().ok(),
+            }));
+        }
+        json!({"ok": true, "panes": panes, "count": panes.len(), "fallback": true})
     }
 
     pub async fn handle_find_pane_text(
@@ -567,7 +619,20 @@ impl ProtocolProxy {
                     Err(e) => json!({"ok": false, "error": e.to_string()}),
                 }
             }
-            Err(e) => json!({"ok": false, "found": false, "error": e.to_string()}),
+            Err(e) => {
+                tracing::warn!("get_pane_by_title SDK failed, falling back to CLI: {e}");
+                let args = json!({"title": title});
+                let result = self.find_panes_cli_fallback(&args).await;
+                if result["ok"].as_bool().unwrap_or(false) {
+                    let panes = result["panes"].as_array();
+                    match panes.and_then(|p| p.first()) {
+                        Some(pane) => json!({"ok": true, "found": true, "pane": pane, "fallback": true}),
+                        None => json!({"ok": true, "found": false, "fallback": true}),
+                    }
+                } else {
+                    result
+                }
+            }
         }
     }
 
