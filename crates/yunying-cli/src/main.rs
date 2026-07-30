@@ -204,7 +204,10 @@ async fn main() -> anyhow::Result<()> {
                 }
                 Ok(())
             } else {
-                anyhow::bail!("list failed: {}", response["error"].as_str().unwrap_or("unknown"))
+                anyhow::bail!(
+                    "list failed: {}",
+                    response["error"].as_str().unwrap_or("unknown")
+                )
             }
         }
         Commands::Replay { file, speed, idle } => {
@@ -247,13 +250,15 @@ async fn main() -> anyhow::Result<()> {
             let conn = get_connection(&server_addr, &ca_cert, &api_key, &hosts_file, &host).await?;
             let (mut send, mut recv) = conn.open_bi().await?;
 
-            let file_data = tokio::fs::read(&local_path).await
+            let file_data = tokio::fs::read(&local_path)
+                .await
                 .map_err(|e| anyhow::anyhow!("read {local_path}: {e}"))?;
             let file_size = file_data.len() as u64;
 
             send.write_all(&[0x02]).await?; // STREAM_UPLOAD
             send.write_all(&[0x01]).await?; // overwrite mode
-            send.write_all(&(remote_path.len() as u16).to_le_bytes()).await?;
+            send.write_all(&(remote_path.len() as u16).to_le_bytes())
+                .await?;
             send.write_all(remote_path.as_bytes()).await?;
             send.write_all(&file_size.to_le_bytes()).await?;
             send.write_all(&file_data).await?;
@@ -268,7 +273,10 @@ async fn main() -> anyhow::Result<()> {
                     let total = u64::from_le_bytes(size_buf);
                     let mut hash = [0u8; 32];
                     recv.read_exact(&mut hash).await?;
-                    println!("uploaded {local_path} → {host}:{remote_path} ({total} bytes, sha256:{})", hex::encode(hash));
+                    println!(
+                        "uploaded {local_path} → {host}:{remote_path} ({total} bytes, sha256:{})",
+                        hex::encode(hash)
+                    );
                     Ok(())
                 }
                 0x01 => {
@@ -295,7 +303,8 @@ async fn main() -> anyhow::Result<()> {
             let (mut send, mut recv) = conn.open_bi().await?;
 
             send.write_all(&[0x03]).await?; // STREAM_DOWNLOAD
-            send.write_all(&(remote_path.len() as u16).to_le_bytes()).await?;
+            send.write_all(&(remote_path.len() as u16).to_le_bytes())
+                .await?;
             send.write_all(remote_path.as_bytes()).await?;
             send.finish()?;
 
@@ -311,7 +320,8 @@ async fn main() -> anyhow::Result<()> {
                     let mut file_data = vec![0u8; file_size as usize];
                     recv.read_exact(&mut file_data).await?;
 
-                    tokio::fs::write(&local_path, &file_data).await
+                    tokio::fs::write(&local_path, &file_data)
+                        .await
                         .map_err(|e| anyhow::anyhow!("write {local_path}: {e}"))?;
                     println!("downloaded {host}:{remote_path} → {local_path} ({file_size} bytes)");
                     Ok(())
@@ -332,13 +342,16 @@ async fn main() -> anyhow::Result<()> {
             local,
             remote,
         } => {
-            let (remote_host, remote_port) = remote.split_once(':')
+            let (remote_host, remote_port) = remote
+                .split_once(':')
                 .ok_or_else(|| anyhow::anyhow!("invalid --remote format, expected host:port"))?;
             let remote_port: u16 = remote_port.parse()?;
 
             let conn = get_connection(&server_addr, &ca_cert, &api_key, &hosts_file, &host).await?;
             let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{local}")).await?;
-            println!("tunnel: 127.0.0.1:{local} → {host}:{remote_host}:{remote_port} (Ctrl+C to stop)");
+            println!(
+                "tunnel: 127.0.0.1:{local} → {host}:{remote_host}:{remote_port} (Ctrl+C to stop)"
+            );
 
             loop {
                 let (mut tcp_stream, peer) = listener.accept().await?;
@@ -348,12 +361,27 @@ async fn main() -> anyhow::Result<()> {
                 tokio::spawn(async move {
                     let (mut send, mut recv) = match conn.open_bi().await {
                         Ok(s) => s,
-                        Err(e) => { eprintln!("open stream failed: {e}"); return; }
+                        Err(e) => {
+                            eprintln!("open stream failed: {e}");
+                            return;
+                        }
                     };
-                    if send.write_all(&[0x05]).await.is_err() { return; }
-                    if send.write_all(&(rh.len() as u16).to_le_bytes()).await.is_err() { return; }
-                    if send.write_all(rh.as_bytes()).await.is_err() { return; }
-                    if send.write_all(&rp.to_le_bytes()).await.is_err() { return; }
+                    if send.write_all(&[0x05]).await.is_err() {
+                        return;
+                    }
+                    if send
+                        .write_all(&(rh.len() as u16).to_le_bytes())
+                        .await
+                        .is_err()
+                    {
+                        return;
+                    }
+                    if send.write_all(rh.as_bytes()).await.is_err() {
+                        return;
+                    }
+                    if send.write_all(&rp.to_le_bytes()).await.is_err() {
+                        return;
+                    }
 
                     let (mut tcp_read, mut tcp_write) = tcp_stream.split();
                     let t2q = async {
@@ -362,7 +390,11 @@ async fn main() -> anyhow::Result<()> {
                         loop {
                             match tcp_read.read(&mut buf).await {
                                 Ok(0) => break,
-                                Ok(n) => { if send.write_all(&buf[..n]).await.is_err() { break; } }
+                                Ok(n) => {
+                                    if send.write_all(&buf[..n]).await.is_err() {
+                                        break;
+                                    }
+                                }
                                 Err(_) => break,
                             }
                         }
@@ -372,7 +404,9 @@ async fn main() -> anyhow::Result<()> {
                         use tokio::io::AsyncWriteExt;
                         let mut buf = [0u8; 8192];
                         while let Ok(Some(n)) = recv.read(&mut buf).await {
-                            if tcp_write.write_all(&buf[..n]).await.is_err() { break; }
+                            if tcp_write.write_all(&buf[..n]).await.is_err() {
+                                break;
+                            }
                         }
                     };
                     tokio::join!(t2q, q2t);

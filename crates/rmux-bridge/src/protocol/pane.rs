@@ -388,17 +388,23 @@ impl ProtocolProxy {
             .await
         {
             Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
-            Ok(o) => return json!({"ok": false, "error": format!("rmux CLI failed: {}", String::from_utf8_lossy(&o.stderr))}),
+            Ok(o) => {
+                return json!({"ok": false, "error": format!("rmux CLI failed: {}", String::from_utf8_lossy(&o.stderr))})
+            }
             Err(e) => return json!({"ok": false, "error": format!("rmux CLI spawn failed: {e}")}),
         };
 
         let mut panes: Vec<serde_json::Value> = Vec::new();
         for line in output.lines() {
             let parts: Vec<&str> = line.splitn(9, '\t').collect();
-            if parts.len() < 9 { continue; }
+            if parts.len() < 9 {
+                continue;
+            }
             let title = parts[4];
             if let Some(f) = title_filter {
-                if title != f { continue; }
+                if title != f {
+                    continue;
+                }
             }
             let dead = parts[6] == "1";
             panes.push(json!({
@@ -626,7 +632,9 @@ impl ProtocolProxy {
                 if result["ok"].as_bool().unwrap_or(false) {
                     let panes = result["panes"].as_array();
                     match panes.and_then(|p| p.first()) {
-                        Some(pane) => json!({"ok": true, "found": true, "pane": pane, "fallback": true}),
+                        Some(pane) => {
+                            json!({"ok": true, "found": true, "pane": pane, "fallback": true})
+                        }
                         None => json!({"ok": true, "found": false, "fallback": true}),
                     }
                 } else {

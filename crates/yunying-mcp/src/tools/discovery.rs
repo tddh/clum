@@ -154,7 +154,9 @@ pub(crate) async fn host_set_meta(ctx: &ToolContext, args: Value) -> Result<Valu
         });
 
     if group.is_none() && tags.is_none() && labels.is_none() {
-        return Ok(json!({"ok": false, "error": "nothing to update: provide group, tags, or labels"}));
+        return Ok(
+            json!({"ok": false, "error": "nothing to update: provide group, tags, or labels"}),
+        );
     }
 
     let found = ctx
@@ -163,10 +165,14 @@ pub(crate) async fn host_set_meta(ctx: &ToolContext, args: Value) -> Result<Valu
         .await?;
 
     if !found {
-        return Ok(json!({"ok": false, "error": format!("host '{}' not found in enrolled bridges", hostname)}));
+        return Ok(
+            json!({"ok": false, "error": format!("host '{}' not found in enrolled bridges", hostname)}),
+        );
     }
 
-    Ok(json!({"ok": true, "host": hostname, "updated": {"group": group, "tags": tags, "labels": labels}}))
+    Ok(
+        json!({"ok": true, "host": hostname, "updated": {"group": group, "tags": tags, "labels": labels}}),
+    )
 }
 
 pub(crate) async fn find_panes(ctx: &ToolContext, args: Value) -> Result<Value> {

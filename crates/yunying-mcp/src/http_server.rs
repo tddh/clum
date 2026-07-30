@@ -19,7 +19,8 @@ use rmcp::{
 use crate::api_keys::ApiKeyStore;
 use crate::tools::{self, ToolContext};
 
-pub type DownloadTokenMap = Arc<tokio::sync::RwLock<std::collections::HashMap<String, std::time::Instant>>>;
+pub type DownloadTokenMap =
+    Arc<tokio::sync::RwLock<std::collections::HashMap<String, std::time::Instant>>>;
 
 #[derive(Clone)]
 struct AuthState {

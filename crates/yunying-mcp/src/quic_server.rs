@@ -20,6 +20,8 @@ pub struct QuicServerConfig {
     pub recordings_dir: std::path::PathBuf,
     pub api_key_store: Option<Arc<crate::api_keys::ApiKeyStore>>,
     pub db_path: std::path::PathBuf,
+    pub router: Arc<crate::router::HostRouter>,
+    pub ca_cert_path: String,
 }
 
 pub async fn run_quic_server(
@@ -76,9 +78,11 @@ pub async fn run_quic_server(
         let rec_dir = config.recordings_dir.clone();
         let store = api_key_store.clone();
         let agents = Arc::clone(&last_agents);
+        let router = Arc::clone(&config.router);
+        let ca_cert = config.ca_cert_path.clone();
         tokio::spawn(async move {
             if let Err(e) =
-                handle_connection(incoming, registry, token_map, rec_dir, store, agents).await
+                handle_connection(incoming, registry, token_map, rec_dir, store, agents, router, ca_cert).await
             {
                 tracing::debug!("QUIC connection handler ended: {e}");
             }
@@ -88,6 +92,7 @@ pub async fn run_quic_server(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_connection(
     incoming: quinn::Incoming,
     registry: Arc<BridgeRegistry>,
@@ -95,6 +100,8 @@ async fn handle_connection(
     recordings_dir: std::path::PathBuf,
     api_key_store: Option<Arc<crate::api_keys::ApiKeyStore>>,
     last_agents: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
+    router: Arc<crate::router::HostRouter>,
+    ca_cert_path: String,
 ) -> anyhow::Result<()> {
     let conn = incoming.await?;
     let remote_addr = conn.remote_address();
@@ -129,6 +136,8 @@ async fn handle_connection(
                 registry,
                 api_key_store,
                 last_agents,
+                router,
+                ca_cert_path,
             )
             .await
         }
@@ -334,6 +343,8 @@ async fn handle_agent_connection(
     registry: Arc<BridgeRegistry>,
     api_key_store: Option<Arc<crate::api_keys::ApiKeyStore>>,
     last_agents: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
+    router: Arc<crate::router::HostRouter>,
+    ca_cert_path: String,
 ) -> anyhow::Result<()> {
     // Validate API key if auth is enabled
     let mut agent_name = "unknown".to_string();
@@ -366,12 +377,17 @@ async fn handle_agent_connection(
         anyhow::bail!("agent_connect without host from {remote_addr}");
     }
 
-    let bridge = match registry.get(&host).await {
-        Some(b) => b,
-        None => {
-            write_frame(&mut send, &serde_json::json!({"type": "agent_ack", "ok": false, "error": format!("host '{host}' not online")})).await?;
-            anyhow::bail!("agent requested offline host '{host}' from {remote_addr}");
-        }
+    let bridge_conn: quinn::Connection = if let Some(b) = registry.get(&host).await {
+        b.conn.clone()
+    } else if let Some(h) = router.get(&host) {
+        let (direct_conn, _auth_send, _auth_recv) =
+            crate::transport::connect_to_bridge_quic(&h.bridge_addr, &h.bridge_token, &ca_cert_path)
+                .await
+                .with_context(|| format!("direct connect to {}:{} failed", host, h.bridge_addr))?;
+        direct_conn
+    } else {
+        write_frame(&mut send, &serde_json::json!({"type": "agent_ack", "ok": false, "error": format!("host '{host}' not found")})).await?;
+        anyhow::bail!("agent requested unknown host '{host}' from {remote_addr}");
     };
 
     write_frame(
@@ -389,9 +405,9 @@ async fn handle_agent_connection(
     loop {
         match conn.accept_bi().await {
             Ok((cli_send, cli_recv)) => {
-                let bridge_conn = bridge.conn.clone();
+                let bc = bridge_conn.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = relay_stream(cli_send, cli_recv, &bridge_conn).await {
+                    if let Err(e) = relay_stream(cli_send, cli_recv, &bc).await {
                         tracing::debug!("relay stream ended: {e}");
                     }
                 });

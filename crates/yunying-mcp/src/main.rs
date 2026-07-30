@@ -273,6 +273,8 @@ async fn main() -> anyhow::Result<()> {
                     recordings_dir: ctx.recordings_dir.clone(),
                     api_key_store: Some(api_keys::ApiKeyStore::open(&db_path)?),
                     db_path: db_path.clone(),
+                    router: Arc::clone(&ctx.router),
+                    ca_cert_path: ctx.ca_cert_path.clone(),
                 };
                 let reg = Arc::clone(&bridge_registry);
                 tokio::spawn(async move {
@@ -289,15 +291,8 @@ async fn main() -> anyhow::Result<()> {
             }
 
             let key_store = api_keys::ApiKeyStore::open(&db_path)?;
-            http_server::run_http_server(
-                ctx,
-                &cli.listen,
-                key_store,
-                cli.static_dir,
-                cert,
-                key,
-            )
-            .await
+            http_server::run_http_server(ctx, &cli.listen, key_store, cli.static_dir, cert, key)
+                .await
         }
         _ => {
             let tools_definition = schema::tools_definition();
@@ -366,9 +361,13 @@ async fn fetch_download_token(server_addr: &str, api_key: &str) -> anyhow::Resul
     let url = format!("https://{server_addr}/admin/download-token");
     let output = tokio::process::Command::new("curl")
         .args([
-            "-sf", "-X", "POST",
-            "-H", &format!("Authorization: Bearer {api_key}"),
-            "--cacert", "/etc/yunying/ca.crt",
+            "-sf",
+            "-X",
+            "POST",
+            "-H",
+            &format!("Authorization: Bearer {api_key}"),
+            "--cacert",
+            "/etc/yunying/ca.crt",
             &url,
         ])
         .output()

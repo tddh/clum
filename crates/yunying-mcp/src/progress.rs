@@ -40,14 +40,10 @@ impl ProgressReporter {
             Value::String(s) => {
                 rmcp::model::ProgressToken(rmcp::model::NumberOrString::String(s.into()))
             }
-            Value::Number(n) => {
-                rmcp::model::ProgressToken(rmcp::model::NumberOrString::Number(
-                    n.as_i64().unwrap_or(0),
-                ))
-            }
-            _ => rmcp::model::ProgressToken(rmcp::model::NumberOrString::String(
-                "default".into(),
+            Value::Number(n) => rmcp::model::ProgressToken(rmcp::model::NumberOrString::Number(
+                n.as_i64().unwrap_or(0),
             )),
+            _ => rmcp::model::ProgressToken(rmcp::model::NumberOrString::String("default".into())),
         });
         Self {
             token: progress_token,
@@ -108,10 +104,8 @@ impl ProgressReporter {
                 }
             }
             ReporterBackend::Peer(peer) => {
-                let mut params = rmcp::model::ProgressNotificationParam::new(
-                    token.clone(),
-                    progress as f64,
-                );
+                let mut params =
+                    rmcp::model::ProgressNotificationParam::new(token.clone(), progress as f64);
                 params.total = Some(total as f64);
                 params.message = Some(message.to_string());
 

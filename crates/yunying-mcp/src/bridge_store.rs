@@ -41,9 +41,8 @@ impl BridgeStore {
                 revoked_at   TEXT
             );",
         )?;
-        let _ = conn.execute_batch(
-            "ALTER TABLE bridges ADD COLUMN host_group TEXT NOT NULL DEFAULT '';",
-        );
+        let _ = conn
+            .execute_batch("ALTER TABLE bridges ADD COLUMN host_group TEXT NOT NULL DEFAULT '';");
         Ok(Self {
             db: tokio::sync::Mutex::new(conn),
         })
@@ -199,7 +198,6 @@ impl BridgeStore {
         .filter_map(|r| r.ok())
         .collect()
     }
-
 }
 
 pub fn generate_bridge_token() -> String {
