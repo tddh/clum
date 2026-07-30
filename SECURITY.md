@@ -10,22 +10,23 @@ Instead, email the maintainer directly. We will respond within 48 hours and work
 
 | Version | Supported          |
 |---------|--------------------|
-| 0.8.x   | ✅ Supported       |
-| < 0.7   | ❌ Not supported   |
+| 0.9.x   | ✅ Supported       |
+| < 0.8   | ❌ Not supported   |
 
 ## Security Model
 
-yunying consists of three components connected over TLS:
+yunying consists of four components connected over TLS:
 
-1. **yunying-mcp** — MCP server running alongside the AI client
-2. **yunying-cli** — CLI tool for humans to attach to remote sessions
-3. **rmux-bridge** — Bridge daemon deployed on target Linux hosts
+1. **yunying-mcp** — Central MCP Server: HTTP for AI clients + QUIC for Bridge registration and CLI data plane
+2. **yunying-cli** — CLI tool for humans to attach to remote sessions via Server relay
+3. **rmux-bridge** — Bridge daemon deployed on target Linux hosts, reverse-connects to Central Server
+4. **AI clients** — Connect to Central Server via Streamable HTTP with API Key auth
 
 Security assumptions:
-- The TLS channel between MCP server and bridge is encrypted and authenticated
+- AI clients authenticate via API Key (`yk_{name}_{32hex}`, SHA-256 hashed in SQLite)
 - Bridge authentication uses static tokens with constant-time comparison
-- Certificates can be self-signed or CA-issued
-- By default, connections without CA verification are rejected
+- All transport is TLS 1.3 encrypted (QUIC built-in + HTTPS)
+- CA certificate is mandatory — connections without CA verification are rejected
 
 For production deployments:
 - Use a self-managed CA to sign bridge certificates

@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 use super::common::{collect_batch_results, create_session_inner, make_semaphore, resolve_hosts};
 use super::exec::exec_in_session;
 use super::ToolContext;
-use crate::transport::{connect_to_bridge_hybrid, connect_via_registry, send_json_frame};
+use crate::transport::{connect_via_registry, send_json_frame};
 use chrono::Utc;
 use uuid::Uuid;
 use yunying_core::types::{AuditAction, AuditEvent};
@@ -201,10 +201,7 @@ pub(crate) async fn deploy_bridge(
 
             drop(stream);
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-            let mut new_stream = match connect_to_bridge_hybrid(
-                &host.bridge_addr, &host.bridge_token,
-                &ca_cert, 5,
-            ).await {
+            let mut new_stream = match connect_via_registry(&registry, &host, &ca_cert).await {
                 Ok(s) => s,
                 Err(e) => return (host_name.clone(), json!({
                     "ok": false, "status": "reconnect_failed",

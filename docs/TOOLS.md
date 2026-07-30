@@ -912,7 +912,7 @@ yunying-mcp audit cleanup [--db <path>] [--older-than <days>] [--max-size <mb>]
 | `host_name` | string | 目标主机 |
 | `session_name` | string | 会话名 |
 | `pane_id` | string | 窗格 ID（非 pane 操作为空） |
-| `action` | string | 操作类型（65 种 AuditAction） |
+| `action` | string | 操作类型（66 种 AuditAction） |
 | `detail` | string | 操作参数 |
 | `output_summary` | string | Exec/CmdEscape 的输出摘要（前 500 字符） |
 | `success` | bool | 操作是否成功 |
@@ -1207,7 +1207,7 @@ tunnel_create host="tf01" local_port=8080 remote_host="api.internal" remote_port
 
 ### `audit_query`
 
-查询 Server 侧集中审计日志。记录所有 MCP 工具调用（谁、什么时间、哪台机器、什么操作、是否成功）。Hub 模式下查询操作历史的首选工具。
+查询 Server 侧集中审计日志。记录所有 MCP 工具调用（谁、什么时间、哪台机器、什么操作、是否成功）。Central Server 模式下查询操作历史的首选工具。
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:----:|------|

@@ -9,17 +9,40 @@ pub struct ServerConfig {
     #[serde(default = "default_listen")]
     pub listen: String,
 
+    /// External address for clients/bridges to connect (e.g. "10.220.71.1:9788"). Required.
+    pub server_addr: String,
+
     pub server_cert: Option<String>,
     pub server_key: Option<String>,
     pub ca_cert: Option<String>,
     pub hosts_file: Option<String>,
     pub audit_db: Option<String>,
+    pub static_dir: Option<String>,
+    pub recordings_dir: Option<String>,
 
     #[serde(default)]
     pub bridges: Vec<BridgeEntry>,
 
     #[serde(default = "default_token_ttl_hours")]
     pub token_ttl_hours: u64,
+
+    #[serde(default = "default_audit_retention_days")]
+    pub audit_retention_days: u32,
+
+    #[serde(default = "default_audit_max_size_mb")]
+    pub audit_max_size_mb: u64,
+
+    #[serde(default = "default_audit_cleanup_interval_secs")]
+    pub audit_cleanup_interval_secs: u64,
+
+    #[serde(default = "default_audit_sync_interval_secs")]
+    pub audit_sync_interval_secs: u64,
+
+    #[serde(default = "default_recordings_retention_days")]
+    pub recordings_retention_days: u32,
+
+    #[serde(default = "default_recordings_max_size_mb")]
+    pub recordings_max_size_mb: u64,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -41,6 +64,30 @@ fn default_token_ttl_hours() -> u64 {
     24
 }
 
+fn default_audit_retention_days() -> u32 {
+    90
+}
+
+fn default_audit_max_size_mb() -> u64 {
+    500
+}
+
+fn default_audit_cleanup_interval_secs() -> u64 {
+    600
+}
+
+fn default_audit_sync_interval_secs() -> u64 {
+    300
+}
+
+fn default_recordings_retention_days() -> u32 {
+    90
+}
+
+fn default_recordings_max_size_mb() -> u64 {
+    5000
+}
+
 impl ServerConfig {
     pub fn load(path: &Path) -> anyhow::Result<Self> {
         let content = std::fs::read_to_string(path)
@@ -57,25 +104,33 @@ impl ServerConfig {
             .collect()
     }
 
-    #[allow(dead_code)]
     pub fn resolve_audit_db(&self) -> PathBuf {
-        self.audit_db
-            .as_ref()
-            .map(|p| {
-                if let Some(rest) = p.strip_prefix("~/") {
-                    dirs::home_dir()
-                        .unwrap_or_else(|| PathBuf::from("."))
-                        .join(rest)
-                } else {
-                    PathBuf::from(p)
-                }
-            })
-            .unwrap_or_else(|| {
-                let dir = dirs::home_dir()
-                    .unwrap_or_else(|| PathBuf::from("."))
-                    .join(".yunying");
-                std::fs::create_dir_all(&dir).ok();
-                dir.join("audit.db")
-            })
+        expand_opt_path(&self.audit_db).unwrap_or_else(|| {
+            let dir = dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(".yunying");
+            std::fs::create_dir_all(&dir).ok();
+            dir.join("audit.db")
+        })
     }
+
+    pub fn resolve_recordings_dir(&self) -> Option<PathBuf> {
+        expand_opt_path(&self.recordings_dir)
+    }
+
+    pub fn resolve_static_dir(&self) -> Option<PathBuf> {
+        expand_opt_path(&self.static_dir)
+    }
+}
+
+fn expand_opt_path(path: &Option<String>) -> Option<PathBuf> {
+    path.as_ref().map(|p| {
+        if let Some(rest) = p.strip_prefix("~/") {
+            dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(rest)
+        } else {
+            PathBuf::from(p)
+        }
+    })
 }

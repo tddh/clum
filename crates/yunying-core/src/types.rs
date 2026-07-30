@@ -141,4 +141,5 @@ pub enum AuditAction {
     AuditCleanup,
     ConfigReload,
     BridgeAuditQuery,
+    AgentRelay,
 }

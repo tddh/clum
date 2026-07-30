@@ -22,6 +22,7 @@ pub async fn connect_via_server(
     ca_cert_path: &str,
     host: &str,
     api_key: Option<&str>,
+    purpose: &str,
 ) -> Result<quinn::Connection> {
     let ca_pem = std::fs::read(ca_cert_path)
         .with_context(|| format!("failed to read CA cert: {}", ca_cert_path))?;
@@ -61,6 +62,7 @@ pub async fn connect_via_server(
         "type": "agent_connect",
         "host": host,
         "api_key": api_key.unwrap_or(""),
+        "purpose": purpose,
     });
     let data = serde_json::to_vec(&msg)?;
     let len = (data.len() as u32).to_le_bytes();

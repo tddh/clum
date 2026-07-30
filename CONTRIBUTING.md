@@ -22,9 +22,9 @@ just fmt-check    # Check formatting
 ```
 crates/
 ├── yunying-core/    # Shared types (HostConfig, AuditEvent, SessionInfo)
-├── yunying-mcp/     # MCP Server — runs alongside AI client
+├── yunying-mcp/     # MCP Server — Central Server (HTTP + QUIC) or local stdio mode
 ├── yunying-cli/     # CLI tool — human PTY passthrough to remote sessions
-└── rmux-bridge/       # Bridge daemon — deployed on target Linux hosts
+└── rmux-bridge/     # Bridge daemon — deployed on target Linux hosts
 ```
 
 ## Before Submitting a PR

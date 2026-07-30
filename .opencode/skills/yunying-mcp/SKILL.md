@@ -196,8 +196,8 @@ close_pane(host="tf01", session_name="yunying", pane_id="%0")  # ❌ 违反规�
 | 批量文件传输 | `batch_upload` / `batch_download` |
 | 部署 bridge | `deploy_bridge`（升级部署，需已运行 bridge） |
 | 查询主机能力 | `host_capabilities`（检查 rmux 特性支持） |
-| **查询 Server 审计** | `audit_query`（Server 侧集中审计：谁、何时、哪台机器、什么操作。Hub 模式首选） |
-| 查询 bridge 审计 | `query_bridge_audit`（Bridge 侧连接事件日志，Hub 模式下较少使用） |
+| **查询 Server 审计** | `audit_query`（Server 侧集中审计：谁、何时、哪台机器、什么操作。Central Server 模式首选） |
+| 查询 bridge 审计 | `query_bridge_audit`（Bridge 侧连接事件日志，Central Server 模式下较少使用） |
 | 列出录制文件 | `list_recordings`（列出已同步到本地的 PTY 录制） |
 | 获取录制内容 | `get_recording`（获取 .cast 文件内容，访问被审计） |
 
@@ -587,8 +587,8 @@ export YUNYING_API_KEY=yk_tddh_...             # API Key
 yunying-cli --server-addr 10.220.71.1:9788 --api-key yk_tddh_... --ca-cert ~/.yunying/ca.crt <command>
 ```
 
-- `--server-addr`：设置后走 Hub 模式（通过中央 Server 中继）；不设置走直连模式（需要 hosts.yaml）
-- `--api-key`：Server 认证（Hub 模式必须）
+- `--server-addr`：设置后走 Central Server 模式（通过中央 Server 中继）；不设置走直连模式（需要 hosts.yaml）
+- `--api-key`：Server 认证（Central Server 模式必须）
 - `--ca-cert`：TLS 证书验证
 
 ### 文件传输

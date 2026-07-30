@@ -13,13 +13,13 @@ use std::path::PathBuf;
     about = "RMUX Bridge - QUIC to Unix socket protocol-aware proxy"
 )]
 pub struct BridgeConfig {
-    #[arg(long, default_value = "/tmp/rmux-1000/default")]
+    #[arg(long, default_value = "/tmp/rmux-1000/default", env = "RMUX_SOCKET")]
     pub rmux_socket: String,
 
-    #[arg(long, default_value = "certs/bridge.crt")]
+    #[arg(long, default_value = "certs/bridge.crt", env = "BRIDGE_TLS_CERT")]
     pub tls_cert: PathBuf,
 
-    #[arg(long, default_value = "certs/bridge.key")]
+    #[arg(long, default_value = "certs/bridge.key", env = "BRIDGE_TLS_KEY")]
     pub tls_key: PathBuf,
 
     #[arg(long, env = "BRIDGE_AUTH_TOKEN")]

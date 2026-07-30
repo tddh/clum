@@ -123,6 +123,17 @@ impl BridgeStore {
             .collect()
     }
 
+    pub async fn validate_token(&self, raw_token: &str) -> bool {
+        let hash = hex::encode(Sha256::digest(raw_token.as_bytes()));
+        let db = self.db.lock().await;
+        db.query_row(
+            "SELECT 1 FROM bridges WHERE token_hash = ?1 AND revoked_at IS NULL",
+            rusqlite::params![hash],
+            |_| Ok(()),
+        )
+        .is_ok()
+    }
+
     pub async fn rotate_token(&self, hostname: &str, new_token: &str) -> Result<()> {
         let new_hash = hex::encode(Sha256::digest(new_token.as_bytes()));
         let new_prefix = new_token[..new_token.len().min(8)].to_string();

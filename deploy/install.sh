@@ -1,8 +1,9 @@
 #!/bin/sh
 set -e
 
-# yunying Bridge installer
-# Usage: curl -fsSL https://SERVER:9788/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=10.0.0.1:9788 sh
+# yunying Bridge installer (Hub mode)
+# Usage: curl -fsSLk -H "Authorization: Bearer <TOKEN>" https://SERVER:9788/install.sh | \
+#          BRIDGE_TOKEN=xxx SERVER_ADDR=10.0.0.1:9788 sh
 
 if [ -z "${BRIDGE_TOKEN}" ]; then
     echo "ERROR: BRIDGE_TOKEN environment variable is required" >&2
@@ -21,39 +22,44 @@ case "$ARCH" in
     *)       echo "unsupported arch: $ARCH" >&2; exit 1 ;;
 esac
 
-SERVER_HOST=$(echo "$SERVER_ADDR" | cut -d: -f1)
-SERVER_PORT=$(echo "$SERVER_ADDR" | cut -d: -f2)
-SERVER_PORT=${SERVER_PORT:-9788}
-BASE_URL="http://${SERVER_HOST}:${SERVER_PORT}"
+BASE_URL="https://${SERVER_ADDR}"
+AUTH="-H \"Authorization: Bearer ${BRIDGE_TOKEN}\""
 
 echo ">>> Installing yunying bridge (${ARCH})"
 echo ">>> Server: ${SERVER_ADDR}"
 
-# Auth header for downloads (download token or API key)
-AUTH_HEADER=""
-if [ -n "${DOWNLOAD_TOKEN}" ]; then
-    AUTH_HEADER="-H \"Authorization: Bearer ${DOWNLOAD_TOKEN}\""
+# Stop existing service to avoid "Text file busy"
+if systemctl is-active rmux-bridge >/dev/null 2>&1; then
+    echo ">>> Stopping existing rmux-bridge..."
+    systemctl stop rmux-bridge
 fi
 
-mkdir -p /etc/yunying
+# Clean up legacy files
+rm -f /etc/yunying/token
+rm -rf /opt/yunying
 
-# Download binary
+mkdir -p /etc/yunying /opt/agent-ops/recordings
+
+# Download binary (write to temp then move to avoid partial writes)
 echo ">>> Downloading rmux-bridge..."
-eval curl -fsSL ${AUTH_HEADER} "${BASE_URL}/releases/rmux-bridge-linux-${ARCH}" -o /usr/local/bin/rmux-bridge
-chmod +x /usr/local/bin/rmux-bridge
+eval curl -fsSLk ${AUTH} "${BASE_URL}/releases/rmux-bridge-linux-${ARCH}" -o /tmp/rmux-bridge.download
+chmod +x /tmp/rmux-bridge.download
+mv -f /tmp/rmux-bridge.download /usr/local/bin/rmux-bridge
 
-# Download CA cert (default: yes, since we use private CA)
-if [ "${SKIP_CA}" != "1" ]; then
-    echo ">>> Downloading CA certificate..."
-    eval curl -fsSL ${AUTH_HEADER} "${BASE_URL}/ca.crt" -o /etc/yunying/ca.crt
-    CA_FLAG="--ca-cert /etc/yunying/ca.crt"
-else
-    CA_FLAG=""
-fi
+# Download CA cert
+echo ">>> Downloading CA certificate..."
+eval curl -fsSLk ${AUTH} "${BASE_URL}/ca.crt" -o /etc/yunying/ca.crt
 
-# Write token
-echo "${BRIDGE_TOKEN}" > /etc/yunying/token
-chmod 600 /etc/yunying/token
+# Write bridge.env
+cat > /etc/yunying/bridge.env << EOF
+BRIDGE_AUTH_TOKEN=${BRIDGE_TOKEN}
+YUNYING_SERVER_ADDR=${SERVER_ADDR}
+YUNYING_CA_CERT=/etc/yunying/ca.crt
+RECORDING_ENABLED=true
+RECORDING_DIR=/opt/agent-ops/recordings
+BRIDGE_AUDIT_DB=/opt/agent-ops/bridge_events.db
+RMUX_SOCKET=/root/.rmux/rmux-0/default
+EOF
 
 # Install rmux daemon if not present
 if ! command -v rmux >/dev/null 2>&1; then
@@ -65,12 +71,11 @@ fi
 cat > /etc/systemd/system/rmux-bridge.service << EOF
 [Unit]
 Description=yunying Bridge
-After=network.target
+After=network.target rmux-daemon.service
 
 [Service]
-Environment=BRIDGE_AUTH_TOKEN=${BRIDGE_TOKEN}
-Environment=YUNYING_SERVER_ADDR=${SERVER_ADDR}
-ExecStart=/usr/local/bin/rmux-bridge --server-addr ${SERVER_ADDR} --auth-token ${BRIDGE_TOKEN} --rmux-socket /root/.rmux/rmux-0/default ${CA_FLAG}
+EnvironmentFile=/etc/yunying/bridge.env
+ExecStart=/usr/local/bin/rmux-bridge
 Restart=always
 RestartSec=5
 

@@ -2,7 +2,7 @@
 
 > 最后更新：2026-07-30
 
-## 架构（Hub 模式）
+## 架构（Central Server 模式）
 
 ```
 ┌─────────────────┐  HTTP :9788 (MCP)   ┌────────────────────────────────────────┐
@@ -25,7 +25,7 @@
                                           └─────────────┘  └──────────────┘
 ```
 
-- **yunying-mcp (Hub Server)**: 中央 MCP Server，双栈监听。AI 客户端通过 HTTP 连接，Bridge 通过 QUIC 反向注册。
+- **yunying-mcp (Central Server)**: 中央 MCP Server，双栈监听。AI 客户端通过 HTTP 连接，Bridge 通过 QUIC 反向注册。
 - **yunying-cli**: 命令行工具，通过 QUIC 连接 Server 中继到 Bridge。支持 connect/upload/download/tunnel/list/replay。
 - **rmux-bridge**: 部署在每台目标 Linux 主机，主动连接 Server 注册，处理工具执行、文件 I/O、PTY、录制推送。
 - **RMUX daemon**: 每个 Linux 主机上的终端多路复用器。
@@ -35,16 +35,19 @@
 ### 1. 部署 Server
 
 ```bash
-# 在中心服务器上
-scp target/x86_64-unknown-linux-musl/release/yunying-mcp server:/opt/yunying/
-ssh server '/opt/yunying/yunying-mcp --mode http \
-  --listen 0.0.0.0:9788 \
-  --server-cert /etc/yunying/server.crt \
-  --server-key /etc/yunying/server.key \
-  --ca-cert /etc/yunying/ca.crt \
-  --hosts-file /etc/yunying/hosts.yaml \
-  --static-dir /root/.yunying'
+# 方式 1：使用部署脚本（推荐）
+just deploy-mcp host=root@<server-ip>
+
+# 或手动调用脚本
+bash deploy/deploy-mcp.sh ./target/x86_64-unknown-linux-musl/release/yunying-mcp root@<server-ip>
 ```
+
+脚本自动完成：
+- 上传二进制到 `/usr/local/bin/yunying-mcp`
+- 上传证书（ca.crt、server.crt、server.key）到 `/etc/yunying/`
+- 上传 `hosts.yaml` 到 `/etc/yunying/`
+- 首次部署时生成默认 `server-config.yaml`
+- 创建 `yunying-mcp.service` systemd 服务并启动
 
 ### 2. 添加 Bridge
 
@@ -54,7 +57,7 @@ yunying-mcp bridge add my-host --tags gpu,web
 # 输出 token 和安装命令
 
 # 目标机器一键安装
-curl -fsSL https://SERVER:9788/install.sh | \
+curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/install.sh | \
   BRIDGE_TOKEN=<token> SERVER_ADDR=SERVER:9788 sh
 ```
 
@@ -79,7 +82,7 @@ curl -fsSL https://SERVER:9788/install.sh | \
 | 目标主机 | Linux x86_64，systemd，有 SSH 访问 |
 | RMUX | `rmux` 0.9+ daemon 已安装并运行（`curl -fsSL https://rmux.io/install.sh \| sh`） |
 | 构建机 | Rust 1.85+，`x86_64-linux-musl-gcc`（交叉编译用 `brew install FiloSottile/musl-cross/musl-cross`） |
-| 端口 | bridge 监听 9778（QUIC/UDP） |
+| 端口 | Server 监听 9788（TCP HTTP + UDP QUIC）；Bridge 为出站连接，无需开放入站端口 |
 | 证书 | 自签名 TLS 证书（`openssl` 即可） |
 
 ## 快速开始
@@ -125,20 +128,19 @@ bash deploy/install-daemon.sh root@<your-bridge-ip>
 **步骤 2b：部署 bridge**
 
 ```bash
-# 一键：生成证书 → 上传二进制 → 配置 systemd → 启动
-just deploy host=root@<your-bridge-ip> token=<your-token>
+# 方式 1：Central Server 模式一键安装（推荐，bridge 主动注册到 Server）
+curl -fsSLk -H "Authorization: Bearer <download_token>" \
+  https://SERVER:9788/install.sh | \
+  BRIDGE_TOKEN=<token> SERVER_ADDR=SERVER:9788 sh
 
-# 或手动：
-BRIDGE_TOKEN="<your-token>" bash deploy/install-bridge.sh \
-  ./target/x86_64-unknown-linux-musl/release/rmux-bridge \
-  root@<your-bridge-ip>
+# 方式 2：手动部署
+bash deploy/deploy-bridge.sh root@<your-bridge-ip>
 ```
 
 部署脚本自动完成：
-- 用 `deploy/generate-certs.sh` 在本地生成主机专属 TLS 证书（`certs/<ip>.crt` / `certs/<ip>.key`）
-- 上传 `rmux-bridge` 二进制到 `/opt/yunying/`
-- 上传证书到 `/opt/yunying/certs/`
-- 写入 token 到 `/opt/yunying/bridge.env`（权限 600）
+- 上传 `rmux-bridge` 二进制到 `/usr/local/bin/rmux-bridge`
+- 下载 CA 证书到 `/etc/yunying/ca.crt`
+- 写入配置到 `/etc/yunying/bridge.env`（权限 600，含 BRIDGE_AUTH_TOKEN、YUNYING_SERVER_ADDR、YUNYING_CA_CERT）
 - 创建 `rmux-bridge.service`（`systemctl enable --now`）
 
 **其他 Justfile 命令：**
@@ -152,19 +154,12 @@ BRIDGE_TOKEN="<your-token>" bash deploy/install-bridge.sh \
 
 ```ini
 [Unit]
-Description=RMUX Bridge - QUIC to Unix socket proxy
+Description=yunying Bridge
 After=network.target rmux-daemon.service
-Requires=rmux-daemon.service
 
 [Service]
-Type=simple
-EnvironmentFile=/opt/yunying/bridge.env
-ExecStart=/opt/yunying/rmux-bridge \
-    --quic-listen-addr 0.0.0.0:9788 \
-    --max-connections 256 \
-    --rmux-socket /root/.rmux/rmux-0/default \
-    --tls-cert /opt/yunying/certs/<ip>.crt \
-    --tls-key /opt/yunying/certs/<ip>.key
+EnvironmentFile=/etc/yunying/bridge.env
+ExecStart=/usr/local/bin/rmux-bridge
 Restart=always
 RestartSec=5
 
@@ -180,7 +175,7 @@ just release-linux
 
 # 替换二进制 + 重启
 ssh root@<your-bridge-ip> "systemctl stop rmux-bridge"
-scp target/x86_64-unknown-linux-musl/release/rmux-bridge root@<your-bridge-ip>:/opt/yunying/
+scp target/x86_64-unknown-linux-musl/release/rmux-bridge root@<your-bridge-ip>:/usr/local/bin/rmux-bridge
 ssh root@<your-bridge-ip> "systemctl start rmux-bridge"
 
 # 验证
@@ -212,7 +207,15 @@ ssh root@<your-bridge-ip> "systemctl status rmux-bridge --no-pager"
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `--hosts-file` | `config/hosts.yaml` | 主机注册表路径 |
+| `--mode` | `stdio` | 运行模式：`stdio`（本地）或 `http`（Central Server） |
+| `--config` | 无 | server-config.yaml 路径（http 模式推荐，YAML 配置覆盖 CLI 参数） |
+| `--listen` | 无 | HTTP/QUIC 监听地址（http 模式，如 `0.0.0.0:9788`） |
+| `--server-cert` | 无 | TLS 服务器证书路径（http 模式必填） |
+| `--server-key` | 无 | TLS 服务器私钥路径（http 模式必填） |
+| `--api-keys` | 无 | API Key 列表（逗号分隔，http 模式认证） |
+| `--bridge` | 无 | Bridge token（`HOSTNAME=TOKEN` 格式，可多次指定） |
+| `--static-dir` | 无 | 静态文件服务目录（install.sh、ca.crt、releases 等） |
+| `--hosts-file` | `config/hosts.yaml` | 主机注册表路径（直连回退用） |
 | `--ca-cert` | 无 | CA 证书路径（必填，不传则拒绝连接） |
 | `--audit-db` | `~/.yunying/audit.db` | 审计数据库路径 |
 | `--audit-retention-days` | `90` | 审计数据保留天数 |
@@ -225,17 +228,35 @@ ssh root@<your-bridge-ip> "systemctl status rmux-bridge --no-pager"
 
 ### 6. 认证模式
 
+**AI 客户端认证（Central Server 模式）**：
+
+API Key 格式 `yk_{name}_{32hex}`，SHA-256 哈希存储在 SQLite。通过 HTTP Bearer header 传递。
+
+```bash
+# Server 侧管理 API Key
+yunying-mcp agent add tddh        # 创建，输出 yk_tddh_xxxx
+yunying-mcp agent list            # 列出
+yunying-mcp agent rotate tddh     # 轮换
+yunying-mcp agent revoke tddh     # 吊销
+```
+
+**Bridge 认证**：
+
 Bridge 使用静态 token 认证，通过常数时间比较（防时序攻击）。
 
-```yaml
+```bash
+# Central Server 模式：Server 侧生成 token
+yunying-mcp bridge add my-host --tags gpu,web
+
+# 直连模式：hosts.yaml 配置
 # config/hosts.yaml
 hosts:
   - name: tf01
-    bridge_addr: 10.0.1.10:9788
+    bridge_addr: 10.0.1.10:9778
     bridge_token: "your-secure-token"
 ```
 
-`bridge_token` 和系统环境变量 `BRIDGE_AUTH_TOKEN` 中的 token 必须一致。
+`bridge_token` 和 Bridge 端环境变量 `BRIDGE_AUTH_TOKEN` 中的 token 必须一致。
 
 ### 7. 配置主机注册表
 
@@ -260,22 +281,31 @@ hosts:
 
 > 💡 **热加载**：修改 `hosts.yaml` 后无需重启 MCP Server — 调用 `reload_config` MCP 工具或向进程发送 `kill -HUP <pid>` 即可生效。加载失败时保留原有配置，不影响运行中服务。
 
-### 8. 配置 MCP Server（OpenCode）
+### 8. 配置 AI 客户端
 
-编辑 `~/.config/opencode/opencode.json`：
+**Central Server 模式**（推荐）：
+
+```json
+{
+  "mcp": {
+    "yunying": {
+      "type": "remote",
+      "url": "https://SERVER:9788/mcp",
+      "headers": { "Authorization": "Bearer yk_name_..." }
+    }
+  }
+}
+```
+
+**本地 stdio 模式**（开发/测试）：
 
 ```json
 {
   "mcp": {
     "yunying": {
       "type": "local",
-      "command": ["/path/to/yunying/target/release/yunying-mcp"],
-      "args": [
-        "--hosts-file",
-        "/path/to/yunying/config/hosts.test.yaml",
-        "--ca-cert",
-        "/tmp/bridge-remote.crt"
-      ],
+      "command": ["/path/to/yunying-mcp"],
+      "args": ["--hosts-file", "config/hosts.yaml", "--ca-cert", "certs/ca.crt"],
       "enabled": true
     }
   }
@@ -330,12 +360,18 @@ yunying-mcp audit cleanup --older-than 30
 ├── audit.db                       # 审计数据库（SQLite）
 └── recordings/                    # 从 bridge 同步的 PTY 录制文件（asciinema v2）
 
-/opt/yunying/                   # 远程主机
-├── rmux-bridge                   # bridge 二进制
-├── bridge.env                    # BRIDGE_AUTH_TOKEN（权限 600）
-└── certs/
-    ├── <ip>.crt                  # 主机 TLS 证书
-    └── <ip>.key                  # TLS 私钥（权限 600）
+/usr/local/bin/
+└── rmux-bridge                   # bridge 二进制
+
+/etc/yunying/                    # 远程主机配置
+├── bridge.env                    # BRIDGE_AUTH_TOKEN + SERVER_ADDR + CA 路径（权限 600）
+├── ca.crt                        # CA 根证书
+├── bridge.crt                    # 主机 TLS 证书（可选，直连回退用）
+└── bridge.key                    # TLS 私钥（权限 600，可选）
+
+/opt/agent-ops/                  # 远程主机数据
+├── recordings/                   # PTY 录制文件（asciinema v2）
+└── bridge_events.db              # Bridge 侧审计数据库
 
 /etc/systemd/system/
 ├── rmux-daemon.service           # daemon systemd 服务

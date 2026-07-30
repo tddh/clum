@@ -92,8 +92,11 @@ enum Commands {
 }
 
 fn expand_tilde(path: &str) -> String {
-    if path.starts_with("~/") {
-        if let Ok(home) = std::env::var("HOME") {
+    if path.starts_with("~/") || path.starts_with("~\\") {
+        let home = std::env::var("USERPROFILE")
+            .or_else(|_| std::env::var("HOME"))
+            .ok();
+        if let Some(home) = home {
             return home + &path[1..];
         }
     }
@@ -116,9 +119,10 @@ async fn get_connection(
     api_key: &Option<String>,
     hosts_file: &str,
     host: &str,
+    purpose: &str,
 ) -> anyhow::Result<quinn::Connection> {
     if let Some(addr) = server_addr {
-        connect::connect_via_server(addr, ca_cert, host, api_key.as_deref()).await
+        connect::connect_via_server(addr, ca_cert, host, api_key.as_deref(), purpose).await
     } else {
         let config = load_host_config(hosts_file, host)?;
         connect::connect_to_bridge_quic(&config.bridge_addr, &config.bridge_token, ca_cert).await
@@ -182,7 +186,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Commands::List { host } => {
-            let conn = get_connection(&server_addr, &ca_cert, &api_key, &hosts_file, &host).await?;
+            let conn = get_connection(&server_addr, &ca_cert, &api_key, &hosts_file, &host, "list").await?;
             let (mut send, mut recv) = conn.open_bi().await?;
             send.write_all(&[0x01]).await?;
             let request = serde_json::json!({ "type": "list_sessions" });
@@ -219,8 +223,10 @@ async fn main() -> anyhow::Result<()> {
             } else if let Some(server) = &cli.server_addr {
                 let url = format!("http://{server}/recordings/{expanded}");
                 eprintln!("Fetching recording from {url} ...");
+                let tmp_file = std::env::temp_dir().join("yunying-replay.cast");
+                let tmp_path = tmp_file.to_string_lossy().to_string();
                 let mut cmd = std::process::Command::new("curl");
-                cmd.args(["-fsSL", "-o", "/tmp/yunying-replay.cast"]);
+                cmd.args(["-fsSL", "-o", &tmp_path]);
                 if let Some(key) = &cli.api_key {
                     cmd.args(["-H", &format!("Authorization: Bearer {key}")]);
                 }
@@ -229,7 +235,7 @@ async fn main() -> anyhow::Result<()> {
                 if !resp.success() {
                     anyhow::bail!("failed to download recording from {url}");
                 }
-                "/tmp/yunying-replay.cast".to_string()
+                tmp_path
             } else {
                 anyhow::bail!("file not found: {expanded} (use --server-addr for remote replay)");
             };
@@ -247,7 +253,7 @@ async fn main() -> anyhow::Result<()> {
             local_path,
             remote_path,
         } => {
-            let conn = get_connection(&server_addr, &ca_cert, &api_key, &hosts_file, &host).await?;
+            let conn = get_connection(&server_addr, &ca_cert, &api_key, &hosts_file, &host, "upload").await?;
             let (mut send, mut recv) = conn.open_bi().await?;
 
             let file_data = tokio::fs::read(&local_path)
@@ -299,7 +305,7 @@ async fn main() -> anyhow::Result<()> {
             remote_path,
             local_path,
         } => {
-            let conn = get_connection(&server_addr, &ca_cert, &api_key, &hosts_file, &host).await?;
+            let conn = get_connection(&server_addr, &ca_cert, &api_key, &hosts_file, &host, "download").await?;
             let (mut send, mut recv) = conn.open_bi().await?;
 
             send.write_all(&[0x03]).await?; // STREAM_DOWNLOAD
@@ -347,7 +353,7 @@ async fn main() -> anyhow::Result<()> {
                 .ok_or_else(|| anyhow::anyhow!("invalid --remote format, expected host:port"))?;
             let remote_port: u16 = remote_port.parse()?;
 
-            let conn = get_connection(&server_addr, &ca_cert, &api_key, &hosts_file, &host).await?;
+            let conn = get_connection(&server_addr, &ca_cert, &api_key, &hosts_file, &host, "tunnel").await?;
             let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{local}")).await?;
             println!(
                 "tunnel: 127.0.0.1:{local} → {host}:{remote_host}:{remote_port} (Ctrl+C to stop)"

@@ -22,6 +22,7 @@ pub struct QuicServerConfig {
     pub db_path: std::path::PathBuf,
     pub router: Arc<crate::router::HostRouter>,
     pub ca_cert_path: String,
+    pub audit_db: Arc<crate::audit::AuditDb>,
 }
 
 pub async fn run_quic_server(
@@ -80,9 +81,10 @@ pub async fn run_quic_server(
         let agents = Arc::clone(&last_agents);
         let router = Arc::clone(&config.router);
         let ca_cert = config.ca_cert_path.clone();
+        let audit = Arc::clone(&config.audit_db);
         tokio::spawn(async move {
             if let Err(e) =
-                handle_connection(incoming, registry, token_map, rec_dir, store, agents, router, ca_cert).await
+                handle_connection(incoming, registry, token_map, rec_dir, store, agents, router, ca_cert, audit).await
             {
                 tracing::debug!("QUIC connection handler ended: {e}");
             }
@@ -102,6 +104,7 @@ async fn handle_connection(
     last_agents: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
     router: Arc<crate::router::HostRouter>,
     ca_cert_path: String,
+    audit_db: Arc<crate::audit::AuditDb>,
 ) -> anyhow::Result<()> {
     let conn = incoming.await?;
     let remote_addr = conn.remote_address();
@@ -138,6 +141,7 @@ async fn handle_connection(
                 last_agents,
                 router,
                 ca_cert_path,
+                audit_db,
             )
             .await
         }
@@ -345,6 +349,7 @@ async fn handle_agent_connection(
     last_agents: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
     router: Arc<crate::router::HostRouter>,
     ca_cert_path: String,
+    audit_db: Arc<crate::audit::AuditDb>,
 ) -> anyhow::Result<()> {
     // Validate API key if auth is enabled
     let mut agent_name = "unknown".to_string();
@@ -400,6 +405,22 @@ async fn handle_agent_connection(
         .await
         .insert(host.clone(), agent_name.clone());
     tracing::info!(%host, %remote_addr, %agent_name, "agent connected, starting relay");
+
+    let purpose = msg.get("purpose").and_then(|v| v.as_str()).unwrap_or("unknown");
+    audit_db.log(yunying_core::types::AuditEvent {
+        event_id: uuid::Uuid::new_v4(),
+        timestamp: chrono::Utc::now(),
+        agent_name: agent_name.clone(),
+        host_name: host.clone(),
+        session_name: String::new(),
+        pane_id: None,
+        action: yunying_core::types::AuditAction::AgentRelay,
+        detail: format!("purpose={purpose} addr={remote_addr}"),
+        output_summary: None,
+        success: true,
+        duration_ms: 0,
+        error_message: None,
+    }).await;
 
     // Relay loop: for each stream CLI opens, open corresponding stream to Bridge and relay
     loop {

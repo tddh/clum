@@ -32,59 +32,54 @@ struct Cli {
     #[arg(long, default_value = "stdio")]
     mode: String,
 
-    #[arg(long, default_value = "0.0.0.0:9788")]
-    listen: String,
+    #[arg(long)]
+    listen: Option<String>,
 
     #[arg(long, value_delimiter = ',')]
     api_keys: Vec<String>,
 
-    #[arg(long, default_value = "config/hosts.yaml")]
-    hosts_file: PathBuf,
+    #[arg(long)]
+    hosts_file: Option<PathBuf>,
 
     #[arg(long)]
-    ca_cert: String,
+    ca_cert: Option<String>,
 
     #[arg(long)]
     audit_db: Option<PathBuf>,
 
-    #[arg(long, default_value = "90")]
-    audit_retention_days: u32,
+    #[arg(long)]
+    audit_retention_days: Option<u32>,
 
-    #[arg(long, default_value = "500")]
-    audit_max_size_mb: u64,
+    #[arg(long)]
+    audit_max_size_mb: Option<u64>,
 
-    #[arg(long, default_value = "600")]
-    audit_cleanup_interval_secs: u64,
+    #[arg(long)]
+    audit_cleanup_interval_secs: Option<u64>,
 
-    #[arg(long, default_value = "300")]
-    audit_sync_interval_secs: u64,
+    #[arg(long)]
+    audit_sync_interval_secs: Option<u64>,
 
     #[arg(long)]
     recordings_dir: Option<PathBuf>,
 
-    #[arg(long, default_value = "90")]
-    recordings_retention_days: u32,
+    #[arg(long)]
+    recordings_retention_days: Option<u32>,
 
-    #[arg(long, default_value = "5000")]
-    recordings_max_size_mb: u64,
+    #[arg(long)]
+    recordings_max_size_mb: Option<u64>,
 
-    /// TLS certificate for QUIC server (PEM). Required for http mode.
     #[arg(long)]
     server_cert: Option<String>,
 
-    /// TLS private key for QUIC server (PEM). Required for http mode.
     #[arg(long)]
     server_key: Option<String>,
 
-    /// Bridge token mapping: hostname=token (repeatable).
     #[arg(long = "bridge", value_name = "HOSTNAME=TOKEN")]
     bridge_tokens: Vec<String>,
 
-    /// Path to server-config.yaml. Values are overridden by explicit CLI args.
     #[arg(long)]
     config: Option<PathBuf>,
 
-    /// Directory for static file serving (install.sh, releases/, ca.crt).
     #[arg(long)]
     static_dir: Option<PathBuf>,
 }
@@ -118,24 +113,79 @@ async fn main() -> anyhow::Result<()> {
         .init();
     let cli = Cli::parse();
 
+    let file_config = match &cli.config {
+        Some(path) => match server_config::ServerConfig::load(path) {
+            Ok(c) => {
+                tracing::info!("loaded server config from {}", path.display());
+                c
+            }
+            Err(e) => {
+                tracing::error!("failed to load config: {e:#}");
+                server_config::ServerConfig::default()
+            }
+        },
+        None => server_config::ServerConfig::default(),
+    };
+
+    // Merge: CLI > config file > defaults
+    // Resolve methods and token map first (they borrow file_config)
+    let file_audit_db = file_config.resolve_audit_db();
+    let file_recordings_dir = file_config.resolve_recordings_dir();
+    let file_static_dir = file_config.resolve_static_dir();
+    let file_bridge_tokens = file_config.bridge_token_map();
+
+    let listen = cli.listen.or(Some(file_config.listen));
+    let hosts_file = cli
+        .hosts_file
+        .or_else(|| file_config.hosts_file.as_ref().map(PathBuf::from))
+        .unwrap_or_else(|| PathBuf::from("config/hosts.yaml"));
+    let ca_cert = cli
+        .ca_cert
+        .or(file_config.ca_cert)
+        .unwrap_or_else(|| String::from(""));
+    let audit_retention_days = cli
+        .audit_retention_days
+        .unwrap_or(file_config.audit_retention_days);
+    let audit_max_size_mb = cli
+        .audit_max_size_mb
+        .unwrap_or(file_config.audit_max_size_mb);
+    let cleanup_interval = cli
+        .audit_cleanup_interval_secs
+        .unwrap_or(file_config.audit_cleanup_interval_secs);
+    let sync_interval = cli
+        .audit_sync_interval_secs
+        .unwrap_or(file_config.audit_sync_interval_secs);
+    let recordings_retention = cli
+        .recordings_retention_days
+        .unwrap_or(file_config.recordings_retention_days);
+    let recordings_max_size = cli
+        .recordings_max_size_mb
+        .unwrap_or(file_config.recordings_max_size_mb);
+    let static_dir = cli.static_dir.or(file_static_dir);
+    let server_cert = cli.server_cert.or(file_config.server_cert);
+    let server_key = cli.server_key.or(file_config.server_key);
+
     let router = Arc::new(
-        router::HostRouter::from_file(&cli.hosts_file).context("failed to load host registry")?,
+        router::HostRouter::from_file(&hosts_file).context("failed to load host registry")?,
     );
     tracing::info!("loaded {} hosts", router.len());
 
-    let db_path = resolve_audit_db_path(cli.audit_db);
+    let db_path = cli
+        .audit_db
+        .unwrap_or(file_audit_db);
     let audit_db = Arc::new(audit::AuditDb::open(&db_path)?);
     tracing::info!("audit database: {}", db_path.display());
 
     let cleanup_db = audit_db.clone();
-    let retention_days = cli.audit_retention_days;
-    let max_size_mb = cli.audit_max_size_mb;
-    let interval = cli.audit_cleanup_interval_secs;
     tokio::spawn(async move {
-        let mut timer = tokio::time::interval(std::time::Duration::from_secs(interval));
+        let mut timer =
+            tokio::time::interval(std::time::Duration::from_secs(cleanup_interval));
         loop {
             timer.tick().await;
-            if let Err(e) = cleanup_db.cleanup(retention_days, max_size_mb).await {
+            if let Err(e) = cleanup_db
+                .cleanup(audit_retention_days, audit_max_size_mb)
+                .await
+            {
                 tracing::error!("audit cleanup failed: {e}");
             }
         }
@@ -186,21 +236,19 @@ async fn main() -> anyhow::Result<()> {
 
     let recordings_dir = cli
         .recordings_dir
-        .clone()
+        .or(file_recordings_dir)
         .unwrap_or_else(recording_sync::default_recordings_dir);
 
-    // Start the background recording sync task (pulls unsynced .cast files from
-    // bridges into the local recordings directory).
     let sync_config = recording_sync::RecordingSyncConfig {
-        interval_secs: cli.audit_sync_interval_secs,
+        interval_secs: sync_interval,
         recordings_dir: recordings_dir.clone(),
-        retention_days: cli.recordings_retention_days,
-        max_size_mb: cli.recordings_max_size_mb,
+        retention_days: recordings_retention,
+        max_size_mb: recordings_max_size,
     };
     tokio::spawn(recording_sync::run_sync_loop(
         sync_config,
         Arc::clone(&router),
-        cli.ca_cert.clone(),
+        ca_cert.clone(),
     ));
 
     let bridge_registry = Arc::new(registry::BridgeRegistry::new());
@@ -208,8 +256,8 @@ async fn main() -> anyhow::Result<()> {
 
     let ctx = Arc::new(tools::ToolContext {
         router,
-        ca_cert_path: cli.ca_cert,
-        audit_db,
+        ca_cert_path: ca_cert.clone(),
+        audit_db: audit_db.clone(),
         agent_name: std::sync::Mutex::new("unknown".to_string()),
         tunnel_manager: Arc::new(tunnel::TunnelManager::new()),
         stream_manager: Arc::new(stream::StreamManager::new()),
@@ -220,25 +268,14 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.mode.as_str() {
         "http" => {
-            let file_config = match &cli.config {
-                Some(path) => match server_config::ServerConfig::load(path) {
-                    Ok(c) => {
-                        tracing::info!("loaded server config from {}", path.display());
-                        c
-                    }
-                    Err(e) => {
-                        tracing::error!("failed to load config: {e:#}");
-                        server_config::ServerConfig::default()
-                    }
-                },
-                None => server_config::ServerConfig::default(),
-            };
+            let mut token_map = file_bridge_tokens;
+            let cert = server_cert;
+            let key = server_key;
 
-            let mut token_map = file_config.bridge_token_map();
-            let cert = cli.server_cert.or(file_config.server_cert);
-            let key = cli.server_key.or(file_config.server_key);
-
-            tracing::info!("yunying-mcp server starting (http mode on {})", cli.listen);
+            tracing::info!(
+                "yunying-mcp server starting (http mode on {})",
+                listen.as_deref().unwrap_or("0.0.0.0:9788")
+            );
 
             if let (Some(cert), Some(key)) = (&cert, &key) {
                 for entry in &cli.bridge_tokens {
@@ -266,7 +303,7 @@ async fn main() -> anyhow::Result<()> {
                 tracing::info!("loaded {} bridge tokens", hash_map.len());
 
                 let quic_config = quic_server::QuicServerConfig {
-                    listen_addr: cli.listen.clone(),
+                    listen_addr: listen.clone().unwrap_or_else(|| "0.0.0.0:9788".to_string()),
                     cert_path: cert.clone(),
                     key_path: key.clone(),
                     bridge_token_hashes: hash_map,
@@ -275,6 +312,7 @@ async fn main() -> anyhow::Result<()> {
                     db_path: db_path.clone(),
                     router: Arc::clone(&ctx.router),
                     ca_cert_path: ctx.ca_cert_path.clone(),
+                    audit_db: Arc::clone(&audit_db),
                 };
                 let reg = Arc::clone(&bridge_registry);
                 tokio::spawn(async move {
@@ -291,8 +329,17 @@ async fn main() -> anyhow::Result<()> {
             }
 
             let key_store = api_keys::ApiKeyStore::open(&db_path)?;
-            http_server::run_http_server(ctx, &cli.listen, key_store, cli.static_dir, cert, key)
-                .await
+            let listen_str = listen.as_deref().unwrap_or("0.0.0.0:9788");
+            http_server::run_http_server(
+                ctx,
+                listen_str,
+                key_store,
+                Arc::clone(&bridge_store),
+                static_dir,
+                cert,
+                key,
+            )
+            .await
         }
         _ => {
             let tools_definition = schema::tools_definition();
@@ -357,31 +404,6 @@ async fn run_agent_command(args: &[String]) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn fetch_download_token(server_addr: &str, api_key: &str) -> anyhow::Result<String> {
-    let url = format!("https://{server_addr}/admin/download-token");
-    let output = tokio::process::Command::new("curl")
-        .args([
-            "-sf",
-            "-X",
-            "POST",
-            "-H",
-            &format!("Authorization: Bearer {api_key}"),
-            "--cacert",
-            "/etc/yunying/ca.crt",
-            &url,
-        ])
-        .output()
-        .await?;
-    if !output.status.success() {
-        anyhow::bail!("server returned {}", output.status);
-    }
-    let body: serde_json::Value = serde_json::from_slice(&output.stdout)?;
-    body["token"]
-        .as_str()
-        .map(String::from)
-        .ok_or_else(|| anyhow::anyhow!("no token in response"))
-}
-
 async fn run_bridge_command(args: &[String]) -> anyhow::Result<()> {
     let db_path = resolve_audit_db_path(None);
     let store = bridge_store::BridgeStore::open(&db_path)?;
@@ -389,33 +411,32 @@ async fn run_bridge_command(args: &[String]) -> anyhow::Result<()> {
     match args.first().map(|s| s.as_str()) {
         Some("add") => {
             let hostname = args.get(1).ok_or_else(|| {
-                anyhow::anyhow!("usage: yunying-mcp bridge add <hostname> [--tags gpu,web]")
+                anyhow::anyhow!("usage: yunying-mcp bridge add <hostname> --tags infra,server [--config path]")
             })?;
             let tags: Vec<String> = args
                 .iter()
                 .position(|a| a == "--tags")
                 .and_then(|i| args.get(i + 1))
                 .map(|t| t.split(',').map(String::from).collect())
-                .unwrap_or_default();
+                .ok_or_else(|| anyhow::anyhow!("--tags is required"))?;
+            let config_path = args
+                .iter()
+                .position(|a| a == "--config")
+                .and_then(|i| args.get(i + 1))
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from("/etc/yunying/server-config.yaml"));
+            let config = server_config::ServerConfig::load(&config_path)?;
+            let server_addr = &config.server_addr;
+
             let token = bridge_store::generate_bridge_token();
             store.add(hostname, &token, &tags).await?;
 
-            let server_addr = std::env::var("YUNYING_SERVER_ADDR")
-                .unwrap_or_else(|_| "127.0.0.1:9788".to_string());
-            let api_key = std::env::var("YUNYING_API_KEY").unwrap_or_default();
-            let dl_token = fetch_download_token(&server_addr, &api_key).await;
-
             println!("Bridge: {hostname}");
             println!("Token:  {token}");
-            match &dl_token {
-                Ok(t) => println!("Download token (1h expiry): {t}"),
-                Err(e) => println!("Download token: FAILED ({e}) — get manually: curl -X POST -H 'Authorization: Bearer $API_KEY' https://{server_addr}/admin/download-token"),
-            }
             println!();
-            let dl = dl_token.as_deref().unwrap_or("<DOWNLOAD_TOKEN>");
             println!("Install command (on target machine):");
-            println!("  curl -fsSL -H \"Authorization: Bearer {dl}\" https://{server_addr}/install.sh | \\");
-            println!("    BRIDGE_TOKEN={token} SERVER_ADDR={server_addr} DOWNLOAD_TOKEN={dl} sh");
+            println!("  curl -fsSLk -H \"Authorization: Bearer {token}\" https://{server_addr}/install.sh | \\");
+            println!("    BRIDGE_TOKEN={token} SERVER_ADDR={server_addr} sh");
         }
         Some("list") => {
             let bridges = store.list().await;

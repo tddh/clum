@@ -71,9 +71,9 @@ graph LR
     C3 <-->|Unix Socket| D3[RMUX daemon]
 ```
 
-- **yunying-mcp（Hub Server）** — 中央 MCP Server：HTTP :9788 面向 AI 客户端（MCP 协议）+ QUIC :9788 面向 Bridge 注册和 CLI 数据平面。提供 67 个工具、集中审计、API Key 认证、静态文件服务。
+- **yunying-mcp（Central Server）** — 中央 MCP Server：HTTP :9788 面向 AI 客户端（MCP 协议）+ QUIC :9788 面向 Bridge 注册和 CLI 数据平面。提供 67 个工具、集中审计、API Key 认证、静态文件服务。
 - **yunying-cli** — 命令行工具：PTY 透传（`connect`）、文件传输（`upload`/`download`）、端口转发（`tunnel`）、会话列表（`list`）、录制回放（`replay`）。内置 AI 对话面板（Ctrl+G）。
-- **rmux-bridge** — 部署在每台 Linux 主机的 Agent。主动连接 Hub Server 注册，处理工具执行、文件 I/O、PTY 会话、录制推送。
+- **rmux-bridge** — 部署在每台 Linux 主机的 Agent。主动连接 Central Server 注册，处理工具执行、文件 I/O、PTY 会话、录制推送。
 - **RMUX daemon** — 每台 Linux 主机上的终端多路复用器（基于 rmux）。
 
 **部署模型：**
@@ -81,11 +81,11 @@ graph LR
 | 组件 | 运行位置 | 连接目标 |
 |------|----------|----------|
 | `yunying-mcp --mode http` | 中心服务器（1 实例） | — |
-| `rmux-bridge` | 每台目标 Linux 主机 | Hub Server（QUIC 反向注册） |
-| AI 客户端 | 任意机器 | Hub Server（HTTP，MCP 协议） |
-| `yunying-cli` | 运维人员机器 | Hub Server（QUIC，`--server-addr`） |
+| `rmux-bridge` | 每台目标 Linux 主机 | Central Server（QUIC 反向注册） |
+| AI 客户端 | 任意机器 | Central Server（HTTP，MCP 协议） |
+| `yunying-cli` | 运维人员机器 | Central Server（QUIC，`--server-addr`） |
 
-> 💡 新 Bridge 一键部署：`curl -fsSL curl -fsSL -H "Authorization: Bearer <download_token>" https://SERVER:9788/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=SERVER:9788 DOWNLOAD_TOKEN=<download_token> sh`
+> 💡 新 Bridge 一键部署：`curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=SERVER:9788 sh`
 
 > 💡 部署时 bridge 会自动检测 RMUX socket 路径，无需手动配置。
 
@@ -149,7 +149,7 @@ bash deploy/install-daemon.sh root@<your-bridge-ip>
 
 # 步骤 2：编译并部署 bridge（一键）
 just release-linux
-just deploy host=root@<your-bridge-ip> token=<your-token>
+BRIDGE_TOKEN="<your-token>" just deploy-bridge host=root@<your-bridge-ip>
 ```
 
 ### 配置主机注册表
@@ -169,9 +169,23 @@ hosts:
 
 > 💡 **热加载**：修改 `hosts.yaml` 后无需重启 — 调用 `reload_config` MCP 工具或向 MCP Server 进程发送 `kill -HUP <pid>` 即可生效。
 
-### 配置 MCP Server
+### 配置 MCP 客户端
 
-编辑 `~/.config/opencode/opencode.json`（参考 `config/mcp-config.example.json`）：
+**Central Server 模式**（推荐 — 一个 URL + API Key）：
+
+```json
+{
+  "mcp": {
+    "yunying": {
+      "type": "remote",
+      "url": "https://SERVER:9788/mcp",
+      "headers": { "Authorization": "Bearer yk_name_..." }
+    }
+  }
+}
+```
+
+**本地 stdio 模式**（无中央服务器，直连）：
 
 ```json
 {
@@ -179,10 +193,7 @@ hosts:
     "yunying": {
       "type": "local",
       "command": ["/path/to/yunying-mcp"],
-      "args": [
-        "--ca-cert", "/path/to/ca.crt",
-        "--hosts-file", "/path/to/hosts.yaml"
-      ],
+      "args": ["--ca-cert", "/path/to/ca.crt", "--hosts-file", "/path/to/hosts.yaml"],
       "enabled": true
     }
   }
@@ -299,11 +310,11 @@ echo "$(cat)" >> knowledge.jsonl && git commit -am "新增排障经验条目"
 
 | 类别 | 工具 |
 |------|------|
-| 主机管理 | `host_list`, `host_filter`, `reload_config` |
+| 主机管理 | `host_list`, `host_filter`, `host_set_meta`, `reload_config` |
 | 会话管理 | `session_create`, `session_list`, `session_attach`, `session_detach`, `kill_session` |
 | 终端输入 | `send_keys`, `send_text`, `broadcast_keys` |
 | 终端输出 | `capture_pane`, `capture_region`, `wait_for_text`, `wait_for_bytes`, `find_pane_text`, `find_text_all`, `stream_pane` |
-| 命令执行 | `exec`, `wait_exit`, `wait_stable`, `collect_until_exit`, , `shell_command`, `respawn_pane`, `cmd_escape` |
+| 命令执行 | `exec`, `wait_exit`, `wait_stable`, `collect_until_exit`, `shell_command`, `respawn_pane`, `cmd_escape` |
 | 窗格操作 | `split_pane`, `split_pane_with`, `break_pane`, `join_pane`, `swap_pane`, `resize_pane`, `set_pane_title`, `get_pane_title`, `clear_history`, `close_pane`, `pane_info`, `pane_exists` |
 | 窗口操作 | `split_window`, `close_window`, `rename_window`, `resize_window`, `select_window`, `select_layout`, `window_info`, `list_window_panes` |
 | 发现与查询 | `find_panes`, `find_sessions`, `get_pane_by_title`, `host_capabilities` |
@@ -312,12 +323,28 @@ echo "$(cat)" >> knowledge.jsonl && git commit -am "新增排障经验条目"
 | 批量操作 | `batch_exec`, `batch_upload`, `batch_download` |
 | 端口转发 | `tunnel_create`, `tunnel_list`, `tunnel_close` |
 | 部署升级 | `deploy_bridge` |
-| 审计录制 | `query_bridge_audit`, `list_recordings`, `get_recording` |
+| 审计录制 | `audit_query`, `query_bridge_audit`, `list_recordings`, `get_recording` |
 | 系统 | `yunying_usage_rules` |
 
 > 💡 `stream_pane` 适用于长命令实时输出监控（阻塞读，增量返回），替代 capture_pane 轮询。
 
 完整工具文档见 [docs/TOOLS.md](docs/TOOLS.md)。
+
+## 性能
+
+| 优化项 | 优化前 | 优化后 | 提升 |
+|--------|--------|--------|------|
+| QUIC BBR 拥塞控制 + 16MB 流控窗口 | 200MB 上传: 60.4s | 28.1s | +53% |
+| 接收方计算 SHA256（消除双读） | 200MB 下载: 63.5s | 21.8s | +192% |
+| 1MB 拷贝缓冲（原 8KB 默认） | 系统调用次数: N | N/128 | 128 倍减少 |
+| Bridge 部署（fire-and-forget 重启） | 47s | 4s | -91% |
+
+稳态吞吐：**82 Mbps**（1GB 文件，100 Mbps 链路利用率 82%）。
+
+核心设计选择：
+- **BBR 替代 Cubic**：基于带宽和 RTT 模型调速，少量丢包不大幅降窗
+- **接收方算哈希**：发送方单遍流式传输，接收方边收边算 SHA256——发送侧磁盘 I/O 减半
+- **统一 1MB buffer**：MCP 端与 Bridge 端均使用 `COPY_BUF_SIZE = 1MB` 的 `tokio::io::copy_with_buf`，消除跨边界缓冲
 
 ## 开发
 
@@ -336,7 +363,7 @@ just build       # cargo build --workspace
 - **TLS**：rustls（无 openssl 依赖）
 - **终端多路复用**：rmux-sdk
 - **审计存储**：rusqlite（bundled SQLite）
-- **MCP 传输**：stdio（JSON-RPC 2.0）
+- **MCP 传输**：stdio + Streamable HTTP（rmcp v3，JSON-RPC 2.0）
 
 ## 文档
 

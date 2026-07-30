@@ -1,18 +1,43 @@
-# yunying central server configuration
-# Usage: yunying-mcp --mode http --config config/server-config.yaml
+# yunying MCP Server configuration
+# Usage: yunying-mcp --mode http --config /etc/yunying/server-config.yaml
+#
+# All values can be overridden by CLI args (e.g. --listen, --ca-cert).
 
-listen: "0.0.0.0:9778"
-server_cert: "certs/server.crt"
-server_key: "certs/server.key"
-ca_cert: "certs/ca.crt"
-hosts_file: "config/hosts.yaml"
-audit_db: "~/.yunying/audit.db"
+# ─── Network ───
+listen: "0.0.0.0:9788"
+
+# ─── TLS ───
+server_cert: "/etc/yunying/server.crt"
+server_key: "/etc/yunying/server.key"
+ca_cert: "/etc/yunying/ca.crt"
+
+# ─── Host registry ───
+hosts_file: "/etc/yunying/hosts.yaml"
+
+# ─── Storage ───
+audit_db: "/root/.yunying/audit.db"
+recordings_dir: "/root/.yunying/recordings"
+static_dir: "/root/.yunying"
+
+# ─── Audit settings ───
+audit_retention_days: 90
+audit_max_size_mb: 500
+audit_cleanup_interval_secs: 600
+audit_sync_interval_secs: 300
+
+# ─── Recording settings ───
+recordings_retention_days: 90
+recordings_max_size_mb: 5000
+
+# ─── Token settings ───
 token_ttl_hours: 24
 
-bridges:
-  - hostname: tf01
-    token: "8f3a..."
-    tags: [gpu, training]
-    labels:
-      dc: shanghai
-      rack: A03
+# ─── Inline bridge enrollment (optional) ───
+# Bridges can also be enrolled dynamically via the bridge_store SQLite DB.
+# bridges:
+#   - hostname: tf01
+#     token: "8f3a..."
+#     tags: [gpu, training]
+#     labels:
+#       dc: shanghai
+#       rack: A03

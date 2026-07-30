@@ -27,6 +27,7 @@ struct AuthState {
     store: Arc<ApiKeyStore>,
     agent_name: Arc<std::sync::Mutex<String>>,
     download_tokens: DownloadTokenMap,
+    bridge_store: Arc<crate::bridge_store::BridgeStore>,
 }
 
 #[derive(Clone)]
@@ -126,14 +127,19 @@ async fn auth_middleware(
                 }
                 return Ok(next.run(request).await);
             }
-            if !is_mcp && t.starts_with("dl_") {
-                use sha2::{Digest, Sha256};
-                let hash = hex::encode(Sha256::digest(t.as_bytes()));
-                let tokens = auth.download_tokens.read().await;
-                if let Some(expires) = tokens.get(&hash) {
-                    if *expires > std::time::Instant::now() {
-                        return Ok(next.run(request).await);
+            if !is_mcp {
+                if t.starts_with("dl_") {
+                    use sha2::{Digest, Sha256};
+                    let hash = hex::encode(Sha256::digest(t.as_bytes()));
+                    let tokens = auth.download_tokens.read().await;
+                    if let Some(expires) = tokens.get(&hash) {
+                        if *expires > std::time::Instant::now() {
+                            return Ok(next.run(request).await);
+                        }
                     }
+                }
+                if auth.bridge_store.validate_token(t).await {
+                    return Ok(next.run(request).await);
                 }
             }
             Err(StatusCode::UNAUTHORIZED)
@@ -146,6 +152,7 @@ pub async fn run_http_server(
     ctx: Arc<ToolContext>,
     listen_addr: &str,
     key_store: Arc<ApiKeyStore>,
+    bridge_store: Arc<crate::bridge_store::BridgeStore>,
     static_dir: Option<std::path::PathBuf>,
     tls_cert: Option<String>,
     tls_key: Option<String>,
@@ -231,6 +238,7 @@ pub async fn run_http_server(
         store: key_store,
         agent_name,
         download_tokens,
+        bridge_store,
     };
     let app = app.layer(middleware::from_fn_with_state(auth_state, auth_middleware));
 

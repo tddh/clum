@@ -71,9 +71,9 @@ graph LR
     C3 <-->|Unix Socket| D3[RMUX daemon]
 ```
 
-- **yunying-mcp (Hub Server)** — Central MCP Server: HTTP :9788 for AI clients (MCP protocol) + QUIC :9788 for Bridge registration and CLI data plane. Provides 67 tools, centralized audit, API Key auth, and static file serving.
+- **yunying-mcp (Central Server)** — Central MCP Server: HTTP :9788 for AI clients (MCP protocol) + QUIC :9788 for Bridge registration and CLI data plane. Provides 67 tools, centralized audit, API Key auth, and static file serving.
 - **yunying-cli** — CLI for humans: PTY passthrough (`connect`), file transfer (`upload`/`download`), port forwarding (`tunnel`), session listing (`list`), recording playback (`replay`). Built-in AI chat panel (Ctrl+G).
-- **rmux-bridge** — Agent deployed on each Linux host. Reverse-connects to the Hub server, handles tool execution, file I/O, PTY sessions, and recording push.
+- **rmux-bridge** — Agent deployed on each Linux host. Reverse-connects to the Central Server, handles tool execution, file I/O, PTY sessions, and recording push.
 - **RMUX daemon** — Terminal multiplexer on each Linux host (rmux-based).
 
 **Deployment model:**
@@ -81,11 +81,11 @@ graph LR
 | Component | Runs on | Connects to |
 |-----------|---------|-------------|
 | `yunying-mcp --mode http` | Central server (1 instance) | — |
-| `rmux-bridge` | Each target Linux host | Hub server (QUIC, reverse registration) |
-| AI clients | Any machine | Hub server (HTTP, MCP protocol) |
-| `yunying-cli` | Operator machine | Hub server (QUIC, `--server-addr`) |
+| `rmux-bridge` | Each target Linux host | Central Server (QUIC, reverse registration) |
+| AI clients | Any machine | Central Server (HTTP, MCP protocol) |
+| `yunying-cli` | Operator machine | Central Server (QUIC, `--server-addr`) |
 
-> 💡 New bridges deploy with one command: `curl -fsSL curl -fsSL -H "Authorization: Bearer <download_token>" https://SERVER:9788/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=SERVER:9788 DOWNLOAD_TOKEN=<download_token> sh`
+> 💡 New bridges deploy with one command: `curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=SERVER:9788 sh`
 
 ## Features
 
@@ -147,7 +147,7 @@ bash deploy/install-daemon.sh root@<your-bridge-ip>
 
 # Step 2: Compile & deploy bridge (one-shot)
 just release-linux
-just deploy host=root@<your-bridge-ip> token=<your-token>
+BRIDGE_TOKEN="<your-token>" just deploy-bridge host=root@<your-bridge-ip>
 ```
 
 ### Host Registry
@@ -167,9 +167,23 @@ hosts:
 
 > 💡 **Hot-reload**: After editing `hosts.yaml`, reload without restarting — either call the `reload_config` MCP tool or send `kill -HUP <pid>` to the MCP server process.
 
-### MCP Server Config
+### MCP Client Config
 
-Edit `~/.config/opencode/opencode.json` (see `config/mcp-config.example.json`):
+**Central Server mode** (recommended — one URL + API Key):
+
+```json
+{
+  "mcp": {
+    "yunying": {
+      "type": "remote",
+      "url": "https://SERVER:9788/mcp",
+      "headers": { "Authorization": "Bearer yk_name_..." }
+    }
+  }
+}
+```
+
+**Local stdio mode** (no central server, direct connections):
 
 ```json
 {
@@ -177,17 +191,12 @@ Edit `~/.config/opencode/opencode.json` (see `config/mcp-config.example.json`):
     "yunying": {
       "type": "local",
       "command": ["/path/to/yunying-mcp"],
-      "args": [
-        "--ca-cert", "/path/to/ca.crt",
-        "--hosts-file", "/path/to/hosts.yaml"
-      ],
+      "args": ["--ca-cert", "/path/to/ca.crt", "--hosts-file", "/path/to/hosts.yaml"],
       "enabled": true
     }
   }
 }
 ```
-
-> Use `ca.crt` for remote deployments; `bridge.crt` for local self-signed testing.
 
 ## Security
 
@@ -298,11 +307,11 @@ This design keeps yunying focused on operations while enabling teams to build th
 
 | Category | Tools |
 |----------|-------|
-| Host | `host_list`, `host_filter`, `reload_config` |
+| Host | `host_list`, `host_filter`, `host_set_meta`, `reload_config` |
 | Session | `session_create`, `session_list`, `session_attach`, `session_detach`, `kill_session` |
 | Input | `send_keys`, `send_text`, `broadcast_keys` |
 | Output | `capture_pane`, `capture_region`, `wait_for_text`, `wait_for_bytes`, `find_pane_text`, `find_text_all`, `stream_pane` |
-| Execution | `exec`, `wait_exit`, `wait_stable`, `collect_until_exit`, , `shell_command`, `respawn_pane`, `cmd_escape` |
+| Execution | `exec`, `wait_exit`, `wait_stable`, `collect_until_exit`, `shell_command`, `respawn_pane`, `cmd_escape` |
 | Pane | `split_pane`, `split_pane_with`, `break_pane`, `join_pane`, `swap_pane`, `resize_pane`, `set_pane_title`, `get_pane_title`, `clear_history`, `close_pane`, `pane_info`, `pane_exists` |
 | Window | `split_window`, `close_window`, `rename_window`, `resize_window`, `select_window`, `select_layout`, `window_info`, `list_window_panes` |
 | Discovery | `find_panes`, `find_sessions`, `get_pane_by_title`, `host_capabilities` |
@@ -311,12 +320,28 @@ This design keeps yunying focused on operations while enabling teams to build th
 | Batch | `batch_exec`, `batch_upload`, `batch_download` |
 | Tunnel | `tunnel_create`, `tunnel_list`, `tunnel_close` |
 | Deploy | `deploy_bridge` |
-| Audit | `query_bridge_audit`, `list_recordings`, `get_recording` |
+| Audit | `audit_query`, `query_bridge_audit`, `list_recordings`, `get_recording` |
 | System | `yunying_usage_rules` |
 
 > 💡 `stream_pane` is ideal for real-time output monitoring of long-running commands (blocking read, incremental return), replacing capture_pane polling.
 
 Full docs: [docs/TOOLS.md](docs/TOOLS.md)
+
+## Performance
+
+| Optimization | Before | After | Gain |
+|--------------|--------|-------|------|
+| QUIC BBR congestion control + 16MB flow window | 200MB upload: 60.4s | 28.1s | +53% |
+| Receiver-side SHA256 (eliminate double-read) | 200MB download: 63.5s | 21.8s | +192% |
+| 1MB copy buffer (was 8KB default) | syscall count: N | N/128 | 128x fewer |
+| Bridge deploy (fire-and-forget restart) | 47s | 4s | -91% |
+
+Steady-state throughput: **82 Mbps** (1GB file, 82% link utilization on 100 Mbps link).
+
+Key design choices:
+- **BBR over Cubic**: Model-based rate control tolerates packet loss without drastic window reduction
+- **Receiver computes hash**: Sender streams data in one pass; receiver calculates SHA256 inline — halves disk I/O on the sending side
+- **Unified 1MB buffer**: Both MCP and Bridge use `COPY_BUF_SIZE = 1MB` for `tokio::io::copy_with_buf`, aligned to avoid cross-boundary buffering
 
 ## Development
 
@@ -335,7 +360,7 @@ just build       # cargo build --workspace
 - **TLS**: rustls (no OpenSSL dependency)
 - **Terminal**: rmux-sdk
 - **Audit storage**: rusqlite (bundled SQLite)
-- **MCP transport**: stdio (JSON-RPC 2.0)
+- **MCP transport**: stdio + Streamable HTTP (rmcp v3, JSON-RPC 2.0)
 
 ## Docs
 

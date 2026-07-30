@@ -29,12 +29,13 @@ yunying/
 ├── crates/              # Rust crates
 │   ├── yunying-cli/   # CLI 交互式终端
 │   ├── yunying-core/  # 共享类型（HostConfig, AuditEvent, AuditAction）
-│   ├── yunying-mcp/   # MCP Server
-│   └── rmux-bridge/     # Bridge proxy
+│   ├── yunying-mcp/   # MCP Server（Central Server 模式 / stdio 本地模式）
+│   └── rmux-bridge/   # Bridge proxy
 ├── config/              # 配置文件
 ├── docs/                # 文档
-├── deploy/              # 部署脚本
-└── .opencode/skills/    # AI 开发辅助 Skills
+├── deploy/              # 部署脚本（install.sh, deploy-bridge.sh, deploy-mcp.sh）
+├── .opencode/skills/    # AI 开发辅助 Skills (OpenCode)
+└── .qoder/skills/       # AI 开发辅助 Skills (Qoder)
 ```
 
 ## 常用命令
