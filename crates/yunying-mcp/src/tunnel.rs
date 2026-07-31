@@ -115,8 +115,16 @@ impl TunnelManager {
         let conn = if let Some(bridge) = registry.get(&host.name).await {
             bridge.conn.clone()
         } else {
+            let addr = host
+                .bridge_addr
+                .as_deref()
+                .with_context(|| format!("host '{}': bridge_addr not configured", host.name))?;
+            let token = host
+                .bridge_token
+                .as_deref()
+                .with_context(|| format!("host '{}': bridge_token not configured", host.name))?;
             let (conn, auth_send, auth_recv) =
-                connect_to_bridge_quic_tunnel(&host.bridge_addr, &host.bridge_token, ca_cert_path)
+                connect_to_bridge_quic_tunnel(addr, token, ca_cert_path)
                     .await
                     .with_context(|| "failed to connect to bridge")?;
             tokio::spawn(async move {
@@ -313,8 +321,8 @@ mod tests {
     fn make_host(targets: Option<Vec<String>>) -> HostConfig {
         HostConfig {
             name: "test-host".to_string(),
-            bridge_addr: "10.0.0.1:9778".to_string(),
-            bridge_token: "tok".to_string(),
+            bridge_addr: Some("10.0.0.1:9778".to_string()),
+            bridge_token: Some("tok".to_string()),
             group: "test".to_string(),
             tags: vec![],
             labels: HashMap::new(),

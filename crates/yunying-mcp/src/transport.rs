@@ -396,7 +396,7 @@ pub async fn connect_to_bridge_hybrid_stream(
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Registry-aware connection (Hub mode)
+// Registry-aware connection (central server mode)
 // ══════════════════════════════════════════════════════════════════
 
 pub async fn connect_to_host(
@@ -429,15 +429,24 @@ pub async fn connect_to_host_stream(
             }
         }
     }
-    connect_to_bridge_hybrid_stream(
-        &host.bridge_addr,
-        &host.bridge_token,
-        &ctx.ca_cert_path,
-        3,
-        idle_timeout_secs,
-        keepalive_secs,
-    )
-    .await
+    match (&host.bridge_addr, &host.bridge_token) {
+        (Some(addr), Some(token)) => {
+            connect_to_bridge_hybrid_stream(
+                addr,
+                token,
+                &ctx.ca_cert_path,
+                3,
+                idle_timeout_secs,
+                keepalive_secs,
+            )
+            .await
+        }
+        _ => anyhow::bail!(
+            "host '{}': no bridge_addr/bridge_token configured and not found in registry — \
+             either configure hosts.yaml for direct connection or ensure bridge is enrolled",
+            host.name
+        ),
+    }
 }
 
 pub async fn connect_via_registry(
@@ -462,7 +471,14 @@ pub async fn connect_via_registry(
             }
         }
     }
-    connect_to_bridge_hybrid(&host.bridge_addr, &host.bridge_token, ca_cert_path, 3).await
+    match (&host.bridge_addr, &host.bridge_token) {
+        (Some(addr), Some(token)) => connect_to_bridge_hybrid(addr, token, ca_cert_path, 3).await,
+        _ => anyhow::bail!(
+            "host '{}': no bridge_addr/bridge_token configured and not found in registry — \
+             either configure hosts.yaml for direct connection or ensure bridge is enrolled",
+            host.name
+        ),
+    }
 }
 
 async fn open_json_stream(conn: &quinn::Connection) -> Result<BridgeStream> {

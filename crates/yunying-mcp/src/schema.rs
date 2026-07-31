@@ -4,8 +4,8 @@ use std::sync::Arc;
 pub fn instructions() -> String {
     "You are an AI agent managing remote Linux hosts via yunying.\n\n\
 ## Core Concepts\n\
-- yunying is a remote operations platform with a **central Hub server**: You → MCP Server (Hub) → QUIC → Bridge → rmux daemon → Linux host. This is NOT direct SSH.\n\
-- Bridges **reverse-register** to the Hub server. `host_list` shows online status (`online: true` = enrolled, `null` = direct fallback).\n\
+- yunying is a remote operations platform with a **central server**: You → MCP Server → QUIC → Bridge → rmux daemon → Linux host. This is NOT direct SSH.\n\
+- Bridges **reverse-register** to the central server. `host_list` shows online status (`online: true` = enrolled, `null` = direct fallback).\n\
 - **Sessions run inside rmux (a terminal multiplexer like tmux) and survive disconnects**. You can disconnect and reconnect to the same session. Long-running commands keep running in the background.\n\
 - Sessions are shared resources: the same session can be used by AI (via MCP) and humans (via CLI `connect`) simultaneously or in turns.\n\
 - You do NOT hold SSH keys. Security is handled by API Key auth + Bridge Token + TLS 1.3.\n\
@@ -28,10 +28,10 @@ pub fn instructions() -> String {
 - `cmd_escape` for direct rmux CLI access (advanced).\n\n\
 ## Audit\n\
 - `audit_query` — query the **Server-side** centralized audit log (all MCP tool calls: who, when, which host, what action, success/failure). Use this to review operation history.\n\
-- `query_bridge_audit` — query a specific host's **Bridge-side** connection event log (auth events, attach/detach). Less useful in Hub mode.\n\
+- `query_bridge_audit` — query a specific host's **Bridge-side** connection event log (auth events, attach/detach). Less useful in central server mode.\n\
 - Prefer `audit_query` for \"who did what\" questions.\n\n\
 ## CLI Commands (via Bash tool)\n\
-- `yunying-cli upload <host> <local> <remote>` — file upload through Hub relay\n\
+- `yunying-cli upload <host> <local> <remote>` — file upload through server relay\n\
 - `yunying-cli download <host> <remote> <local>` — file download\n\
 - `yunying-cli tunnel <host> --local <port> --remote <host:port>` — port forwarding\n\
 - `yunying-cli connect <host> [--session <name>]` — interactive PTY\n\
@@ -65,12 +65,12 @@ pub fn tools_definition() -> Value {
         "tools": [
             {
                 "name": "yunying_usage_rules",
-                "description": "⚠️ READ-ONLY: Do NOT call this tool. Role: SRE engineer operating remote Linux hosts. Key concepts: sessions are persistent (survive disconnects, run in rmux terminal multiplexer), shared between AI and humans, accessed via Bridge proxy (no SSH keys on client). Principles: (1) Verify before destructive operations (2) Follow user's explicit requirements — if user wants SSH, use SSH; yunying is for hosts in the registry only (3) Use default session 'yunying' unless specified.",
+                "description": "⚠️ READ-ONLY: Do NOT call this tool. See the MCP server instructions for full usage rules. Key points: use default session 'yunying', verify before destructive operations, follow user's explicit requirements.",
                 "inputSchema": { "type": "object", "properties": {}, "required": [] }
             },
             {
                 "name": "host_list",
-                "description": "List all registered remote hosts from the host registry (hosts.yaml). Returns an array of host objects with name, group, tags, labels, and bridge_addr. Use this to discover available hosts before performing operations. This is typically the first tool called in any workflow.",
+                "description": "List all registered remote hosts from the host registry (hosts.yaml). Returns {\"hosts\": [...], \"count\": N} where each host object includes name, group, tags, labels, bridge_addr, online (true for enrolled bridges, null for hosts.yaml-only), and via (\"enrolled\" or \"direct\"). Use this to discover available hosts before performing operations. This is typically the first tool called in any workflow.",
                 "inputSchema": { "type": "object", "properties": {}, "required": [] }
             },
             {
@@ -181,14 +181,14 @@ pub fn tools_definition() -> Value {
                         "join_wrapped": { "type": "boolean", "description": "Join terminal-wrapped lines into single lines (default: false)" },
                         "preserve_spaces": { "type": "boolean", "description": "Preserve trailing spaces (default: false)" },
                         "alternate": { "type": "boolean", "description": "Capture alternate screen (e.g. vim/less). Default: false." },
-                        "buffer_name": { "type": "string", "description": "Write capture to a named buffer instead of returning text. Mutually exclusive with other text-return params." }
+                        "buffer_name": { "type": "string", "description": "Write capture to a named buffer instead of returning text directly. Other params (max_lines, start_line, etc.) still apply to limit the captured content." }
                     },
                     "required": ["host", "session_name"]
                 }
             },
             {
                 "name": "wait_for_text",
-                "description": "Block until specific text appears in the pane's visible output, or timeout expires. Polls the pane content periodically and returns as soon as the text is found. Returns found=true if text appeared, found=false on timeout. On success, also returns terminal_state (ready/running/password/confirm/repl/editor/pager/unknown) and cursor position. Use this instead of polling capture_pane in a loop. Ideal for waiting for command prompts, completion messages, or error indicators. Default timeout is 30 seconds.",
+                "description": "Block until specific text appears in the pane's visible output, or timeout expires. Uses event-driven detection via the rmux daemon (not polling). Returns found=true with terminal_state and cursor on success; found=false on timeout (WITHOUT terminal_state). Use this instead of polling capture_pane in a loop. Ideal for waiting for command prompts, completion messages, or error indicators. Default timeout is 30 seconds.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -237,7 +237,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "wait_exit",
-                "description": "Wait for the process running in a pane to exit and return its exit status. Blocks until the process terminates or timeout expires. Returns ok=true if process exited within timeout, ok=false on timeout. Use this after shell_command to wait for completion. Default timeout is 30 seconds. Note: exec already waits for exit internally — you don't need wait_exit after exec.",
+                "description": "Wait for the process running in a pane to exit and return its exit status. Blocks until the process terminates or timeout expires. On success: {ok:true, exited:true, exit_code:N, signal:N} if the process exited, or {ok:true, exited:false} if the pane disappeared. On timeout: {ok:false, error:\"timeout...\"}. Use this after shell_command to wait for completion. Default timeout is 30 seconds. Note: exec already waits for exit internally — you don't need wait_exit after exec.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -264,7 +264,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "stream_pane",
-                "description": "Blocking read from a pane's output stream. Creates a stream on first call (returns current snapshot + subsequent output), reuses it on later calls (returns only new output). Blocks until data arrives or timeout_ms expires. Use with long-running commands instead of capture_pane polling.",
+                "description": "Blocking read from a pane's output stream. Creates a stream on first call (returns current snapshot + subsequent output), reuses it on later calls (returns only new output). Blocks until data arrives or timeout_ms expires. Use with long-running commands instead of capture_pane polling. Stream state is held in-memory on the MCP server — if the server restarts or the bridge connection drops, the next call creates a fresh stream (returns a new snapshot).",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -278,14 +278,14 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "file_upload",
-                "description": "Upload files/directories to remote host via QUIC. Hub mode: local_path refers to the SERVER filesystem, not the client machine. For client-to-remote transfers use yunying-cli upload. Auto-creates target dirs. overwrite: overwrite(default)|skip|rename|error. exclude: glob patterns. Paths containing '..' are rejected by the bridge (path traversal protection). ⚠️ Do NOT add exclude/overwrite unless user explicitly requests.",
+                "description": "Upload files/directories to remote host via QUIC. Central server mode: local_path refers to the SERVER filesystem, not the client machine. For client-to-remote transfers use yunying-cli upload. Auto-creates target dirs. overwrite: overwrite(default)|skip|rename|error. exclude: glob patterns. Paths containing '..' are rejected by the bridge (path traversal protection). ⚠️ Do NOT add exclude/overwrite unless user explicitly requests.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "local_path": { "type": "string", "description": "Local file/directory path" },
                         "remote_path": { "type": "string", "description": "Remote destination path" },
-                        "overwrite": { "type": "string", "description": "overwrite|skip|rename|error (default: overwrite)" },
+                        "overwrite": { "type": "string", "enum": ["overwrite", "skip", "rename", "error"], "description": "overwrite|skip|rename|error (default: overwrite)" },
                         "exclude": { "type": "array", "items": { "type": "string" }, "description": "Glob patterns, e.g. [\"*.log\"]. Only if user specifies." }
                     },
                     "required": ["host", "local_path", "remote_path"]
@@ -293,7 +293,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "file_download",
-                "description": "Download a file or directory from remote host via QUIC. Hub mode: local_path writes to the SERVER filesystem, not the client machine. For remote-to-client downloads use yunying-cli download. Auto-detects path type: single file downloads directly; directory recursively downloads all files preserving structure. Returns size and SHA256 for files, or file list for directories. Paths containing '..' are rejected by the bridge; MCP validates relative paths from bridge. ⚠️ Do NOT modify paths or add filters unless user explicitly requests.",
+                "description": "Download a file or directory from remote host via QUIC. Central server mode: local_path writes to the SERVER filesystem, not the client machine. For remote-to-client downloads use yunying-cli download. Auto-detects path type: single file downloads directly; directory recursively downloads all files preserving structure. Returns size and SHA256 for files, or file list for directories. Paths containing '..' are rejected by the bridge; MCP validates relative paths from bridge. ⚠️ Do NOT modify paths or add filters unless user explicitly requests.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -311,7 +311,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, default: yunying" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. yunying" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "command": { "type": "string", "description": "Shell command, e.g. ls -la" },
                         "timeout_ms": { "type": "number", "description": "Safety-net timeout in ms (default: 600000 = 10min). Normal commands don't need to set this — waiting for command completion is the default behavior." },
@@ -352,7 +352,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "send_text",
-                "description": "Send plain text to a pane's input buffer WITHOUT interpreting escape sequences. Unlike send_keys, backslashes and special characters are sent literally. The text stays in the terminal input buffer and is NOT executed — you must follow with exec or send_keys '\\n' to run it. Multiple send_text calls without execution in between will concatenate on the same input line. Use this when you need to send text that contains escape-like sequences (e.g., '\\n', '\\t') as literal characters.",
+                "description": "Send plain text to a pane's input buffer WITHOUT interpreting escape sequences. Unlike send_keys, backslashes and special characters are sent literally. The text stays in the terminal input buffer and is NOT executed — you must follow with send_keys '\\n' to run it (do NOT use exec — exec clears the input buffer first). Multiple send_text calls without execution in between will concatenate on the same input line. Use this when you need to send text that contains escape-like sequences (e.g., '\\n', '\\t') as literal characters.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -495,7 +495,7 @@ pub fn tools_definition() -> Value {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. yunying" },
                         "window_index": { "type": "integer", "description": "Window index (0-based)" },
-                        "layout": { "type": "string", "description": "Layout name: even-horizontal, even-vertical, main-horizontal, main-vertical, or tiled" }
+                        "layout": { "type": "string", "enum": ["even-horizontal", "even-vertical", "main-horizontal", "main-vertical", "tiled"], "description": "Layout name: even-horizontal, even-vertical, main-horizontal, main-vertical, or tiled" }
                     },
                     "required": ["host", "session_name", "window_index", "layout"]
                 }
@@ -559,14 +559,14 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. yunying" },
-                        "pane_id": { "type": "string", "description": "Pane ID to check, e.g. %0 (optional, auto-detects if omitted)" }
+                        "pane_id": { "type": "string", "description": "Pane ID to check, e.g. %0. If omitted, auto-detects the lowest-numbered pane in window 0 and checks that (useful for verifying a session has any usable pane)." }
                     },
                     "required": ["host", "session_name"]
                 }
             },
             {
                 "name": "batch_exec",
-                "description": "Multi-host command execution: sends the same command to all specified hosts concurrently, waits for each to complete via sentinel markers (event-driven detection), captures output per host, and returns results keyed by hostname. Default 5 concurrent connections, 200 lines/host, 10min timeout/host. Host-level failures (connection refused, timeout) are marked ok=false but do NOT affect other hosts. Non-zero exit codes set per-host ok=false (but output is always captured — check per-host exit_code). For self-terminating commands only (ls, cat, grep, df, systemctl, kubectl, curl). NOT for interactive programs (vim, htop) or non-terminating commands (tail -f, ping). Uses the yunying session default pane (%0) on each host. Use this when you need to run the same command on multiple machines in one round — saves N-1 round trips compared to calling exec per host.",
+                "description": "Multi-host command execution: sends the same command to all specified hosts concurrently, waits for each to complete via sentinel markers (event-driven detection), captures output per host, and returns results keyed by hostname. Default 5 concurrent connections, 200 lines/host, 10min timeout/host. Host-level failures (connection refused, timeout) are marked ok=false but do NOT affect other hosts. Non-zero exit codes set per-host ok=false (but output is always captured — check per-host exit_code). For self-terminating commands only (ls, cat, grep, df, systemctl, kubectl, curl). NOT for interactive programs (vim, htop) or non-terminating commands (tail -f, ping). Uses the yunying session's initial pane (typically %0) on each host. Use this when you need to run the same command on multiple machines in one round — saves N-1 round trips compared to calling exec per host.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -611,7 +611,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "tunnel_create",
-                "description": "Create a port forwarding tunnel through an encrypted QUIC channel. Hub mode: the TCP listener is created on the SERVER side, not the client machine. For client-side local port forwarding use yunying-cli tunnel. Opens a TCP listener on the specified port that forwards all connections to a remote host:port via the bridge. The remote_host can be an internal address (e.g., 127.0.0.1, 10.x.x.x) not directly reachable from your machine. If the host has 'allowed_tunnel_targets' configured in hosts.yaml, only matching targets are allowed (glob patterns supported). Returns a tunnel_id that can be used with tunnel_close. Tunnels persist until explicitly closed or the MCP server restarts.",
+                "description": "Create a port forwarding tunnel through an encrypted QUIC channel. Central server mode: the TCP listener is created on the SERVER side, not the client machine. For client-side local port forwarding use yunying-cli tunnel. Opens a TCP listener on the specified port that forwards all connections to a remote host:port via the bridge. The remote_host can be an internal address (e.g., 127.0.0.1, 10.x.x.x) not directly reachable from your machine. If the host has 'allowed_tunnel_targets' configured in hosts.yaml, only matching targets are allowed (glob patterns supported). Returns a tunnel_id that can be used with tunnel_close. Tunnels persist until explicitly closed or the MCP server restarts.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -796,7 +796,7 @@ pub fn tools_definition() -> Value {
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "max_bytes": { "type": "integer", "description": "Maximum bytes to collect (default: 1048576 = 1MB)" },
                         "timeout_ms": { "type": "number", "description": "Timeout in milliseconds (default: 60000)" },
-                        "starting_at": { "type": "string", "description": "Where to start collecting: 'now' (default) or 'oldest' (includes scrollback)" }
+                        "starting_at": { "type": "string", "enum": ["now", "oldest"], "description": "Where to start collecting: 'now' (default) or 'oldest' (includes scrollback)" }
                     },
                     "required": ["host", "session_name"]
                 }
@@ -888,14 +888,14 @@ pub fn tools_definition() -> Value {
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "bytes": { "type": "string", "description": "Raw bytes to wait for, encoded as base64" },
                         "only_new": { "type": "boolean", "description": "Only match data appearing after this call (skip existing buffer, default: false)" },
-                        "timeout_ms": { "type": "number", "description": "Maximum wait time in milliseconds (default: 30000)" }
+                        "timeout_ms": { "type": "number", "description": "⚠️ Currently NOT enforced at the bridge level — the wait is effectively unbounded. Do not rely on this timeout." }
                     },
                     "required": ["host", "session_name", "bytes"]
                 }
             },
             {
                 "name": "wait_stable",
-                "description": "Wait until the pane output has been stable (no changes) for a specified duration. Monitors the pane content and returns when it hasn't changed for stable_ms milliseconds. Returns stable=true plus terminal_state (ready/running/password/confirm/repl/editor/pager/unknown) and cursor position. Use this after sending commands to ensure terminal rendering is complete before capturing output. Ideal for commands with progressive output (e.g., builds, downloads) where you want to wait for completion without knowing the exact completion text. Default stable duration is 500ms, default timeout is 30 seconds.",
+                "description": "Wait until the pane output has been stable (no changes) for a specified duration. Monitors the pane content and returns when it hasn't changed for stable_ms milliseconds. On success: stable=true with terminal_state and cursor. On timeout: stable=false WITHOUT terminal_state. Use this after sending commands to ensure terminal rendering is complete before capturing output. Ideal for commands with progressive output (e.g., builds, downloads) where you want to wait for completion without knowing the exact completion text. Default stable duration is 500ms, default timeout is 30 seconds.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -924,55 +924,55 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "query_bridge_audit",
-                "description": "查询目标主机 bridge 侧的连接事件日志（认证、attach/detach、文件操作、tunnel 等）",
+                "description": "Query the bridge-side connection event log on a target host (auth events, attach/detach, file operations, tunnel events, etc.). Returns events in reverse chronological order. Less useful in central server mode — prefer audit_query for centralized audit.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "host": { "type": "string", "description": "目标主机名" },
-                        "event_type": { "type": "string", "description": "事件类型过滤" },
-                        "session_name": { "type": "string", "description": "会话名过滤" },
-                        "since": { "type": "string", "description": "起始时间 (RFC3339)" },
-                        "until": { "type": "string", "description": "截止时间 (RFC3339)" },
-                        "limit": { "type": "integer", "description": "返回条数上限", "default": 50 }
+                        "host": { "type": "string", "description": "Target hostname" },
+                        "event_type": { "type": "string", "description": "Filter by event type" },
+                        "session_name": { "type": "string", "description": "Filter by session name" },
+                        "since": { "type": "string", "description": "Start time (RFC3339)" },
+                        "until": { "type": "string", "description": "End time (RFC3339)" },
+                        "limit": { "type": "integer", "description": "Max number of events to return (default: 50)" }
                     },
                     "required": ["host"]
                 }
             },
             {
                 "name": "audit_query",
-                "description": "查询 Server 侧集中审计日志（所有 MCP 工具调用记录：谁、什么时间、哪台机器、什么操作、是否成功）",
+                "description": "Query the server-side centralized audit log (all MCP tool call records: who, when, which host, what action, success/failure). Use this to review operation history. Preferred over query_bridge_audit in central server mode.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "host": { "type": "string", "description": "按主机名过滤" },
-                        "action": { "type": "string", "description": "按操作类型过滤（如 Exec, SessionCreate）" },
-                        "agent": { "type": "string", "description": "按 agent 名过滤" },
-                        "since": { "type": "string", "description": "起始时间 (RFC3339)" },
-                        "until": { "type": "string", "description": "截止时间 (RFC3339)" },
-                        "success": { "type": "boolean", "description": "按成功/失败过滤" },
-                        "limit": { "type": "integer", "description": "返回条数上限", "default": 50 }
+                        "host": { "type": "string", "description": "Filter by hostname" },
+                        "action": { "type": "string", "description": "Filter by action type (e.g. Exec, SessionCreate)" },
+                        "agent": { "type": "string", "description": "Filter by agent name" },
+                        "since": { "type": "string", "description": "Start time (RFC3339)" },
+                        "until": { "type": "string", "description": "End time (RFC3339)" },
+                        "success": { "type": "boolean", "description": "Filter by success/failure" },
+                        "limit": { "type": "integer", "description": "Max number of events to return. If omitted, returns all matching events." }
                     }
                 }
             },
             {
                 "name": "list_recordings",
-                "description": "列出已同步到本地的 PTY 会话录制文件（asciinema v2 .cast 文件）。可按主机名、日期 (YYYY-MM-DD)、会话名前缀过滤。返回每个录制文件的 host、date、file、size_bytes 和 path（path 用于 get_recording）。录制文件由后台同步任务定期从各 bridge 拉取到本地。",
+                "description": "List PTY session recordings synced to local storage (asciinema v2 .cast files). Filter by hostname, date (YYYY-MM-DD), or session name prefix. Returns host, date, file, size_bytes, and path for each recording (path is used with get_recording). Recordings are periodically synced from bridges by a background task.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "host": { "type": "string", "description": "按主机名过滤" },
-                        "date": { "type": "string", "description": "按日期过滤 (YYYY-MM-DD)" },
-                        "session": { "type": "string", "description": "按会话名前缀过滤" }
+                        "host": { "type": "string", "description": "Filter by hostname" },
+                        "date": { "type": "string", "description": "Filter by date (YYYY-MM-DD)" },
+                        "session": { "type": "string", "description": "Filter by session name prefix" }
                     }
                 }
             },
             {
                 "name": "get_recording",
-                "description": "获取指定录制文件的内容（asciinema v2 格式）。path 必须是 list_recordings 返回的绝对路径；出于安全考虑，路径必须位于本地录制目录内（拒绝路径穿越）。返回文件的完整文本内容。",
+                "description": "Get the content of a recording file (asciinema v2 format). The path must be an absolute path returned by list_recordings; for security, the path must be within the local recordings directory (path traversal is rejected). Returns the full text content of the file.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "path": { "type": "string", "description": "录制文件路径（从 list_recordings 获取）" }
+                        "path": { "type": "string", "description": "Recording file path (from list_recordings)" }
                     },
                     "required": ["path"]
                 }

@@ -72,7 +72,7 @@ pub(crate) async fn deploy_bridge(
         .with_context(|| format!("binary not found at {}", binary_path))?;
     let binary_size = metadata.len();
 
-    let targets = resolve_hosts(ctx, &hosts_arg);
+    let targets = resolve_hosts(ctx, &hosts_arg).await;
     let semaphore = make_semaphore(concurrency_limit);
     let ca_cert = ctx.ca_cert_path.clone();
     let registry = std::sync::Arc::clone(&ctx.bridge_registry);

@@ -5,6 +5,33 @@ use std::sync::Arc;
 use super::ToolContext;
 use crate::transport::{recv_json_frame, send_json_frame, BridgeStream};
 
+/// 解析主机名 → HostConfig：优先查 HostRouter（hosts.yaml），找不到则查
+/// BridgeRegistry 已注册的 enrolled bridge，构造最小 HostConfig。
+/// 纯 enrolled 模式下 hosts.yaml 可能不包含该主机，但仍可正常操作。
+pub(crate) async fn resolve_host_config(
+    ctx: &ToolContext,
+    host_name: &str,
+) -> Result<yunying_core::types::HostConfig> {
+    // 1. 先查 hosts.yaml 静态配置（direct 模式）
+    if let Some(h) = ctx.router.get(host_name) {
+        return Ok(h);
+    }
+    // 2. 查 BridgeRegistry 已反向注册的 bridge（enrolled 模式）
+    let enrolled = ctx.bridge_registry.list().await;
+    if enrolled.iter().any(|b| b.hostname == host_name) {
+        return Ok(yunying_core::types::HostConfig {
+            name: host_name.to_string(),
+            bridge_addr: None,
+            bridge_token: None,
+            group: String::new(),
+            tags: Vec::new(),
+            labels: std::collections::HashMap::new(),
+            allowed_tunnel_targets: None,
+        });
+    }
+    anyhow::bail!("host not found: {}", host_name)
+}
+
 /// 内部 session_create（不记 audit）
 pub(crate) async fn create_session_inner(
     stream: &mut BridgeStream,
@@ -19,17 +46,16 @@ pub(crate) async fn create_session_inner(
 }
 
 /// 解析主机名列表 → (name, Option<HostConfig>)
-pub(crate) fn resolve_hosts(
+pub(crate) async fn resolve_hosts(
     ctx: &ToolContext,
     names: &[String],
 ) -> Vec<(String, Option<yunying_core::types::HostConfig>)> {
-    names
-        .iter()
-        .map(|name| {
-            let h = ctx.router.get(name);
-            (name.clone(), h)
-        })
-        .collect()
+    let mut result = Vec::with_capacity(names.len());
+    for name in names {
+        let h = resolve_host_config(ctx, name).await.ok();
+        result.push((name.clone(), h));
+    }
+    result
 }
 
 /// 创建并发信号量（concurrency=0 → None，即不限制）

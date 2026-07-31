@@ -156,7 +156,7 @@ hosts:
         let router = HostRouter::from_file(&path).unwrap();
         let host = router.get("test-host").expect("host should exist");
         assert_eq!(host.name, "test-host");
-        assert_eq!(host.bridge_addr, "10.0.0.1:9778");
+        assert_eq!(host.bridge_addr.as_deref(), Some("10.0.0.1:9778"));
 
         let _ = std::fs::remove_file(&path);
     }
@@ -278,7 +278,7 @@ hosts:
         assert_eq!(router.len(), 2);
 
         let h1 = router.get("host1").unwrap();
-        assert_eq!(h1.bridge_token, "tok1-updated");
+        assert_eq!(h1.bridge_token.as_deref(), Some("tok1-updated"));
         assert!(router.get("host2").is_some());
 
         let _ = std::fs::remove_file(&path);

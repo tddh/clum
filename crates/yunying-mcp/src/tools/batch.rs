@@ -37,7 +37,7 @@ pub(crate) async fn batch_exec(
         .unwrap_or(200);
     let concurrency_limit = args["concurrency"].as_u64().unwrap_or(5) as usize;
 
-    let targets = resolve_hosts(ctx, &hosts_arg);
+    let targets = resolve_hosts(ctx, &hosts_arg).await;
     let semaphore = make_semaphore(concurrency_limit);
     let ca_cert = ctx.ca_cert_path.clone();
     let registry = std::sync::Arc::clone(&ctx.bridge_registry);
@@ -230,7 +230,7 @@ pub(crate) async fn batch_upload(
         .unwrap_or_default();
     let concurrency_limit = args["concurrency"].as_u64().unwrap_or(5) as usize;
 
-    let targets = resolve_hosts(ctx, &hosts_arg);
+    let targets = resolve_hosts(ctx, &hosts_arg).await;
     let semaphore = make_semaphore(concurrency_limit);
     let ca_cert = ctx.ca_cert_path.clone();
     let registry = std::sync::Arc::clone(&ctx.bridge_registry);
@@ -337,7 +337,7 @@ pub(crate) async fn batch_download(
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| remote_path.to_string());
 
-    let targets = resolve_hosts(ctx, &hosts_arg);
+    let targets = resolve_hosts(ctx, &hosts_arg).await;
     let semaphore = make_semaphore(concurrency_limit);
     let ca_cert = ctx.ca_cert_path.clone();
     let registry = std::sync::Arc::clone(&ctx.bridge_registry);

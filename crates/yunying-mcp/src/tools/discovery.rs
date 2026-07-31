@@ -12,7 +12,7 @@ struct UnifiedHost {
     group: String,
     tags: Vec<String>,
     labels: HashMap<String, String>,
-    bridge_addr: String,
+    bridge_addr: Option<String>,
     online: bool,
     via: &'static str,
 }
@@ -39,7 +39,7 @@ async fn build_unified_hosts(ctx: &ToolContext) -> Vec<UnifiedHost> {
             labels: meta
                 .map(|m| m.labels.clone())
                 .unwrap_or_else(|| info.labels.clone()),
-            bridge_addr: String::new(),
+            bridge_addr: None,
             online: true,
             via: "enrolled",
         });
@@ -177,10 +177,7 @@ pub(crate) async fn host_set_meta(ctx: &ToolContext, args: Value) -> Result<Valu
 
 pub(crate) async fn find_panes(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
 
     let mut request = json!({"type": "find_panes"});
@@ -229,10 +226,7 @@ pub(crate) async fn find_panes(ctx: &ToolContext, args: Value) -> Result<Value> 
 
 pub(crate) async fn find_sessions(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
 
     let mut request = json!({"type": "find_sessions"});
@@ -261,10 +255,7 @@ pub(crate) async fn find_sessions(ctx: &ToolContext, args: Value) -> Result<Valu
 pub(crate) async fn host_capabilities(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
     let check = args["check"].as_str();
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     let mut req = json!({ "type": "capabilities" });
     if let Some(c) = check {

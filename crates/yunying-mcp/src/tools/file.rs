@@ -16,11 +16,7 @@ pub(crate) async fn file_upload(
     let remote_path = args["remote_path"]
         .as_str()
         .context("missing 'remote_path'")?;
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
-
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let overwrite = match args["overwrite"].as_str().unwrap_or("overwrite") {
         "skip" => crate::files::OverwriteMode::Skip,
         "rename" => crate::files::OverwriteMode::Rename,
@@ -86,10 +82,7 @@ pub(crate) async fn file_download(
     let local_path = args["local_path"]
         .as_str()
         .context("missing 'local_path'")?;
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
 
     let result = crate::files::download_file(
         &host,

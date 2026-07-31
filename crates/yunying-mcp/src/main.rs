@@ -409,7 +409,7 @@ async fn run_bridge_command(args: &[String]) -> anyhow::Result<()> {
         Some("add") => {
             let hostname = args.get(1).ok_or_else(|| {
                 anyhow::anyhow!(
-                    "usage: yunying-mcp bridge add <hostname> --tags infra,server [--config path]"
+                    "usage: yunying-mcp bridge add <hostname> --tags infra,server [--group production] [--config path]"
                 )
             })?;
             let tags: Vec<String> = args
@@ -418,6 +418,11 @@ async fn run_bridge_command(args: &[String]) -> anyhow::Result<()> {
                 .and_then(|i| args.get(i + 1))
                 .map(|t| t.split(',').map(String::from).collect())
                 .ok_or_else(|| anyhow::anyhow!("--tags is required"))?;
+            let group = args
+                .iter()
+                .position(|a| a == "--group")
+                .and_then(|i| args.get(i + 1))
+                .map(|s| s.as_str());
             let config_path = args
                 .iter()
                 .position(|a| a == "--config")
@@ -428,7 +433,7 @@ async fn run_bridge_command(args: &[String]) -> anyhow::Result<()> {
             let server_addr = &config.server_addr;
 
             let token = bridge_store::generate_bridge_token();
-            store.add(hostname, &token, &tags).await?;
+            store.add(hostname, &token, &tags, group).await?;
 
             println!("Bridge: {hostname}");
             println!("Token:  {token}");

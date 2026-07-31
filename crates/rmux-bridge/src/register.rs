@@ -197,7 +197,7 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
                     )
                     .await
                     {
-                        tracing::debug!("hub stream handler ended: {e}");
+                        tracing::debug!("server stream handler ended: {e}");
                     }
                 });
             }

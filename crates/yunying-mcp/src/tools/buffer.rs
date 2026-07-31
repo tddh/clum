@@ -7,10 +7,7 @@ use yunying_core::types::AuditAction;
 
 pub(crate) async fn list_buffers(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     send_json_frame(&mut tls, &json!({ "type": "list_buffers" })).await?;
     let response = recv_json_frame(&mut tls).await?;
@@ -37,10 +34,7 @@ pub(crate) async fn paste_buffer(ctx: &ToolContext, args: Value) -> Result<Value
         .context("missing 'session_name'")?;
     let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
     let buffer_name = args["buffer_name"].as_str().unwrap_or("");
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     send_json_frame(&mut tls, &json!({ "type": "paste_buffer", "session_name": session_name, "pane_id": pane_id, "buffer_name": buffer_name })).await?;
     let response = recv_json_frame(&mut tls).await?;
@@ -65,10 +59,7 @@ pub(crate) async fn delete_buffer(ctx: &ToolContext, args: Value) -> Result<Valu
     let buffer_name = args["buffer_name"]
         .as_str()
         .context("missing 'buffer_name'")?;
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     send_json_frame(
         &mut tls,

@@ -43,12 +43,20 @@ impl BridgeStore {
         )?;
         let _ = conn
             .execute_batch("ALTER TABLE bridges ADD COLUMN host_group TEXT NOT NULL DEFAULT '';");
+        let _ = conn.execute_batch("ALTER TABLE bridges ADD COLUMN previous_token_hash TEXT;");
+        let _ = conn.execute_batch("ALTER TABLE bridges ADD COLUMN rotated_at TEXT;");
         Ok(Self {
             db: tokio::sync::Mutex::new(conn),
         })
     }
 
-    pub async fn add(&self, hostname: &str, token: &str, tags: &[String]) -> Result<()> {
+    pub async fn add(
+        &self,
+        hostname: &str,
+        token: &str,
+        tags: &[String],
+        group: Option<&str>,
+    ) -> Result<()> {
         let hash = hex::encode(Sha256::digest(token.as_bytes()));
         let prefix = token[..token.len().min(8)].to_string();
         let tags_json = serde_json::to_string(tags)?;
@@ -56,9 +64,9 @@ impl BridgeStore {
 
         let db = self.db.lock().await;
         db.execute(
-            "INSERT OR REPLACE INTO bridges (token_hash, token_prefix, hostname, tags, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            rusqlite::params![hash, prefix, hostname, tags_json, now],
+            "INSERT OR REPLACE INTO bridges (token_hash, token_prefix, hostname, tags, created_at, host_group)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![hash, prefix, hostname, tags_json, now, group.unwrap_or("")],
         )?;
         Ok(())
     }
@@ -114,21 +122,57 @@ impl BridgeStore {
 
     pub async fn token_map(&self) -> HashMap<String, String> {
         let db = self.db.lock().await;
+        let mut map: HashMap<String, String> = HashMap::new();
+
         let mut stmt = db
             .prepare("SELECT token_hash, hostname FROM bridges WHERE revoked_at IS NULL")
             .unwrap();
-        stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        for (hash, host) in stmt
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
             .unwrap()
             .filter_map(|r| r.ok())
-            .collect()
+        {
+            map.insert(hash, host);
+        }
+
+        // Include previous tokens within 12h grace period
+        let cutoff = (chrono::Utc::now() - chrono::Duration::hours(12)).to_rfc3339();
+        let mut prev_stmt = db
+            .prepare(
+                "SELECT previous_token_hash, hostname FROM bridges
+                 WHERE revoked_at IS NULL AND previous_token_hash IS NOT NULL AND rotated_at > ?1",
+            )
+            .unwrap();
+        for (hash, host) in prev_stmt
+            .query_map(rusqlite::params![cutoff], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .unwrap()
+            .filter_map(|r| r.ok())
+        {
+            map.entry(hash).or_insert(host);
+        }
+
+        map
     }
 
     pub async fn validate_token(&self, raw_token: &str) -> bool {
         let hash = hex::encode(Sha256::digest(raw_token.as_bytes()));
         let db = self.db.lock().await;
+        let current = db
+            .query_row(
+                "SELECT 1 FROM bridges WHERE token_hash = ?1 AND revoked_at IS NULL",
+                rusqlite::params![hash],
+                |_| Ok(()),
+            )
+            .is_ok();
+        if current {
+            return true;
+        }
+        let cutoff = (chrono::Utc::now() - chrono::Duration::hours(12)).to_rfc3339();
         db.query_row(
-            "SELECT 1 FROM bridges WHERE token_hash = ?1 AND revoked_at IS NULL",
-            rusqlite::params![hash],
+            "SELECT 1 FROM bridges WHERE previous_token_hash = ?1 AND revoked_at IS NULL AND rotated_at > ?2",
+            rusqlite::params![hash, cutoff],
             |_| Ok(()),
         )
         .is_ok()
@@ -141,8 +185,10 @@ impl BridgeStore {
 
         let db = self.db.lock().await;
         db.execute(
-            "UPDATE bridges SET token_hash = ?1, token_prefix = ?2, created_at = ?3 WHERE hostname = ?4 AND revoked_at IS NULL",
-            rusqlite::params![new_hash, new_prefix, now, hostname],
+            "UPDATE bridges SET previous_token_hash = token_hash, rotated_at = ?1,
+             token_hash = ?2, token_prefix = ?3, created_at = ?1
+             WHERE hostname = ?4 AND revoked_at IS NULL",
+            rusqlite::params![now, new_hash, new_prefix, hostname],
         )?;
         Ok(())
     }

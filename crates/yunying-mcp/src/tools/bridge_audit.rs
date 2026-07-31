@@ -11,10 +11,7 @@ use crate::transport::{connect_to_host_stream, recv_json_frame, send_json_frame}
 /// (auth events, attach/detach, file ops, tunnels, ...).
 pub(crate) async fn query_bridge_audit(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
 
     let event_type = args["event_type"].as_str();
     let session_name = args["session_name"].as_str();

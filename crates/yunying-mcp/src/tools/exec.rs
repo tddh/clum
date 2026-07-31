@@ -48,10 +48,7 @@ pub(crate) async fn shell_command(ctx: &ToolContext, args: Value) -> Result<Valu
         .context("missing 'session_name'")?;
     let pane_id_arg = args["pane_id"].as_str();
     let command = args["command"].as_str().context("missing 'command'")?;
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =
         super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
@@ -82,10 +79,7 @@ pub(crate) async fn broadcast_keys(ctx: &ToolContext, args: Value) -> Result<Val
     let pane_ids = args["pane_ids"].as_array().cloned().unwrap_or_default();
     let keys = args["keys"].as_str().context("missing 'keys'")?;
     let keys = unescape_keys(keys);
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     send_json_frame(&mut tls, &json!({ "type": "broadcast_keys", "session_name": session_name, "pane_ids": pane_ids, "keys": keys })).await?;
     let response = recv_json_frame(&mut tls).await?;
@@ -108,10 +102,7 @@ pub(crate) async fn broadcast_keys(ctx: &ToolContext, args: Value) -> Result<Val
 pub(crate) async fn cmd_escape(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
     let cmd_args = args["args"].as_array().cloned().unwrap_or_default();
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     send_json_frame(
         &mut tls,
@@ -673,10 +664,7 @@ pub(crate) async fn exec(
         .unwrap_or(200);
     let clear_screen = args["clear_screen"].as_bool().unwrap_or(false);
 
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     progress.report(0, 3, "connecting").await;
     let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =
@@ -783,10 +771,7 @@ pub(crate) async fn collect_until_exit(ctx: &ToolContext, args: Value) -> Result
     let max_bytes = args["max_bytes"].as_u64().unwrap_or(1048576);
     let timeout_ms = args["timeout_ms"].as_u64().unwrap_or(60000);
     let starting_at = args["starting_at"].as_str().unwrap_or("now");
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =
         super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;

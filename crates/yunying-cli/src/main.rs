@@ -4,6 +4,7 @@ mod protocol;
 mod replay;
 mod tui;
 
+use anyhow::Context;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -125,7 +126,15 @@ async fn get_connection(
         connect::connect_via_server(addr, ca_cert, host, api_key.as_deref(), purpose).await
     } else {
         let config = load_host_config(hosts_file, host)?;
-        connect::connect_to_bridge_quic(&config.bridge_addr, &config.bridge_token, ca_cert).await
+        let addr = config
+            .bridge_addr
+            .as_deref()
+            .context("bridge_addr not configured in hosts.yaml")?;
+        let token = config
+            .bridge_token
+            .as_deref()
+            .context("bridge_token not configured in hosts.yaml")?;
+        connect::connect_to_bridge_quic(addr, token, ca_cert).await
     }
 }
 

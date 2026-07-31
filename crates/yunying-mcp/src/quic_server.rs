@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 
 use crate::registry::{BridgeConn, BridgeRegistry};
 
-/// Relay buffer size for CLI file transfer streams through Hub.
+/// Relay buffer size for CLI file transfer streams through central server.
 /// Must align with bridge CHUNK_SIZE and MCP COPY_BUF_SIZE (both 1 MB).
 const RELAY_BUF_SIZE: usize = 1024 * 1024; // 1 MB
 
@@ -387,13 +387,18 @@ async fn handle_agent_connection(
     let bridge_conn: quinn::Connection = if let Some(b) = registry.get(&host).await {
         b.conn.clone()
     } else if let Some(h) = router.get(&host) {
-        let (direct_conn, _auth_send, _auth_recv) = crate::transport::connect_to_bridge_quic(
-            &h.bridge_addr,
-            &h.bridge_token,
-            &ca_cert_path,
-        )
-        .await
-        .with_context(|| format!("direct connect to {}:{} failed", host, h.bridge_addr))?;
+        let addr = h
+            .bridge_addr
+            .as_deref()
+            .with_context(|| format!("host '{host}': bridge_addr not configured"))?;
+        let token = h
+            .bridge_token
+            .as_deref()
+            .with_context(|| format!("host '{host}': bridge_token not configured"))?;
+        let (direct_conn, _auth_send, _auth_recv) =
+            crate::transport::connect_to_bridge_quic(addr, token, &ca_cert_path)
+                .await
+                .with_context(|| format!("direct connect to {}:{} failed", host, addr))?;
         direct_conn
     } else {
         write_frame(&mut send, &serde_json::json!({"type": "agent_ack", "ok": false, "error": format!("host '{host}' not found")})).await?;

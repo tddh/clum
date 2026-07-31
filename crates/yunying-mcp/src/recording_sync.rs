@@ -12,6 +12,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use anyhow::Context;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use yunying_core::HostConfig;
@@ -91,21 +92,26 @@ async fn sync_all_hosts(
     Ok(())
 }
 
+fn resolve_bridge_addr_token(host: &HostConfig) -> anyhow::Result<(&str, &str)> {
+    let addr = host
+        .bridge_addr
+        .as_deref()
+        .with_context(|| format!("host '{}': bridge_addr not configured", host.name))?;
+    let token = host
+        .bridge_token
+        .as_deref()
+        .with_context(|| format!("host '{}': bridge_token not configured", host.name))?;
+    Ok((addr, token))
+}
+
 async fn sync_host(
     config: &RecordingSyncConfig,
     host: &HostConfig,
     ca_cert_path: &str,
 ) -> anyhow::Result<usize> {
+    let (addr, token) = resolve_bridge_addr_token(host)?;
     // Query the list of unsynced recordings over a 0x01 JSON stream.
-    let mut stream = connect_to_bridge_hybrid_stream(
-        &host.bridge_addr,
-        &host.bridge_token,
-        ca_cert_path,
-        3,
-        30,
-        10,
-    )
-    .await?;
+    let mut stream = connect_to_bridge_hybrid_stream(addr, token, ca_cert_path, 3, 30, 10).await?;
 
     send_json_frame(&mut stream, &json!({"command": "list_unsynced_recordings"})).await?;
     let resp = recv_json_frame(&mut stream).await?;
@@ -187,8 +193,8 @@ async fn download_recording(
     ca_cert_path: &str,
     remote_path: &str,
 ) -> anyhow::Result<Vec<u8>> {
-    let (conn, _auth_send, _auth_recv) =
-        connect_to_bridge_quic(&host.bridge_addr, &host.bridge_token, ca_cert_path).await?;
+    let (addr, token) = resolve_bridge_addr_token(host)?;
+    let (conn, _auth_send, _auth_recv) = connect_to_bridge_quic(addr, token, ca_cert_path).await?;
 
     let (mut send, mut recv) = conn.open_bi().await?;
 
@@ -241,15 +247,8 @@ async fn mark_synced_on_bridge(
     file_name: &str,
     date: &str,
 ) -> anyhow::Result<()> {
-    let mut stream = connect_to_bridge_hybrid_stream(
-        &host.bridge_addr,
-        &host.bridge_token,
-        ca_cert_path,
-        3,
-        30,
-        10,
-    )
-    .await?;
+    let (addr, token) = resolve_bridge_addr_token(host)?;
+    let mut stream = connect_to_bridge_hybrid_stream(addr, token, ca_cert_path, 3, 30, 10).await?;
 
     let cmd = json!({
         "command": "mark_synced",

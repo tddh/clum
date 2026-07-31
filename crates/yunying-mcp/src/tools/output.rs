@@ -12,10 +12,7 @@ pub(crate) async fn wait_exit(ctx: &ToolContext, args: Value) -> Result<Value> {
         .context("missing 'session_name'")?;
     let pane_id_arg = args["pane_id"].as_str();
     let timeout_ms = args["timeout_ms"].as_u64().unwrap_or(30000);
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =
         super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
@@ -46,10 +43,7 @@ pub(crate) async fn wait_for_text(ctx: &ToolContext, args: Value) -> Result<Valu
     let pane_id_arg = args["pane_id"].as_str();
     let text = args["text"].as_str().context("missing 'text'")?;
     let timeout_ms = args["timeout_ms"].as_u64().unwrap_or(30000);
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =
         super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
@@ -80,10 +74,7 @@ pub(crate) async fn find_text_all(ctx: &ToolContext, args: Value) -> Result<Valu
         .context("missing 'session_name'")?;
     let pane_id_arg = args["pane_id"].as_str();
     let pattern = args["pattern"].as_str().context("missing 'pattern'")?;
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =
         super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
@@ -125,10 +116,7 @@ pub(crate) async fn wait_for_bytes(ctx: &ToolContext, args: Value) -> Result<Val
     let bytes_b64 = args["bytes"].as_str().context("missing 'bytes'")?;
     let only_new = args["only_new"].as_bool().unwrap_or(false);
     let timeout_ms = args["timeout_ms"].as_u64().unwrap_or(30000);
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =
         super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
@@ -171,10 +159,7 @@ pub(crate) async fn wait_stable(ctx: &ToolContext, args: Value) -> Result<Value>
     let pane_id_arg = args["pane_id"].as_str();
     let stable_ms = args["stable_ms"].as_u64().unwrap_or(500);
     let timeout_ms = args["timeout_ms"].as_u64().unwrap_or(30000);
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =
         super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;

@@ -50,13 +50,17 @@ async fn get_conn(
             return Ok(bridge.conn.clone());
         }
     }
-    let (conn, _auth_send, _auth_recv) = crate::transport::connect_to_bridge_quic(
-        &host.bridge_addr,
-        &host.bridge_token,
-        ca_cert_path,
-    )
-    .await?;
-    Ok(conn)
+    match (&host.bridge_addr, &host.bridge_token) {
+        (Some(addr), Some(token)) => {
+            let (conn, _auth_send, _auth_recv) =
+                crate::transport::connect_to_bridge_quic(addr, token, ca_cert_path).await?;
+            Ok(conn)
+        }
+        _ => anyhow::bail!(
+            "host '{}': no bridge_addr/bridge_token configured and not found in registry",
+            host.name
+        ),
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

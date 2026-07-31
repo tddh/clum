@@ -11,10 +11,7 @@ pub(crate) async fn split_window(ctx: &ToolContext, args: Value) -> Result<Value
         .as_str()
         .context("missing 'session_name'")?;
     let direction = args["direction"].as_str().unwrap_or("horizontal");
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
 
     send_json_frame(
@@ -46,10 +43,7 @@ pub(crate) async fn stream_pane(ctx: &ToolContext, args: Value) -> Result<Value>
         .context("missing 'session_name'")?;
     let pane_id_arg = args["pane_id"].as_str();
     let timeout_ms = args["timeout_ms"].as_u64().unwrap_or(10000);
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
 
     let (pane_id, auto_resolved) = match pane_id_arg {
         Some(id) => (id.to_string(), false),
@@ -96,10 +90,7 @@ pub(crate) async fn close_window(ctx: &ToolContext, args: Value) -> Result<Value
     let window_index = args["window_index"]
         .as_u64()
         .context("missing 'window_index'")?;
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     send_json_frame(&mut tls, &json!({ "type": "close_window", "session_name": session_name, "window_index": window_index })).await?;
     let response = recv_json_frame(&mut tls).await?;
@@ -128,10 +119,7 @@ pub(crate) async fn rename_window(ctx: &ToolContext, args: Value) -> Result<Valu
         .as_u64()
         .context("missing 'window_index'")?;
     let name = args["name"].as_str().context("missing 'name'")?;
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     send_json_frame(&mut tls, &json!({ "type": "rename_window", "session_name": session_name, "window_index": window_index, "name": name })).await?;
     let response = recv_json_frame(&mut tls).await?;
@@ -159,10 +147,7 @@ pub(crate) async fn list_window_panes(ctx: &ToolContext, args: Value) -> Result<
     let window_index = args["window_index"]
         .as_u64()
         .context("missing 'window_index'")?;
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     send_json_frame(&mut tls, &json!({ "type": "list_window_panes", "session_name": session_name, "window_index": window_index })).await?;
     let response = recv_json_frame(&mut tls).await?;
@@ -198,10 +183,7 @@ pub(crate) async fn resize_window(ctx: &ToolContext, args: Value) -> Result<Valu
         .as_u64()
         .map(|v| u16::try_from(v).context("height must be 0-65535"))
         .transpose()?;
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     send_json_frame(&mut tls, &json!({ "type": "resize_window", "session_name": session_name, "window_index": window_index, "width": width, "height": height })).await?;
     let response = recv_json_frame(&mut tls).await?;
@@ -229,10 +211,7 @@ pub(crate) async fn select_window(ctx: &ToolContext, args: Value) -> Result<Valu
     let window_index = args["window_index"]
         .as_u64()
         .context("missing 'window_index'")?;
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     send_json_frame(&mut tls, &json!({ "type": "select_window", "session_name": session_name, "window_index": window_index })).await?;
     let response = recv_json_frame(&mut tls).await?;
@@ -261,10 +240,7 @@ pub(crate) async fn select_layout(ctx: &ToolContext, args: Value) -> Result<Valu
         .as_u64()
         .context("missing 'window_index'")?;
     let layout = args["layout"].as_str().context("missing 'layout'")?;
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     send_json_frame(&mut tls, &json!({ "type": "select_layout", "session_name": session_name, "window_index": window_index, "layout": layout })).await?;
     let response = recv_json_frame(&mut tls).await?;
@@ -290,10 +266,7 @@ pub(crate) async fn pane_info(ctx: &ToolContext, args: Value) -> Result<Value> {
         .as_str()
         .context("missing 'session_name'")?;
     let pane_id_arg = args["pane_id"].as_str();
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =
         super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;
@@ -328,10 +301,7 @@ pub(crate) async fn window_info(ctx: &ToolContext, args: Value) -> Result<Value>
     let window_index = args["window_index"]
         .as_u64()
         .context("missing 'window_index'")?;
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     send_json_frame(&mut tls, &json!({ "type": "window_info", "session_name": session_name, "window_index": window_index })).await?;
     let response = recv_json_frame(&mut tls).await?;
@@ -357,10 +327,7 @@ pub(crate) async fn pane_exists(ctx: &ToolContext, args: Value) -> Result<Value>
         .as_str()
         .context("missing 'session_name'")?;
     let pane_id_arg = args["pane_id"].as_str();
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =
         super::common::resolve_pane_id(&mut tls, session_name, pane_id_arg).await?;

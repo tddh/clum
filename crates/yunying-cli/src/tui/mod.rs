@@ -309,7 +309,15 @@ pub async fn run_connect_with_ai(
             .await?
     } else {
         let config = config.context("either config or server must be provided")?;
-        connect_to_bridge_quic(&config.bridge_addr, &config.bridge_token, ca_cert_path).await?
+        let addr = config
+            .bridge_addr
+            .as_deref()
+            .context("bridge_addr not configured")?;
+        let token = config
+            .bridge_token
+            .as_deref()
+            .context("bridge_token not configured")?;
+        connect_to_bridge_quic(addr, token, ca_cert_path).await?
     };
 
     // JSON channel

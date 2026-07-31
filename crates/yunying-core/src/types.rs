@@ -7,10 +7,12 @@ use uuid::Uuid;
 pub struct HostConfig {
     /// 主机标识名，agent 通过此名称引用主机
     pub name: String,
-    /// bridge 监听地址 host:port
-    pub bridge_addr: String,
-    /// bridge 认证 token
-    pub bridge_token: String,
+    /// bridge 监听地址 host:port（纯 enrolled 模式下可选，不需要直连）
+    #[serde(default)]
+    pub bridge_addr: Option<String>,
+    /// bridge 认证 token（纯 enrolled 模式下可选，不需要直连）
+    #[serde(default)]
+    pub bridge_token: Option<String>,
     /// 显式分组（生产/测试/开发）
     #[serde(default)]
     pub group: String,

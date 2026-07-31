@@ -53,10 +53,7 @@ pub(crate) async fn reload_config(ctx: &ToolContext) -> Result<Value> {
 pub(crate) async fn session_create(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
     let session_name = args["session_name"].as_str().unwrap_or("yunying");
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
 
     let mut tls = connect_to_host(ctx, &host).await?;
 
@@ -82,10 +79,7 @@ pub(crate) async fn session_create(ctx: &ToolContext, args: Value) -> Result<Val
 
 pub(crate) async fn session_list(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
 
     send_json_frame(&mut tls, &json!({ "type": "list_sessions" })).await?;
@@ -111,10 +105,7 @@ pub(crate) async fn session_attach(ctx: &ToolContext, args: Value) -> Result<Val
     let session_name = args["session_name"]
         .as_str()
         .context("missing 'session_name'")?;
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
 
     send_json_frame(
@@ -144,10 +135,7 @@ pub(crate) async fn session_detach(ctx: &ToolContext, args: Value) -> Result<Val
     let session_name = args["session_name"]
         .as_str()
         .context("missing 'session_name'")?;
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
 
     send_json_frame(
@@ -177,10 +165,7 @@ pub(crate) async fn kill_session(ctx: &ToolContext, args: Value) -> Result<Value
     let session_name = args["session_name"]
         .as_str()
         .context("missing 'session_name'")?;
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     send_json_frame(
         &mut tls,
@@ -210,10 +195,7 @@ pub(crate) async fn respawn_pane(ctx: &ToolContext, args: Value) -> Result<Value
         .as_str()
         .context("missing 'session_name'")?;
     let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
 
     let mut request = json!({

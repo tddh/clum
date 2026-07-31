@@ -1,4 +1,5 @@
 hosts:
+  # 直连模式：需要 bridge_addr + bridge_token
   - name: prod-web-01
     bridge_addr: 10.0.1.10:9778
     bridge_token: "token-web-01-xxxxxxxx"
@@ -10,16 +11,13 @@ hosts:
       dc: shanghai
       rack: a3
 
+  # 纯注册模式（enrolled）：bridge 反向注册到 central server 后无需 bridge_addr/bridge_token
   - name: prod-web-02
-    bridge_addr: 10.0.1.11:9778
-    bridge_token: "token-web-02-xxxxxxxx"
     group: production
     tags:
       - web
-      - nginx
     labels:
       dc: shanghai
-      rack: a4
 
   - name: prod-db-01
     bridge_addr: 10.0.1.20:9778

@@ -18,10 +18,7 @@ pub(crate) async fn tunnel_create(ctx: &ToolContext, args: Value) -> Result<Valu
         .context("missing 'remote_port'")? as u16;
     let local_addr = args["local_addr"].as_str().unwrap_or("127.0.0.1");
 
-    let host = ctx
-        .router
-        .get(host_name)
-        .with_context(|| format!("host not found: {}", host_name))?;
+    let host = super::common::resolve_host_config(ctx, host_name).await?;
 
     let result = ctx
         .tunnel_manager
