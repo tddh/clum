@@ -17,9 +17,11 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use yunying_core::HostConfig;
 
+use crate::registry::BridgeRegistry;
 use crate::router::HostRouter;
 use crate::transport::{
     connect_to_bridge_hybrid_stream, connect_to_bridge_quic, recv_json_frame, send_json_frame,
+    BridgeStream,
 };
 
 /// Maximum size of a single recording file we are willing to buffer in memory
@@ -50,6 +52,7 @@ pub fn default_recordings_dir() -> PathBuf {
 pub async fn run_sync_loop(
     config: RecordingSyncConfig,
     router: Arc<HostRouter>,
+    registry: Arc<BridgeRegistry>,
     ca_cert_path: String,
 ) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(config.interval_secs));
@@ -57,7 +60,7 @@ pub async fn run_sync_loop(
     // freshly started servers begin syncing without waiting a full interval.
     loop {
         interval.tick().await;
-        if let Err(e) = sync_all_hosts(&config, &router, &ca_cert_path).await {
+        if let Err(e) = sync_all_hosts(&config, &router, &registry, &ca_cert_path).await {
             tracing::error!("recording sync failed: {e}");
         }
     }
@@ -66,12 +69,13 @@ pub async fn run_sync_loop(
 async fn sync_all_hosts(
     config: &RecordingSyncConfig,
     router: &HostRouter,
+    registry: &BridgeRegistry,
     ca_cert_path: &str,
 ) -> anyhow::Result<()> {
     let hosts = router.list();
 
     for host in hosts {
-        match sync_host(config, &host, ca_cert_path).await {
+        match sync_host(config, &host, registry, ca_cert_path).await {
             Ok(count) if count > 0 => {
                 tracing::info!(host = %host.name, files = count, "recordings synced");
             }
@@ -104,14 +108,38 @@ fn resolve_bridge_addr_token(host: &HostConfig) -> anyhow::Result<(&str, &str)> 
     Ok((addr, token))
 }
 
+async fn open_registry_json_stream(
+    registry: &BridgeRegistry,
+    host_name: &str,
+) -> Option<BridgeStream> {
+    let bridge = registry.get(host_name).await?;
+    if bridge.conn.close_reason().is_some() {
+        return None;
+    }
+    let (mut send, recv) = bridge.conn.open_bi().await.ok()?;
+    tokio::io::AsyncWriteExt::write_all(&mut send, &[0x01])
+        .await
+        .ok()?;
+    Some(BridgeStream::Quic {
+        conn: bridge.conn.clone(),
+        send,
+        recv,
+    })
+}
+
 async fn sync_host(
     config: &RecordingSyncConfig,
     host: &HostConfig,
+    registry: &BridgeRegistry,
     ca_cert_path: &str,
 ) -> anyhow::Result<usize> {
-    let (addr, token) = resolve_bridge_addr_token(host)?;
-    // Query the list of unsynced recordings over a 0x01 JSON stream.
-    let mut stream = connect_to_bridge_hybrid_stream(addr, token, ca_cert_path, 3, 30, 10).await?;
+    let mut stream = match open_registry_json_stream(registry, &host.name).await {
+        Some(s) => s,
+        None => {
+            let (addr, token) = resolve_bridge_addr_token(host)?;
+            connect_to_bridge_hybrid_stream(addr, token, ca_cert_path, 3, 30, 10).await?
+        }
+    };
 
     send_json_frame(&mut stream, &json!({"command": "list_unsynced_recordings"})).await?;
     let resp = recv_json_frame(&mut stream).await?;
@@ -135,8 +163,6 @@ async fn sync_host(
         if file_name.is_empty() || date.is_empty() {
             continue;
         }
-        // Reject anything that is not a plain YYYY-MM-DD date or a bare file
-        // name before we build any paths from it.
         if !is_date_dir(date) || file_name.contains('/') || file_name.contains("..") {
             tracing::warn!(
                 file = file_name,
@@ -146,14 +172,12 @@ async fn sync_host(
             continue;
         }
 
-        // Use the absolute path returned by the bridge if available;
-        // fall back to relative path for older bridges.
         let remote_path = file_info["path"]
             .as_str()
             .filter(|p| !p.is_empty())
             .map(String::from)
             .unwrap_or_else(|| format!("recordings/{}/{}", date, file_name));
-        match download_recording(host, ca_cert_path, &remote_path).await {
+        match download_recording(host, registry, ca_cert_path, &remote_path).await {
             Ok(data) => {
                 let mut hasher = Sha256::new();
                 hasher.update(&data);
@@ -174,7 +198,7 @@ async fn sync_host(
                 let local_path = local_dir.join(file_name);
                 tokio::fs::write(&local_path, &data).await?;
 
-                mark_synced_on_bridge(host, ca_cert_path, file_name, date).await?;
+                mark_synced_on_bridge(host, registry, ca_cert_path, file_name, date).await?;
                 synced += 1;
             }
             Err(e) => {
@@ -190,13 +214,23 @@ async fn sync_host(
 /// return its bytes. Mirrors the wire protocol used in `crate::files`.
 async fn download_recording(
     host: &HostConfig,
+    registry: &BridgeRegistry,
     ca_cert_path: &str,
     remote_path: &str,
 ) -> anyhow::Result<Vec<u8>> {
-    let (addr, token) = resolve_bridge_addr_token(host)?;
-    let (conn, _auth_send, _auth_recv) = connect_to_bridge_quic(addr, token, ca_cert_path).await?;
-
-    let (mut send, mut recv) = conn.open_bi().await?;
+    let (mut send, mut recv) = match registry.get(&host.name).await {
+        Some(bridge) if bridge.conn.close_reason().is_none() => bridge
+            .conn
+            .open_bi()
+            .await
+            .context("open_bi on registered conn for download")?,
+        _ => {
+            let (addr, token) = resolve_bridge_addr_token(host)?;
+            let (conn, _auth_send, _auth_recv) =
+                connect_to_bridge_quic(addr, token, ca_cert_path).await?;
+            conn.open_bi().await?
+        }
+    };
 
     // Request: [1B stream_type=0x03][2B LE path_len][path_bytes]
     send.write_all(&[0x03]).await?;
@@ -243,12 +277,18 @@ async fn download_recording(
 
 async fn mark_synced_on_bridge(
     host: &HostConfig,
+    registry: &BridgeRegistry,
     ca_cert_path: &str,
     file_name: &str,
     date: &str,
 ) -> anyhow::Result<()> {
-    let (addr, token) = resolve_bridge_addr_token(host)?;
-    let mut stream = connect_to_bridge_hybrid_stream(addr, token, ca_cert_path, 3, 30, 10).await?;
+    let mut stream = match open_registry_json_stream(registry, &host.name).await {
+        Some(s) => s,
+        None => {
+            let (addr, token) = resolve_bridge_addr_token(host)?;
+            connect_to_bridge_hybrid_stream(addr, token, ca_cert_path, 3, 30, 10).await?
+        }
+    };
 
     let cmd = json!({
         "command": "mark_synced",

@@ -53,7 +53,7 @@ async fn read_bytes(recv: &mut RecvStream, len: usize) -> Result<Vec<u8>> {
 pub async fn handle_interactive_control(
     mut send: SendStream,
     mut recv: RecvStream,
-    proxy: Arc<ProtocolProxy>,
+    proxy: Arc<tokio::sync::RwLock<ProtocolProxy>>,
     session_state: Arc<Mutex<Option<InteractiveSession>>>,
     audit_db: Arc<BridgeAuditDb>,
     idle_timeout_secs: u64,
@@ -68,7 +68,8 @@ pub async fn handle_interactive_control(
 
     let (session_name, pane_id, cols, rows, _term) = parse_attach_payload(&payload)?;
 
-    let _session = match proxy.get_session(&session_name).await {
+    let rp = proxy.read().await;
+    let _session = match rp.get_session(&session_name).await {
         Ok(s) => s,
         Err(_) => {
             write_error(
@@ -81,7 +82,7 @@ pub async fn handle_interactive_control(
         }
     };
 
-    let pane = match proxy.get_pane(&session_name, &pane_id).await {
+    let pane = match rp.get_pane(&session_name, &pane_id).await {
         Ok(p) => p,
         Err(e) => {
             write_error(&mut send, 0x02, &format!("pane not found: {}", e)).await?;
@@ -116,7 +117,7 @@ pub async fn handle_interactive_control(
             pane_id: pane_id.clone(),
             cols,
             rows,
-            socket_path: proxy.socket_path().to_string(),
+            socket_path: rp.socket_path().to_string(),
             master_fd: None,
             child_pid: None,
             exit_code: None,
@@ -124,6 +125,7 @@ pub async fn handle_interactive_control(
             recording_file: None,
         });
     }
+    drop(rp);
 
     write_attached(&mut send, &scrollback).await?;
 
@@ -253,7 +255,7 @@ pub async fn handle_interactive_control(
 pub async fn handle_interactive_data(
     mut send: SendStream,
     mut recv: RecvStream,
-    proxy: Arc<ProtocolProxy>,
+    proxy: Arc<tokio::sync::RwLock<ProtocolProxy>>,
     session_state: Arc<Mutex<Option<InteractiveSession>>>,
     recording_enabled: bool,
     recording_dir: PathBuf,
@@ -561,7 +563,7 @@ pub async fn handle_interactive_data(
         let pid = state.as_ref().map(|s| s.pane_id.clone());
         drop(state);
         if let Some(ref sn) = sn {
-            let result = proxy.handle_select_layout(sn, 0, "even-vertical").await;
+            let result = proxy.read().await.handle_select_layout(sn, 0, "even-vertical").await;
             let ok = result.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
             if ok {
                 tracing::info!(

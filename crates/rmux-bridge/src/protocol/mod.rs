@@ -26,6 +26,7 @@ pub struct ProtocolProxy {
     /// governs the deadline via bridge-side tokio::time::timeout.
     rmux_long: rmux_sdk::Rmux,
     socket_path: String,
+    generation: u64,
 }
 
 impl ProtocolProxy {
@@ -33,6 +34,7 @@ impl ProtocolProxy {
     pub async fn connect(socket_path: &str) -> Result<Self> {
         let rmux = rmux_sdk::Rmux::builder()
             .unix_socket(socket_path)
+            .default_timeout(Duration::from_secs(30))
             .connect()
             .await?;
         let rmux_long = rmux_sdk::Rmux::builder()
@@ -44,12 +46,34 @@ impl ProtocolProxy {
             rmux,
             rmux_long,
             socket_path: socket_path.to_string(),
+            generation: 0,
         })
     }
 
     /// Returns the Unix socket path used to connect to the RMUX daemon.
     pub fn socket_path(&self) -> &str {
         &self.socket_path
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    /// Reconnect both rmux connections after a transport failure.
+    pub async fn reconnect(&mut self) -> Result<()> {
+        self.rmux = rmux_sdk::Rmux::builder()
+            .unix_socket(&self.socket_path)
+            .default_timeout(Duration::from_secs(30))
+            .connect()
+            .await?;
+        self.rmux_long = rmux_sdk::Rmux::builder()
+            .unix_socket(&self.socket_path)
+            .default_timeout(Duration::MAX)
+            .connect()
+            .await?;
+        self.generation += 1;
+        tracing::info!(generation = self.generation, "rmux SDK reconnected");
+        Ok(())
     }
 
     fn parse_pane_id(raw: &str) -> Option<PaneId> {

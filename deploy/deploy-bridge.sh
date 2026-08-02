@@ -57,7 +57,6 @@ RMUX_SOCKET=$RMUX_SOCK
 
 # Recording
 RECORDING_ENABLED=true
-RECORDING_DIR=/opt/agent-ops/recordings
 BRIDGE_AUDIT_DB=/opt/agent-ops/bridge_events.db
 "
 

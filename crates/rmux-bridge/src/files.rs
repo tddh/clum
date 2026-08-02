@@ -32,7 +32,7 @@ fn sanitize_path(raw: &str) -> anyhow::Result<String> {
 pub async fn handle_quic_stream(
     send: quinn::SendStream,
     mut recv: quinn::RecvStream,
-    protocol_proxy: std::sync::Arc<crate::protocol::ProtocolProxy>,
+    protocol_proxy: std::sync::Arc<tokio::sync::RwLock<crate::protocol::ProtocolProxy>>,
     session_state: std::sync::Arc<tokio::sync::Mutex<Option<InteractiveSession>>>,
     recording_enabled: bool,
     recording_dir: std::path::PathBuf,
@@ -44,9 +44,25 @@ pub async fn handle_quic_stream(
     recv.read_exact(&mut type_buf).await?;
     match type_buf[0] {
         0x01 => {
+            let proxy = protocol_proxy.read().await;
+            let gen_before = proxy.generation();
             let adapter = crate::proxy::QuicStreamAdapter { recv, send };
-            crate::proxy::proxy_protocol_aware(adapter, &protocol_proxy, audit_db, recording_dir)
-                .await
+            let result =
+                crate::proxy::proxy_protocol_aware(adapter, &proxy, audit_db, recording_dir)
+                    .await;
+            if let Err(ref e) = result {
+                let msg = format!("{e:#}").to_lowercase();
+                if msg.contains("timed out") || msg.contains("timeout") {
+                    drop(proxy);
+                    let mut guard = protocol_proxy.write().await;
+                    if guard.generation() == gen_before {
+                        if let Err(e2) = guard.reconnect().await {
+                            tracing::error!("rmux reconnect failed: {e2}");
+                        }
+                    }
+                }
+            }
+            result
         }
         0x02 => handle_upload_quic(send, recv).await,
         0x03 => handle_download_quic(send, recv).await,

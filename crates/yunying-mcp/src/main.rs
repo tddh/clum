@@ -231,6 +231,8 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
+    let bridge_registry = Arc::new(registry::BridgeRegistry::new());
+
     let recordings_dir = cli
         .recordings_dir
         .or(file_recordings_dir)
@@ -245,10 +247,9 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(recording_sync::run_sync_loop(
         sync_config,
         Arc::clone(&router),
+        Arc::clone(&bridge_registry),
         ca_cert.clone(),
     ));
-
-    let bridge_registry = Arc::new(registry::BridgeRegistry::new());
     let bridge_store = Arc::new(bridge_store::BridgeStore::open(&db_path)?);
 
     let ctx = Arc::new(tools::ToolContext {

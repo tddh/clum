@@ -40,6 +40,7 @@ pub async fn run_quic_server(
     transport.receive_window(quinn::VarInt::from_u32(16 * 1024 * 1024));
     transport.congestion_controller_factory(Arc::new(quinn::congestion::BbrConfig::default()));
     transport.keep_alive_interval(Some(std::time::Duration::from_secs(15)));
+    transport.max_idle_timeout(Some(std::time::Duration::from_secs(120).try_into().unwrap()));
 
     let addr: SocketAddr = config
         .listen_addr

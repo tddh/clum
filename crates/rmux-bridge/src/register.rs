@@ -45,7 +45,15 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
         quinn::crypto::rustls::QuicClientConfig::try_from(Arc::new(tls_config))
             .map_err(|e| anyhow::anyhow!("QUIC client crypto: {e}"))?,
     );
-    let client_config = quinn::ClientConfig::new(crypto);
+    let mut client_config = quinn::ClientConfig::new(crypto);
+    let mut transport = quinn::TransportConfig::default();
+    transport.max_idle_timeout(Some(Duration::from_secs(120).try_into().unwrap()));
+    transport.keep_alive_interval(Some(Duration::from_secs(15)));
+    transport.stream_receive_window(quinn::VarInt::from_u32(16 * 1024 * 1024));
+    transport.send_window(16 * 1024 * 1024);
+    transport.receive_window(quinn::VarInt::from_u32(16 * 1024 * 1024));
+    transport.congestion_controller_factory(Arc::new(quinn::congestion::BbrConfig::default()));
+    client_config.transport_config(Arc::new(transport));
 
     let mut endpoint = quinn::Endpoint::client("[::]:0".parse()?)?;
     endpoint.set_default_client_config(client_config);
@@ -93,13 +101,15 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
         .unwrap_or("unknown");
     tracing::info!(hostname = %hostname, "registered, starting heartbeat + stream handler");
 
-    let protocol_proxy = match ProtocolProxy::connect(&config.rmux_socket).await {
-        Ok(p) => Arc::new(p),
-        Err(e) => {
-            tracing::error!("rmux connect failed: {e}");
-            return Err(e);
-        }
-    };
+    let protocol_proxy = Arc::new(tokio::sync::RwLock::new(
+        match ProtocolProxy::connect(&config.rmux_socket).await {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::error!("rmux connect failed: {e}");
+                return Err(e);
+            }
+        },
+    ));
 
     let session_state: Arc<tokio::sync::Mutex<Option<InteractiveSession>>> =
         Arc::new(tokio::sync::Mutex::new(None));
