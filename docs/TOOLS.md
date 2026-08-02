@@ -271,7 +271,7 @@
 | `pane_id` | string | | 可选，省略时自动探测 |
 | `bytes` | string | ✅ | base64 编码的目标字节串 |
 | `only_new` | boolean | | 仅匹配新数据（跳过历史），默认 false |
-| `timeout_ms` | number | | 默认 30000（⚠️ 当前 bridge 侧未强制，实际为无限等待）|
+| `timeout_ms` | number | | ⚠️ 当前 bridge 侧未强制执行，实际为无限等待。不要依赖此超时 |
 
 **返回** `{"ok": true, "found": true}`
 
@@ -1217,7 +1217,7 @@ tunnel_create host="tf01" local_port=8080 remote_host="api.internal" remote_port
 | `since` | string | | 起始时间（RFC3339） |
 | `until` | string | | 截止时间（RFC3339） |
 | `success` | boolean | | 按成功/失败过滤 |
-| `limit` | integer | | 返回条数上限（默认 50） |
+| `limit` | integer | | 返回条数上限（省略时返回全部匹配事件） |
 
 ### `query_bridge_audit`
 
@@ -1316,10 +1316,10 @@ tunnel_create host="tf01" local_port=8080 remote_host="api.internal" remote_port
 
 ### `yunying_usage_rules`
 
-返回 yunying 的使用规则和最佳实践。AI Agent 在首次使用 yunying 工具前可调用此工具了解操作规范。
+⚠️ 占位工具，**不要调用**。使用规则已内置于 MCP server instructions，无需通过工具获取。
 
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | 无 | | |
 
-**返回** `{"rules": "..."}` — 包含核心概念（持久化会话、共享会话、多主机注册表）、工具选择原则、默认会话名规则、禁止行为等文本。
+**返回** `{}` — 空对象。

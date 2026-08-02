@@ -120,8 +120,7 @@ bash deploy/install-daemon.sh root@<your-bridge-ip>
 
 做的事：
 - 安装 rmux（如未安装）
-- 上传项目定制的 `rmux-daemon.service`（配置 `RMUX_TMPDIR=%h/.rmux`）
-- 上传项目定制的 `rmux.conf` 到 `/root/.rmux.conf`（启用鼠标、调大回滚缓冲区、**开启 `allow-passthrough`**——rmux 0.9 默认为 `off`，不开启会导致 CLI 连接后按键无效）
+- 上传项目定制的 `rmux-daemon.service`（配置 `RMUX_TMPDIR=%h/.rmux`，启动参数 `--config-default --config-quiet` 自动启用 passthrough 等必要选项）
 - 启动 daemon
 - 写入 `/etc/profile.d/yunying.sh`（`export RMUX_TMPDIR=$HOME/.rmux`），用户登录后可直接 `rmux a -t yunying`
 
@@ -186,7 +185,7 @@ ssh root@<your-bridge-ip> "systemctl status rmux-bridge --no-pager"
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `--quic-listen-addr` | `0.0.0.0:9788` | QUIC/UDP 监听地址（终端操作 + 文件传输） |
+| `--quic-listen-addr` | `0.0.0.0:9778` | QUIC/UDP 监听地址（终端操作 + 文件传输，仅直连模式使用） |
 | `--max-connections` | `256` | 最大并发连接数，0=无限制（`MAX_CONNECTIONS` 环境变量） |
 | `--rmux-socket` | `/tmp/rmux-1000/default` | RMUX daemon Unix socket 路径 |
 | `--tls-cert` | `certs/bridge.crt` | TLS 证书路径（CA 签发） |
@@ -265,8 +264,8 @@ hosts:
 ```yaml
 hosts:
   - name: tf01                         # MCP 工具中引用的主机名
-    bridge_addr: <your-bridge-ip>:9788     # bridge 地址
-    bridge_token: "<your-token>"              # 认证 token
+    bridge_addr: <your-bridge-ip>:9778     # bridge 直连地址（仅 direct 模式需要）
+    bridge_token: "<your-token>"              # 认证 token（仅 direct 模式需要）
     group: production                  # 分组（host_filter 用）
     tags: [web, nginx]                  # 标签
     labels:                             # 键值对标签
@@ -385,7 +384,7 @@ yunying-mcp audit cleanup --older-than 30
 
 | 症状 | 检查 |
 |------|------|
-| CLI `connect` 后按键无效、终端卡死 | rmux 0.9 将 `allow-passthrough` 默认改为 `off`。检查 `/root/.rmux.conf` 中是否有 `set -g allow-passthrough on`，然后 `systemctl restart rmux-daemon`。项目已提供默认配置 `config/rmux.conf`。 |
+| CLI `connect` 后按键无效、终端卡死 | rmux 0.9 将 `allow-passthrough` 默认改为 `off`。项目 `rmux-daemon.service` 通过 `--config-default` 自动启用 passthrough。若使用自定义 service，确认启动参数包含 `--config-default` 或手动 `rmux set -g allow-passthrough on`，然后 `systemctl restart rmux-daemon`。 |
 | MCP 工具返回 `connection refused` | `systemctl status rmux-bridge`，确认 bridge 在运行 |
 | `authentication failed` | 检查 `bridge.env` 中的 `BRIDGE_AUTH_TOKEN` 与 `hosts.yaml` 中 `bridge_token` 是否一致 |
 | TLS 握手失败 | `--ca-cert` 指向的证书是否与 bridge 端一致 |

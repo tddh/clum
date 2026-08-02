@@ -156,13 +156,17 @@ Create `config/hosts.yaml` (see `config/hosts.example.yaml`):
 
 ```yaml
 hosts:
+  # Enrolled mode (recommended) — bridge reverse-registers, no addr/token needed:
   - name: prod-web-01
-    bridge_addr: 10.0.1.10:9788
-    bridge_token: "your-token-here"
     group: production
     tags: [web, nginx]
     labels:
       dc: shanghai
+
+  # Direct mode (fallback) — connect to bridge directly:
+  - name: legacy-host
+    bridge_addr: 10.0.1.10:9778
+    bridge_token: "your-token-here"
 ```
 
 > 💡 **Hot-reload**: After editing `hosts.yaml`, reload without restarting — either call the `reload_config` MCP tool or send `kill -HUP <pid>` to the MCP server process.
@@ -196,6 +200,21 @@ hosts:
     }
   }
 }
+```
+
+### Server Management
+
+```bash
+# API Key management
+yunying-mcp agent add <name>       # Create API key (outputs yk_<name>_<hex>)
+yunying-mcp agent list             # List all API keys
+yunying-mcp agent rotate <name>    # Rotate a key
+yunying-mcp agent revoke <name>    # Revoke a key
+
+# Bridge enrollment (dynamic registration, no hosts.yaml edit needed)
+yunying-mcp bridge add <hostname> [--group <g>] [--tags <t1,t2>]
+yunying-mcp bridge list
+yunying-mcp bridge remove <hostname>
 ```
 
 ## Security

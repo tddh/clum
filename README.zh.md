@@ -158,13 +158,17 @@ BRIDGE_TOKEN="<your-token>" just deploy-bridge host=root@<your-bridge-ip>
 
 ```yaml
 hosts:
+  # Enrolled 模式（推荐）— bridge 反向注册，无需 addr/token：
   - name: prod-web-01
-    bridge_addr: 10.0.1.10:9788
-    bridge_token: "your-token-here"
     group: production
     tags: [web, nginx]
     labels:
       dc: shanghai
+
+  # Direct 模式（回退）— 直连 bridge：
+  - name: legacy-host
+    bridge_addr: 10.0.1.10:9778
+    bridge_token: "your-token-here"
 ```
 
 > 💡 **热加载**：修改 `hosts.yaml` 后无需重启 — 调用 `reload_config` MCP 工具或向 MCP Server 进程发送 `kill -HUP <pid>` 即可生效。
@@ -201,6 +205,21 @@ hosts:
 ```
 
 > 远程部署使用 `ca.crt`；本地自签名测试可用 `bridge.crt`。
+
+### 服务端管理
+
+```bash
+# API Key 管理
+yunying-mcp agent add <name>       # 创建 API Key（输出 yk_<name>_<hex>）
+yunying-mcp agent list             # 列出所有 Key
+yunying-mcp agent rotate <name>    # 轮换 Key
+yunying-mcp agent revoke <name>    # 吊销 Key
+
+# Bridge 注册（动态注册，无需编辑 hosts.yaml）
+yunying-mcp bridge add <hostname> [--group <g>] [--tags <t1,t2>]
+yunying-mcp bridge list
+yunying-mcp bridge remove <hostname>
+```
 
 ## 安全
 
