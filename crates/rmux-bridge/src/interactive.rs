@@ -563,7 +563,11 @@ pub async fn handle_interactive_data(
         let pid = state.as_ref().map(|s| s.pane_id.clone());
         drop(state);
         if let Some(ref sn) = sn {
-            let result = proxy.read().await.handle_select_layout(sn, 0, "even-vertical").await;
+            let result = proxy
+                .read()
+                .await
+                .handle_select_layout(sn, 0, "even-vertical")
+                .await;
             let ok = result.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
             if ok {
                 tracing::info!(

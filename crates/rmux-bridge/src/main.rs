@@ -130,16 +130,15 @@ async fn main() -> anyhow::Result<()> {
                     return;
                 }
 
-                let protocol_proxy =
-                    Arc::new(tokio::sync::RwLock::new(
-                        match ProtocolProxy::connect(&rmux_socket).await {
-                            Ok(p) => p,
-                            Err(e) => {
-                                tracing::error!("QUIC rmux connect failed: {}", e);
-                                return;
-                            }
-                        },
-                    ));
+                let protocol_proxy = Arc::new(tokio::sync::RwLock::new(
+                    match ProtocolProxy::connect(&rmux_socket).await {
+                        Ok(p) => p,
+                        Err(e) => {
+                            tracing::error!("QUIC rmux connect failed: {}", e);
+                            return;
+                        }
+                    },
+                ));
 
                 let session_state: std::sync::Arc<tokio::sync::Mutex<Option<InteractiveSession>>> =
                     std::sync::Arc::new(tokio::sync::Mutex::new(None));

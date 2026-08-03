@@ -48,8 +48,7 @@ pub async fn handle_quic_stream(
             let gen_before = proxy.generation();
             let adapter = crate::proxy::QuicStreamAdapter { recv, send };
             let result =
-                crate::proxy::proxy_protocol_aware(adapter, &proxy, audit_db, recording_dir)
-                    .await;
+                crate::proxy::proxy_protocol_aware(adapter, &proxy, audit_db, recording_dir).await;
             if let Err(ref e) = result {
                 let msg = format!("{e:#}").to_lowercase();
                 if msg.contains("timed out") || msg.contains("timeout") {
