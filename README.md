@@ -87,6 +87,8 @@ graph LR
 
 > 💡 New bridges deploy with one command: `curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=SERVER:9788 sh`
 
+> 💡 During deployment, the bridge auto-detects the RMUX socket path — no manual configuration needed.
+
 ## Features
 
 | Feature | Description |
@@ -202,6 +204,8 @@ hosts:
 }
 ```
 
+> Use `ca.crt` for remote deployments; `bridge.crt` works for local self-signed testing.
+
 ### Server Management
 
 ```bash
@@ -215,16 +219,17 @@ yunying-mcp agent revoke <name>    # Revoke a key
 # host_list/audit_query/recordings auto-filter; reload_config/host_set_meta blocked.
 
 # Bridge enrollment (dynamic registration, no hosts.yaml edit needed)
-yunying-mcp bridge add <hostname> [--group <g>] [--tags <t1,t2>]
+yunying-mcp bridge add <hostname> --tags <t1,t2> [--group <g>]
 yunying-mcp bridge list
 yunying-mcp bridge remove <hostname>
+yunying-mcp bridge join <hostname>   # Generate a new join token (offline recovery)
 ```
 
 ## Security
 
 | Mode | Description |
 |------|-------------|
-| CA verified (required) | `--ca-cert` is mandatory. Server identity is always verified via CA root cert. MITM-resistant. MCP server will not start without it. |
+| CA verified | All server→bridge connections verify the bridge certificate against the CA root (`--ca-cert`) — full chain + hostname check, no insecure mode. `--ca-cert` may be omitted in pure enrolled deployments (bridges initiate the connection); direct-mode connections require it and fail without it. |
 
 **Production**: Run your own CA, issue per-bridge certificates, MCP server holds only the CA root.
 

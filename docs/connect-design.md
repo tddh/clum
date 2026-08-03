@@ -1211,6 +1211,8 @@ pub async fn handle_interactive_control(...) -> Result<()> {
 
 连接事件存储为 SQLite（与 MCP 审计同格式）：
 
+> **当前实现状态**（截至 0.9.x）：`client_addr`/`token_id`/`host_name` 尚未注入——interactive.rs 的审计事件中 `client_addr` 为空字符串、`client_id` 为 `None`（Phase 3 待实现），当前仅记录 session/pane/event_type 等字段。
+
 ```json
 {
   "event_id": "...",

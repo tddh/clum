@@ -219,16 +219,17 @@ yunying-mcp agent revoke <name>    # 吊销 Key
 # host_list/audit_query/recordings 自动过滤；reload_config/host_set_meta 不可用。
 
 # Bridge 注册（动态注册，无需编辑 hosts.yaml）
-yunying-mcp bridge add <hostname> [--group <g>] [--tags <t1,t2>]
+yunying-mcp bridge add <hostname> --tags <t1,t2> [--group <g>]
 yunying-mcp bridge list
 yunying-mcp bridge remove <hostname>
+yunying-mcp bridge join <hostname>   # 生成新 join token（离线恢复用）
 ```
 
 ## 安全
 
 | 模式 | 说明 |
 |------|------|
-| CA 验证（必填） | `--ca-cert` 为必填参数。始终通过 CA 根证书验证服务器身份，防中间人攻击。未提供则 MCP 服务器无法启动。 |
+| CA 验证 | Server→bridge 连接始终通过 CA 根证书（`--ca-cert`）校验 bridge 证书——完整证书链 + 主机名校验，无免校验模式。纯 enrolled 部署（bridge 主动连接）可省略 `--ca-cert`；直连模式必须提供，否则相关连接失败。 |
 
 **生产环境建议**：自建 CA，为每台 bridge 签发证书，MCP server 只持有 CA 根证书。
 
