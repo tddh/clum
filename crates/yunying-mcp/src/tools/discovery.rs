@@ -40,7 +40,7 @@ async fn build_unified_hosts(ctx: &ToolContext) -> Vec<UnifiedHost> {
                 .map(|m| m.labels.clone())
                 .unwrap_or_else(|| info.labels.clone()),
             bridge_addr: None,
-            online: true,
+            online: info.online,
             via: "enrolled",
         });
     }

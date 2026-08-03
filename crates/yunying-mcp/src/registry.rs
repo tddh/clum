@@ -81,17 +81,21 @@ impl BridgeRegistry {
 
     pub async fn list(&self) -> Vec<BridgeInfo> {
         let map = self.connections.read().await;
-        map.values()
-            .map(|c| BridgeInfo {
+        let heartbeat_timeout = std::time::Duration::from_secs(30);
+        let mut result = Vec::with_capacity(map.len());
+        for c in map.values() {
+            let hb_elapsed = c.last_heartbeat.read().await.elapsed();
+            result.push(BridgeInfo {
                 hostname: c.hostname.clone(),
                 tags: c.tags.clone(),
                 labels: c.labels.clone(),
                 version: c.version.clone(),
                 os_info: c.os_info.clone(),
-                online: c.conn.close_reason().is_none(),
+                online: c.conn.close_reason().is_none() && hb_elapsed < heartbeat_timeout,
                 registered_secs_ago: c.registered_at.elapsed().as_secs(),
-            })
-            .collect()
+            });
+        }
+        result
     }
 
     pub async fn update_heartbeat(&self, hostname: &str) {
