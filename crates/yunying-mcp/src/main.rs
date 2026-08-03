@@ -360,9 +360,7 @@ async fn run_agent_command(args: &[String]) -> anyhow::Result<()> {
     match args.first().map(|s| s.as_str()) {
         Some("add") => {
             let name = args.get(1).ok_or_else(|| {
-                anyhow::anyhow!(
-                    "usage: yunying-mcp agent add <name> (--group <group> | --admin)"
-                )
+                anyhow::anyhow!("usage: yunying-mcp agent add <name> (--group <group> | --admin)")
             })?;
             let is_admin = args.iter().any(|a| a == "--admin");
             let group = args

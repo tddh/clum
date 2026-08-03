@@ -156,9 +156,7 @@ async fn auth_middleware(
                 // Grouped keys must use MCP get_recording (which enforces
                 // group isolation); direct HTTP access to /recordings is
                 // restricted to superadmin keys without a group.
-                if identity.group.is_some()
-                    && request.uri().path().starts_with("/recordings")
-                {
+                if identity.group.is_some() && request.uri().path().starts_with("/recordings") {
                     tracing::warn!(
                         agent = %identity.name,
                         group = %identity.group.as_deref().unwrap_or(""),
@@ -314,7 +312,9 @@ async fn serve_static(
     path: &str,
 ) -> Result<axum::response::Response, StatusCode> {
     let requested = dir.join(path);
-    let canonical_dir = dir.canonicalize().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let canonical_dir = dir
+        .canonicalize()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     match requested.canonicalize() {
         Ok(canonical_path) if canonical_path.starts_with(&canonical_dir) => {
             match tokio::fs::read(&canonical_path).await {

@@ -167,11 +167,7 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
                     Err(_) => continue,
                 };
                 // Prune stale entries from pushed set (files that no longer exist)
-                let stale: Vec<_> = pushed
-                    .iter()
-                    .filter(|p| !p.exists())
-                    .cloned()
-                    .collect();
+                let stale: Vec<_> = pushed.iter().filter(|p| !p.exists()).cloned().collect();
                 for p in &stale {
                     pushed.remove(p);
                 }
@@ -197,12 +193,8 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
                                     .file_name()
                                     .map(|n| n.to_string_lossy().to_string())
                                     .unwrap_or_default();
-                                if let Err(e) = cast_recorder::mark_synced(
-                                    &push_dir,
-                                    &fname,
-                                    &date,
-                                )
-                                .await
+                                if let Err(e) =
+                                    cast_recorder::mark_synced(&push_dir, &fname, &date).await
                                 {
                                     tracing::debug!(
                                         file = %path.display(),
