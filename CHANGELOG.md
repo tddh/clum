@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.9.1] — 2026-08-03
 
 ### Added
 - **Group 隔离（RBAC）**：API Key 绑定 group（`agent add --group <g>`），Server 侧统一鉴权。组内 Key 只能访问本组主机，`host_list`/`host_filter`/`audit_query`/`list_recordings` 自动过滤，隧道按组隔离，`reload_config`/`host_set_meta` 仅超管可用。无 group 的 Key 为超管（向后兼容）。CLI 数据面（QUIC agent_connect）同步强制执行。
@@ -10,6 +10,7 @@
 
 ### Fixed
 - **Schema 审计修正**：修复 4 个 bug（`split_pane_with` 缺少 direction required、`respawn_pane` env 类型错误等）、7 处描述不准确；Skill 精简；路由改为 registry-first。
+- **deploy_bridge 验证可靠性**：移除重启后的重连 + `systemctl is-active` 验证循环（与 bridge 重连过程竞态），改为直接返回 `restart_sent`；`host_list` 的 `online` 从硬编码 `true` 改为实时连接状态（`close_reason().is_none()`）。
 
 ### Changed
 - **`agent add` 必须显式指定权限**：`--group <g>`（受限 Key）或 `--admin`（超管 Key）二选一，不指定直接报错，防止误建超管 Key。
