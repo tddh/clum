@@ -1,9 +1,12 @@
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
 
 use crate::bridge_audit::BridgeAuditDb;
+use crate::cast_recorder;
 use crate::interactive::InteractiveSession;
 use crate::protocol::ProtocolProxy;
 
@@ -152,8 +155,7 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
     let push_enabled = config.recording_enabled;
     if push_enabled {
         tokio::spawn(async move {
-            let mut pushed: std::collections::HashSet<std::path::PathBuf> =
-                std::collections::HashSet::new();
+            let mut pushed = load_pushed(&push_dir).await;
             let mut interval = tokio::time::interval(Duration::from_secs(30));
             loop {
                 interval.tick().await;
@@ -164,6 +166,18 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
                     Ok(f) => f,
                     Err(_) => continue,
                 };
+                // Prune stale entries from pushed set (files that no longer exist)
+                let stale: Vec<_> = pushed
+                    .iter()
+                    .filter(|p| !p.exists())
+                    .cloned()
+                    .collect();
+                for p in &stale {
+                    pushed.remove(p);
+                }
+                if !stale.is_empty() {
+                    let _ = save_pushed(&push_dir, &pushed).await;
+                }
                 for path in files {
                     if pushed.contains(&path) {
                         continue;
@@ -171,7 +185,31 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
                     match push_recording(&push_conn, &path).await {
                         Ok(()) => {
                             pushed.insert(path.clone());
+                            let _ = save_pushed(&push_dir, &pushed).await;
                             tracing::info!(file = %path.display(), "recording pushed to server");
+                            // Mark synced to prevent redundant Pull transfer
+                            if let Some(date) = path
+                                .parent()
+                                .and_then(|p| p.file_name())
+                                .map(|n| n.to_string_lossy().to_string())
+                            {
+                                let fname = path
+                                    .file_name()
+                                    .map(|n| n.to_string_lossy().to_string())
+                                    .unwrap_or_default();
+                                if let Err(e) = cast_recorder::mark_synced(
+                                    &push_dir,
+                                    &fname,
+                                    &date,
+                                )
+                                .await
+                                {
+                                    tracing::debug!(
+                                        file = %path.display(),
+                                        "mark_synced after push failed: {e}"
+                                    );
+                                }
+                            }
                         }
                         Err(e) => {
                             tracing::debug!(file = %path.display(), "recording push failed: {e}");
@@ -340,6 +378,30 @@ async fn persist_token(token: &str) -> anyhow::Result<()> {
         use std::os::unix::fs::PermissionsExt;
         tokio::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).await?;
     }
+    Ok(())
+}
+
+const PUSHED_STATE_FILE: &str = ".pushed.json";
+
+async fn load_pushed(dir: &Path) -> HashSet<PathBuf> {
+    let path = dir.join(PUSHED_STATE_FILE);
+    match tokio::fs::read_to_string(&path).await {
+        Ok(content) => {
+            let paths: Vec<String> = serde_json::from_str(&content).unwrap_or_default();
+            paths.into_iter().map(PathBuf::from).collect()
+        }
+        Err(_) => HashSet::new(),
+    }
+}
+
+async fn save_pushed(dir: &Path, pushed: &HashSet<PathBuf>) -> anyhow::Result<()> {
+    let path = dir.join(PUSHED_STATE_FILE);
+    let entries: Vec<String> = pushed
+        .iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
+    let json = serde_json::to_string(&entries)?;
+    tokio::fs::write(&path, json).await?;
     Ok(())
 }
 
