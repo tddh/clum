@@ -12,6 +12,7 @@ pub struct QueryParams {
     pub until: Option<String>,
     pub success: Option<bool>,
     pub limit: Option<u32>,
+    pub host_names: Option<Vec<String>>,
 }
 
 pub enum OutputFormat {
@@ -75,6 +76,15 @@ impl AuditDb {
             if let Some(s) = params.success {
                 sql.push_str(" AND success = ?");
                 bind_values.push(Box::new(s as i32));
+            }
+            if let Some(ref names) = params.host_names {
+                if !names.is_empty() {
+                    let placeholders: Vec<&str> = names.iter().map(|_| "?").collect();
+                    sql.push_str(&format!(" AND host_name IN ({})", placeholders.join(",")));
+                    for n in names {
+                        bind_values.push(Box::new(n.clone()));
+                    }
+                }
             }
 
             sql.push_str(" ORDER BY timestamp DESC");

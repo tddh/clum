@@ -161,6 +161,7 @@ mod tests {
                     until: None,
                     success: Some(true),
                     limit: Some(10),
+                    host_names: None,
                 },
                 OutputFormat::Json,
             )
@@ -185,6 +186,7 @@ mod tests {
                     until: None,
                     success: None,
                     limit: Some(10),
+                    host_names: None,
                 },
                 OutputFormat::Table,
             )
@@ -230,6 +232,7 @@ mod tests {
                     until: None,
                     success: None,
                     limit: Some(100),
+                    host_names: None,
                 },
                 OutputFormat::Json,
             )
@@ -258,6 +261,7 @@ mod tests {
                     until: None,
                     success: None,
                     limit: Some(10),
+                    host_names: None,
                 },
                 OutputFormat::Table,
             )
@@ -288,6 +292,7 @@ mod tests {
                     until: None,
                     success: None,
                     limit: Some(10),
+                    host_names: None,
                 },
                 OutputFormat::Jsonl,
             )

@@ -20,6 +20,12 @@ pub(crate) async fn tunnel_create(ctx: &ToolContext, args: Value) -> Result<Valu
 
     let host = super::common::resolve_host_config(ctx, host_name).await?;
 
+    let caller_group = ctx
+        .caller_group
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+
     let result = ctx
         .tunnel_manager
         .create(
@@ -30,6 +36,7 @@ pub(crate) async fn tunnel_create(ctx: &ToolContext, args: Value) -> Result<Valu
             remote_port,
             &ctx.ca_cert_path,
             &ctx.bridge_registry,
+            caller_group,
         )
         .await;
 
@@ -83,7 +90,15 @@ pub(crate) async fn tunnel_create(ctx: &ToolContext, args: Value) -> Result<Valu
 }
 
 pub(crate) async fn tunnel_list(ctx: &ToolContext) -> Result<Value> {
-    let tunnels = ctx.tunnel_manager.list().await;
+    let mut tunnels = ctx.tunnel_manager.list().await;
+    let caller_group = ctx
+        .caller_group
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    if let Some(cg) = caller_group {
+        tunnels.retain(|t| t.group.as_deref() == Some(cg.as_str()));
+    }
     super::audit(
         ctx,
         AuditAction::TunnelList,
@@ -106,6 +121,20 @@ pub(crate) async fn tunnel_list(ctx: &ToolContext) -> Result<Value> {
 
 pub(crate) async fn tunnel_close(ctx: &ToolContext, args: Value) -> Result<Value> {
     let tunnel_id = args["tunnel_id"].as_str().context("missing 'tunnel_id'")?;
+
+    let caller_group = ctx
+        .caller_group
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    if let Some(ref cg) = caller_group {
+        let tunnels = ctx.tunnel_manager.list().await;
+        if let Some(t) = tunnels.iter().find(|t| t.tunnel_id == tunnel_id) {
+            if t.group.as_deref() != Some(cg.as_str()) {
+                anyhow::bail!("tunnel '{tunnel_id}' is not in your group '{cg}'");
+            }
+        }
+    }
 
     let result = ctx.tunnel_manager.close(tunnel_id).await;
     super::audit(

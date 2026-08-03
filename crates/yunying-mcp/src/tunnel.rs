@@ -55,6 +55,8 @@ pub struct TunnelInfo {
     pub remote_port: u16,
     pub created_at: DateTime<Utc>,
     pub active_connections: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
 }
 
 struct Tunnel {
@@ -66,6 +68,7 @@ struct Tunnel {
     pub created_at: DateTime<Utc>,
     pub active_connections: Arc<AtomicUsize>,
     pub listener_task: JoinHandle<()>,
+    pub group: Option<String>,
 }
 
 impl Drop for Tunnel {
@@ -95,6 +98,7 @@ impl TunnelManager {
         remote_port: u16,
         ca_cert_path: &str,
         registry: &std::sync::Arc<crate::registry::BridgeRegistry>,
+        group: Option<String>,
     ) -> Result<TunnelInfo> {
         if remote_host.len() > MAX_HOST_LEN {
             anyhow::bail!(
@@ -199,6 +203,7 @@ impl TunnelManager {
             remote_port,
             created_at,
             active_connections: 0,
+            group: group.clone(),
         };
 
         let tunnel = Tunnel {
@@ -210,6 +215,7 @@ impl TunnelManager {
             created_at,
             active_connections,
             listener_task,
+            group,
         };
 
         self.tunnels
@@ -232,6 +238,7 @@ impl TunnelManager {
                 remote_port: t.remote_port,
                 created_at: t.created_at,
                 active_connections: t.active_connections.load(Ordering::Relaxed),
+                group: t.group.clone(),
             })
             .collect()
     }

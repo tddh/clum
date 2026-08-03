@@ -102,6 +102,7 @@ pub async fn run_audit_command() -> anyhow::Result<()> {
                 until,
                 success,
                 limit: Some(limit),
+                host_names: None,
             };
             let result = audit_db.query(params, fmt).await?;
             println!("{}", result);

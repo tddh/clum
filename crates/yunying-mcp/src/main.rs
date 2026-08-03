@@ -256,7 +256,8 @@ async fn main() -> anyhow::Result<()> {
         router,
         ca_cert_path: ca_cert.clone(),
         audit_db: audit_db.clone(),
-        agent_name: std::sync::Mutex::new("unknown".to_string()),
+        agent_name: Arc::new(std::sync::Mutex::new("unknown".to_string())),
+        caller_group: Arc::new(std::sync::Mutex::new(None)),
         tunnel_manager: Arc::new(tunnel::TunnelManager::new()),
         stream_manager: Arc::new(stream::StreamManager::new()),
         recordings_dir,
@@ -295,6 +296,9 @@ async fn main() -> anyhow::Result<()> {
                     })
                     .collect();
 
+                // File/CLI tokens only — preserved across DB refreshes.
+                let static_hashes = hash_map.clone();
+
                 let db_hashes = bridge_store.token_map().await;
                 hash_map.extend(db_hashes);
 
@@ -305,6 +309,7 @@ async fn main() -> anyhow::Result<()> {
                     cert_path: cert.clone(),
                     key_path: key.clone(),
                     bridge_token_hashes: hash_map,
+                    static_token_hashes: static_hashes,
                     recordings_dir: ctx.recordings_dir.clone(),
                     api_key_store: Some(api_keys::ApiKeyStore::open(&db_path)?),
                     db_path: db_path.clone(),
@@ -354,22 +359,42 @@ async fn run_agent_command(args: &[String]) -> anyhow::Result<()> {
 
     match args.first().map(|s| s.as_str()) {
         Some("add") => {
-            let name = args
-                .get(1)
-                .ok_or_else(|| anyhow::anyhow!("usage: yunying-mcp agent add <name>"))?;
-            let key = store.add(name).await?;
+            let name = args.get(1).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "usage: yunying-mcp agent add <name> (--group <group> | --admin)"
+                )
+            })?;
+            let is_admin = args.iter().any(|a| a == "--admin");
+            let group = args
+                .iter()
+                .position(|a| a == "--group")
+                .and_then(|i| args.get(i + 1))
+                .map(|s| s.as_str());
+            if !is_admin && group.is_none() {
+                anyhow::bail!(
+                    "must specify --group <group> (restricted key) or --admin (superadmin key)"
+                );
+            }
+            let group = if is_admin { None } else { group };
+            let key = store.add(name, group).await?;
             println!("API Key: {key}");
+            if let Some(g) = group {
+                println!("Group: {g}");
+            } else {
+                println!("Group: (none — superadmin)");
+            }
             println!("Please save this key. It will not be shown again.");
         }
         Some("list") => {
             let keys = store.list().await;
-            println!("NAME         KEY PREFIX           CREATED                LAST USED              STATUS");
+            println!("NAME         KEY PREFIX           GROUP        CREATED                LAST USED              STATUS");
             for k in keys {
                 let status = if k.revoked { "revoked" } else { "active" };
                 println!(
-                    "{:<12} {:<20} {:<22} {:<22} {}",
+                    "{:<12} {:<20} {:<12} {:<22} {:<22} {}",
                     k.name,
                     k.key_prefix,
+                    k.group.as_deref().unwrap_or("(admin)"),
                     &k.created_at[..k.created_at.len().min(19)],
                     k.last_used_at
                         .as_deref()

@@ -30,7 +30,11 @@ pub struct ToolContext {
     pub router: Arc<HostRouter>,
     pub ca_cert_path: String,
     pub audit_db: Arc<audit::AuditDb>,
-    pub agent_name: std::sync::Mutex<String>,
+    // Identity fields are Arc-wrapped so a cloned ToolContext gets its own
+    // isolated copy — each HTTP request carries the identity derived from its
+    // own API key, with no shared mutable state between requests.
+    pub agent_name: Arc<std::sync::Mutex<String>>,
+    pub caller_group: Arc<std::sync::Mutex<Option<String>>>,
     pub tunnel_manager: Arc<TunnelManager>,
     pub stream_manager: Arc<StreamManager>,
     pub recordings_dir: PathBuf,
@@ -39,12 +43,122 @@ pub struct ToolContext {
     pub bridge_store: Arc<crate::bridge_store::BridgeStore>,
 }
 
+impl Clone for ToolContext {
+    fn clone(&self) -> Self {
+        Self {
+            router: Arc::clone(&self.router),
+            ca_cert_path: self.ca_cert_path.clone(),
+            audit_db: Arc::clone(&self.audit_db),
+            agent_name: Arc::new(std::sync::Mutex::new(
+                self.agent_name
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone(),
+            )),
+            caller_group: Arc::new(std::sync::Mutex::new(
+                self.caller_group
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone(),
+            )),
+            tunnel_manager: Arc::clone(&self.tunnel_manager),
+            stream_manager: Arc::clone(&self.stream_manager),
+            recordings_dir: self.recordings_dir.clone(),
+            bridge_registry: Arc::clone(&self.bridge_registry),
+            bridge_store: Arc::clone(&self.bridge_store),
+        }
+    }
+}
+
+async fn resolve_host_group(ctx: &ToolContext, host: &str) -> Option<String> {
+    let meta_list = ctx.bridge_store.get_all_host_meta().await;
+    if let Some(meta) = meta_list.iter().find(|m| m.hostname == host) {
+        if !meta.group.is_empty() {
+            return Some(meta.group.clone());
+        }
+    }
+    ctx.router
+        .get(host)
+        .map(|h| h.group)
+        .filter(|g| !g.is_empty())
+}
+
+/// All hosts whose effective group equals `group`. Effective group is the
+/// registration-DB group when set, falling back to hosts.yaml — the same
+/// semantics as `resolve_host_group`, so access checks and listings agree.
+async fn hosts_in_group(ctx: &ToolContext, group: &str) -> std::collections::HashSet<String> {
+    let mut effective: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for h in ctx.router.list() {
+        if !h.group.is_empty() {
+            effective.insert(h.name.clone(), h.group.clone());
+        }
+    }
+    for m in ctx.bridge_store.get_all_host_meta().await {
+        if !m.group.is_empty() {
+            effective.insert(m.hostname.clone(), m.group.clone());
+        }
+    }
+    effective
+        .into_iter()
+        .filter(|(_, g)| g == group)
+        .map(|(h, _)| h)
+        .collect()
+}
+
+async fn authorize(ctx: &ToolContext, tool_name: &str, args: &Value) -> Result<()> {
+    let caller_group = ctx
+        .caller_group
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+
+    let Some(cg) = caller_group else {
+        return Ok(());
+    };
+
+    if matches!(tool_name, "reload_config" | "host_set_meta") {
+        anyhow::bail!("forbidden: '{tool_name}' requires superadmin (no group)");
+    }
+
+    if tool_name == "yunying_usage_rules" {
+        return Ok(());
+    }
+
+    if let Some(host) = args.get("host").and_then(|v| v.as_str()) {
+        let host_group = resolve_host_group(ctx, host).await;
+        if host_group.as_deref() != Some(cg.as_str()) {
+            anyhow::bail!(
+                "host '{host}' is not in your group '{cg}' (it belongs to '{}')",
+                host_group.as_deref().unwrap_or("(ungrouped)")
+            );
+        }
+    }
+
+    if let Some(hosts) = args.get("hosts").and_then(|v| v.as_array()) {
+        for h in hosts {
+            if let Some(host) = h.as_str() {
+                let host_group = resolve_host_group(ctx, host).await;
+                if host_group.as_deref() != Some(cg.as_str()) {
+                    anyhow::bail!(
+                        "host '{host}' is not in your group '{cg}' (it belongs to '{}')",
+                        host_group.as_deref().unwrap_or("(ungrouped)")
+                    );
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub async fn execute_tool(
     ctx: &ToolContext,
     tool_name: &str,
     args: Value,
     progress: &mut crate::progress::ProgressReporter,
 ) -> Result<Value> {
+    authorize(ctx, tool_name, &args).await?;
+
     match tool_name {
         "yunying_usage_rules" => Ok(json!({})),
         "host_list" => discovery::host_list(ctx).await,
@@ -151,6 +265,23 @@ pub async fn execute_tool(
             result
         }
         "audit_query" => {
+            let caller_group = ctx
+                .caller_group
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            let host_names = match caller_group {
+                Some(cg) => {
+                    let names: Vec<String> = hosts_in_group(ctx, &cg).await.into_iter().collect();
+                    if names.is_empty() {
+                        // No hosts in this group — return nothing; an empty
+                        // filter would otherwise match every event.
+                        return Ok(json!([]));
+                    }
+                    Some(names)
+                }
+                None => None,
+            };
             let params = crate::audit::query::QueryParams {
                 host: args.get("host").and_then(|v| v.as_str()).map(String::from),
                 action: args
@@ -162,6 +293,7 @@ pub async fn execute_tool(
                 until: args.get("until").and_then(|v| v.as_str()).map(String::from),
                 success: args.get("success").and_then(|v| v.as_bool()),
                 limit: args.get("limit").and_then(|v| v.as_u64()).map(|v| v as u32),
+                host_names,
             };
             match ctx
                 .audit_db
@@ -184,7 +316,21 @@ pub async fn execute_tool(
                     .await;
             let duration_ms = start.elapsed().as_millis() as u64;
             match result {
-                Ok(list) => {
+                Ok(mut list) => {
+                    let caller_group = ctx
+                        .caller_group
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .clone();
+                    if let Some(cg) = caller_group {
+                        let group_hosts = hosts_in_group(ctx, &cg).await;
+                        list.retain(|r| {
+                            r.get("host")
+                                .and_then(|v| v.as_str())
+                                .map(|h| group_hosts.contains(h))
+                                .unwrap_or(false)
+                        });
+                    }
                     let value = json!({ "recordings": list, "count": list.len() });
                     audit(
                         ctx,
@@ -223,6 +369,26 @@ pub async fn execute_tool(
         "get_recording" => {
             let start = std::time::Instant::now();
             let path = args.get("path").and_then(|v| v.as_str()).unwrap_or("");
+
+            let caller_group = ctx
+                .caller_group
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            if let Some(ref cg) = caller_group {
+                // Recording paths are absolute: <recordings_dir>/<host>/...
+                let host_from_path = std::path::Path::new(path)
+                    .strip_prefix(&ctx.recordings_dir)
+                    .ok()
+                    .and_then(|rel| rel.components().next())
+                    .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let host_group = resolve_host_group(ctx, &host_from_path).await;
+                if host_group.as_deref() != Some(cg.as_str()) {
+                    anyhow::bail!("host '{host_from_path}' is not in your group '{cg}'");
+                }
+            }
+
             let result = read_recording_file(&ctx.recordings_dir, path).await;
             let duration_ms = start.elapsed().as_millis() as u64;
             match result {

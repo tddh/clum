@@ -25,15 +25,23 @@ pub type DownloadTokenMap =
 #[derive(Clone)]
 struct AuthState {
     store: Arc<ApiKeyStore>,
-    agent_name: Arc<std::sync::Mutex<String>>,
     download_tokens: DownloadTokenMap,
     bridge_store: Arc<crate::bridge_store::BridgeStore>,
+}
+
+/// Caller identity derived from the request's own API key. Inserted into
+/// request extensions by the auth middleware and read per-request in
+/// call_tool — never shared between concurrent requests.
+#[derive(Clone)]
+struct AuthIdentity {
+    name: String,
+    group: Option<String>,
 }
 
 #[derive(Clone)]
 pub struct YunyingServer {
     ctx: Arc<ToolContext>,
-    agent_name: Arc<std::sync::Mutex<String>>,
+    key_store: Arc<ApiKeyStore>,
 }
 
 impl ServerHandler for YunyingServer {
@@ -61,8 +69,13 @@ impl ServerHandler for YunyingServer {
         context: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<CallToolResponse, rmcp::ErrorData>> + Send + '_
     {
-        let ctx = Arc::clone(&self.ctx);
-        let agent_name = Arc::clone(&self.agent_name);
+        // Per-request context clone: identity fields are isolated from other
+        // concurrent requests; shared resources (Arc) clone cheaply.
+        let ctx = self.ctx.as_ref().clone();
+        let identity = context
+            .extensions
+            .get::<axum::http::request::Parts>()
+            .and_then(|parts| parts.extensions.get::<AuthIdentity>().cloned());
         let tool_name = request.name.to_string();
         let args = request
             .arguments
@@ -70,10 +83,28 @@ impl ServerHandler for YunyingServer {
             .unwrap_or(serde_json::Value::Object(Default::default()));
         let peer = context.peer.clone();
         let progress_token = context.meta.get_progress_token();
+        let key_store = Arc::clone(&self.key_store);
 
         async move {
-            if let Ok(name) = agent_name.lock() {
-                *ctx.agent_name.lock().unwrap_or_else(|e| e.into_inner()) = name.clone();
+            match identity {
+                Some(id) => {
+                    *ctx.agent_name.lock().unwrap_or_else(|e| e.into_inner()) = id.name;
+                    *ctx.caller_group.lock().unwrap_or_else(|e| e.into_inner()) = id.group;
+                }
+                None => {
+                    // Fail closed: with auth enabled, every tool call must
+                    // carry an identity derived from its own API key. A
+                    // missing identity would otherwise run as superadmin.
+                    if !key_store.is_empty().await {
+                        tracing::error!(
+                            "call_tool without caller identity while auth is enabled — rejecting"
+                        );
+                        return Err(rmcp::ErrorData::internal_error(
+                            "missing caller identity",
+                            None,
+                        ));
+                    }
+                }
             }
             let mut reporter = crate::progress::ProgressReporter::new_peer(progress_token, peer);
             match tools::execute_tool(&ctx, &tool_name, args, &mut reporter).await {
@@ -105,7 +136,7 @@ impl ServerHandler for YunyingServer {
 async fn auth_middleware(
     State(auth): State<AuthState>,
     headers: HeaderMap,
-    request: Request<axum::body::Body>,
+    mut request: Request<axum::body::Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
     if auth.store.is_empty().await {
@@ -122,9 +153,27 @@ async fn auth_middleware(
     match token {
         Some(t) => {
             if let Some(identity) = auth.store.validate(t).await {
-                if let Ok(mut name) = auth.agent_name.lock() {
-                    *name = identity.name;
+                // Grouped keys must use MCP get_recording (which enforces
+                // group isolation); direct HTTP access to /recordings is
+                // restricted to superadmin keys without a group.
+                if identity.group.is_some()
+                    && request.uri().path().starts_with("/recordings")
+                {
+                    tracing::warn!(
+                        agent = %identity.name,
+                        group = %identity.group.as_deref().unwrap_or(""),
+                        path = %request.uri().path(),
+                        "grouped key attempted HTTP /recordings access (use MCP get_recording instead)"
+                    );
+                    return Err(StatusCode::FORBIDDEN);
                 }
+                // Bind the identity to THIS request only — call_tool reads it
+                // back from the request extensions, so concurrent requests
+                // from different agents can never overwrite each other.
+                request.extensions_mut().insert(AuthIdentity {
+                    name: identity.name,
+                    group: identity.group,
+                });
                 return Ok(next.run(request).await);
             }
             if !is_mcp {
@@ -161,15 +210,12 @@ pub async fn run_http_server(
         .with_json_response(true)
         .disable_allowed_hosts();
 
-    let agent_name: Arc<std::sync::Mutex<String>> =
-        Arc::new(std::sync::Mutex::new("unknown".to_string()));
-    let agent_name_for_handler = Arc::clone(&agent_name);
-
+    let key_store_for_auth = Arc::clone(&key_store);
     let service = StreamableHttpService::new(
         move || {
             Ok(YunyingServer {
                 ctx: Arc::clone(&ctx),
-                agent_name: Arc::clone(&agent_name_for_handler),
+                key_store: Arc::clone(&key_store),
             })
         },
         Arc::new(LocalSessionManager::default()),
@@ -235,8 +281,7 @@ pub async fn run_http_server(
     );
 
     let auth_state = AuthState {
-        store: key_store,
-        agent_name,
+        store: key_store_for_auth,
         download_tokens,
         bridge_store,
     };
@@ -268,24 +313,40 @@ async fn serve_static(
     dir: Arc<std::path::PathBuf>,
     path: &str,
 ) -> Result<axum::response::Response, StatusCode> {
-    let file_path = dir.join(path);
-    if !file_path.starts_with(dir.as_ref()) {
-        return Err(StatusCode::FORBIDDEN);
-    }
-    match tokio::fs::read(&file_path).await {
-        Ok(data) => {
-            let content_type = if path.ends_with(".sh") {
-                "text/x-shellscript"
-            } else if path.ends_with(".crt") || path.ends_with(".pem") {
-                "application/x-pem-file"
-            } else {
-                "application/octet-stream"
-            };
-            Ok(axum::response::Response::builder()
-                .header("content-type", content_type)
-                .body(axum::body::Body::from(data))
-                .unwrap())
+    let requested = dir.join(path);
+    let canonical_dir = dir.canonicalize().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    match requested.canonicalize() {
+        Ok(canonical_path) if canonical_path.starts_with(&canonical_dir) => {
+            match tokio::fs::read(&canonical_path).await {
+                Ok(data) => {
+                    let content_type = if path.ends_with(".sh") {
+                        "text/x-shellscript"
+                    } else if path.ends_with(".crt") || path.ends_with(".pem") {
+                        "application/x-pem-file"
+                    } else {
+                        "application/octet-stream"
+                    };
+                    Ok(axum::response::Response::builder()
+                        .header("content-type", content_type)
+                        .body(axum::body::Body::from(data))
+                        .unwrap())
+                }
+                Err(_) => Err(StatusCode::NOT_FOUND),
+            }
         }
-        Err(_) => Err(StatusCode::NOT_FOUND),
+        _ => {
+            // canonicalize failed — either the file doesn't exist or it's
+            // a path traversal attempt. Check the parent directory to
+            // distinguish: if parent is inside the static dir, return 404
+            // (missing file); otherwise 403 (forbidden traversal).
+            if let Some(parent) = requested.parent() {
+                if let Ok(p) = parent.canonicalize() {
+                    if p.starts_with(&canonical_dir) || p == canonical_dir {
+                        return Err(StatusCode::NOT_FOUND);
+                    }
+                }
+            }
+            Err(StatusCode::FORBIDDEN)
+        }
     }
 }

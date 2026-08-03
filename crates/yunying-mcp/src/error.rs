@@ -26,6 +26,13 @@ pub fn classify_message(msg: &str) -> Classified {
     let m = msg.to_lowercase();
     let has = |p: &str| m.contains(p);
 
+    if has("not in your group") || has("forbidden") {
+        return c(
+            "FORBIDDEN",
+            "该主机不在你的分组内，联系管理员确认分组分配",
+            false,
+        );
+    }
     if has("host not found") {
         return c("HOST_NOT_FOUND", "host_list 检查可用主机名", false);
     }

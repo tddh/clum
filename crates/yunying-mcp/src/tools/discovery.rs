@@ -49,14 +49,35 @@ async fn build_unified_hosts(ctx: &ToolContext) -> Vec<UnifiedHost> {
         if seen.contains(&h.name) {
             continue;
         }
+        seen.insert(h.name.clone());
+        let meta = meta_map.get(&h.name);
         hosts.push(UnifiedHost {
             name: h.name,
-            group: h.group,
-            tags: h.tags,
-            labels: h.labels,
+            group: meta
+                .map(|m| m.group.clone())
+                .filter(|g| !g.is_empty())
+                .unwrap_or(h.group),
+            tags: meta.map(|m| m.tags.clone()).unwrap_or(h.tags),
+            labels: meta.map(|m| m.labels.clone()).unwrap_or(h.labels),
             bridge_addr: h.bridge_addr,
             online: false,
             via: "direct",
+        });
+    }
+
+    // Registered hosts absent from both the live registry and hosts.yaml
+    for m in meta_map.into_values() {
+        if seen.contains(&m.hostname) {
+            continue;
+        }
+        hosts.push(UnifiedHost {
+            name: m.hostname,
+            group: m.group,
+            tags: m.tags,
+            labels: m.labels,
+            bridge_addr: None,
+            online: false,
+            via: "enrolled",
         });
     }
 
@@ -75,8 +96,20 @@ fn host_to_json(h: &UnifiedHost) -> Value {
     })
 }
 
+fn filter_by_caller_group(ctx: &ToolContext, hosts: &mut Vec<UnifiedHost>) {
+    let caller_group = ctx
+        .caller_group
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    if let Some(cg) = caller_group {
+        hosts.retain(|h| h.group == cg);
+    }
+}
+
 pub(crate) async fn host_list(ctx: &ToolContext) -> Result<Value> {
-    let unified = build_unified_hosts(ctx).await;
+    let mut unified = build_unified_hosts(ctx).await;
+    filter_by_caller_group(ctx, &mut unified);
     let hosts: Vec<Value> = unified.iter().map(host_to_json).collect();
     super::audit(
         ctx,
@@ -96,6 +129,7 @@ pub(crate) async fn host_list(ctx: &ToolContext) -> Result<Value> {
 
 pub(crate) async fn host_filter(ctx: &ToolContext, args: Value) -> Result<Value> {
     let mut hosts = build_unified_hosts(ctx).await;
+    filter_by_caller_group(ctx, &mut hosts);
 
     if let Some(group) = args["group"].as_str() {
         hosts.retain(|h| h.group == group);

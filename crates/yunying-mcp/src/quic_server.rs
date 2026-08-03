@@ -11,18 +11,53 @@ use crate::registry::{BridgeConn, BridgeRegistry};
 /// Must align with bridge CHUNK_SIZE and MCP COPY_BUF_SIZE (both 1 MB).
 const RELAY_BUF_SIZE: usize = 1024 * 1024; // 1 MB
 
+/// Maximum size of a single recording file accepted via Push path.
+/// Rejecting oversized recordings prevents OOM from a compromised bridge.
+/// Mirrors the limit enforced in Pull path (recording_sync.rs).
+const MAX_PUSH_RECORDING_SIZE: u64 = 256 * 1024 * 1024; // 256 MB
+
 pub struct QuicServerConfig {
     pub listen_addr: String,
     pub cert_path: String,
     pub key_path: String,
     /// SHA-256(token) hex → hostname
     pub bridge_token_hashes: HashMap<String, String>,
+    /// Tokens supplied via config file / CLI flags only (not in the DB).
+    /// Preserved across background DB refreshes.
+    pub static_token_hashes: HashMap<String, String>,
     pub recordings_dir: std::path::PathBuf,
     pub api_key_store: Option<Arc<crate::api_keys::ApiKeyStore>>,
     pub db_path: std::path::PathBuf,
     pub router: Arc<crate::router::HostRouter>,
     pub ca_cert_path: String,
     pub audit_db: Arc<crate::audit::AuditDb>,
+}
+
+async fn refresh_bridge_state(
+    token_map: &tokio::sync::RwLock<HashMap<String, String>>,
+    host_groups: &tokio::sync::RwLock<HashMap<String, String>>,
+    db_path: &std::path::Path,
+    static_tokens: &HashMap<String, String>,
+) {
+    let Ok(store) = crate::bridge_store::BridgeStore::open(db_path) else {
+        return;
+    };
+    let mut db_hashes = store.token_map().await;
+    if !db_hashes.is_empty() || !static_tokens.is_empty() {
+        // DB is authoritative for DB-managed tokens; static file/CLI tokens
+        // are re-added so refresh never wipes them.
+        db_hashes.extend(static_tokens.iter().map(|(k, v)| (k.clone(), v.clone())));
+        let mut map = token_map.write().await;
+        *map = db_hashes;
+    }
+    let meta = store.get_all_host_meta().await;
+    let mut groups = host_groups.write().await;
+    groups.clear();
+    for m in meta {
+        if !m.group.is_empty() {
+            groups.insert(m.hostname, m.group);
+        }
+    }
 }
 
 pub async fn run_quic_server(
@@ -40,7 +75,9 @@ pub async fn run_quic_server(
     transport.receive_window(quinn::VarInt::from_u32(16 * 1024 * 1024));
     transport.congestion_controller_factory(Arc::new(quinn::congestion::BbrConfig::default()));
     transport.keep_alive_interval(Some(std::time::Duration::from_secs(15)));
-    transport.max_idle_timeout(Some(std::time::Duration::from_secs(120).try_into().unwrap()));
+    transport.max_idle_timeout(Some(
+        std::time::Duration::from_secs(120).try_into().unwrap(),
+    ));
 
     let addr: SocketAddr = config
         .listen_addr
@@ -54,23 +91,21 @@ pub async fn run_quic_server(
     let api_key_store = config.api_key_store.clone();
     let last_agents: Arc<tokio::sync::RwLock<HashMap<String, String>>> =
         Arc::new(tokio::sync::RwLock::new(HashMap::new()));
+    // hostname → registered group (from bridge registration DB)
+    let host_groups: Arc<tokio::sync::RwLock<HashMap<String, String>>> =
+        Arc::new(tokio::sync::RwLock::new(HashMap::new()));
 
-    // Background token refresh from DB every 30s
+    // Background token + group refresh from DB every 30s
     let refresh_map = Arc::clone(&token_map);
+    let refresh_groups = Arc::clone(&host_groups);
     let refresh_db = config.db_path.clone();
+    let refresh_static = config.static_token_hashes.clone();
     tokio::spawn(async move {
+        refresh_bridge_state(&refresh_map, &refresh_groups, &refresh_db, &refresh_static).await;
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
-        interval.tick().await; // skip first immediate tick
         loop {
             interval.tick().await;
-            if let Ok(store) = crate::bridge_store::BridgeStore::open(&refresh_db) {
-                let db_hashes = store.token_map().await;
-                if !db_hashes.is_empty() {
-                    let mut map = refresh_map.write().await;
-                    map.clear();
-                    map.extend(db_hashes);
-                }
-            }
+            refresh_bridge_state(&refresh_map, &refresh_groups, &refresh_db, &refresh_static).await;
         }
     });
 
@@ -83,9 +118,11 @@ pub async fn run_quic_server(
         let router = Arc::clone(&config.router);
         let ca_cert = config.ca_cert_path.clone();
         let audit = Arc::clone(&config.audit_db);
+        let groups = Arc::clone(&host_groups);
         tokio::spawn(async move {
             if let Err(e) = handle_connection(
                 incoming, registry, token_map, rec_dir, store, agents, router, ca_cert, audit,
+                groups,
             )
             .await
             {
@@ -108,6 +145,7 @@ async fn handle_connection(
     router: Arc<crate::router::HostRouter>,
     ca_cert_path: String,
     audit_db: Arc<crate::audit::AuditDb>,
+    host_groups: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
 ) -> anyhow::Result<()> {
     let conn = incoming.await?;
     let remote_addr = conn.remote_address();
@@ -145,6 +183,7 @@ async fn handle_connection(
                 router,
                 ca_cert_path,
                 audit_db,
+                host_groups,
             )
             .await
         }
@@ -311,7 +350,22 @@ async fn handle_push_stream(
         .get("filename")
         .and_then(|v| v.as_str())
         .unwrap_or("unknown.cast");
-    let size = header.get("size").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+    let size = header.get("size").and_then(|v| v.as_u64()).unwrap_or(0);
+
+    // Reject oversized recordings to prevent OOM (mirrors Pull path limit)
+    if size > MAX_PUSH_RECORDING_SIZE {
+        anyhow::bail!(
+            "recording too large: {} bytes (max {})",
+            size,
+            MAX_PUSH_RECORDING_SIZE
+        );
+    }
+    let size = size as usize;
+
+    // Reject path traversal in filename
+    if raw_filename.contains("..") || raw_filename.contains('/') || raw_filename.contains('\\') {
+        anyhow::bail!("unsafe recording filename: {raw_filename}");
+    }
 
     let agent = last_agents
         .read()
@@ -319,17 +373,26 @@ async fn handle_push_stream(
         .get(hostname)
         .cloned()
         .unwrap_or_else(|| "unknown".to_string());
-    let filename = format!("{agent}_{raw_filename}");
 
-    let host_dir = recordings_dir.join(hostname);
+    // Reject path traversal in agent name as well
+    if agent.contains("..") || agent.contains('/') || agent.contains('\\') {
+        anyhow::bail!("unsafe agent name in recording push: {agent}");
+    }
+
+    let safe_filename = format!("{agent}_{raw_filename}");
+
+    // Use date-based layout ({host}/{date}/{file}) so Push files are
+    // discoverable by list_local_recordings and subject to cleanup policies.
+    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    let host_dir = recordings_dir.join(hostname).join(&today);
     tokio::fs::create_dir_all(&host_dir).await?;
-    let file_path = host_dir.join(&filename);
+    let file_path = host_dir.join(&safe_filename);
 
     let mut file_data = vec![0u8; size];
     recv.read_exact(&mut file_data).await?;
     tokio::fs::write(&file_path, &file_data).await?;
 
-    tracing::info!(%hostname, %filename, %agent, size, "recording received");
+    tracing::info!(%hostname, %safe_filename, %agent, size, "recording received");
 
     let ack = serde_json::json!({"type": "recording_ack", "ok": true});
     let ack_data = serde_json::to_vec(&ack)?;
@@ -353,14 +416,19 @@ async fn handle_agent_connection(
     router: Arc<crate::router::HostRouter>,
     ca_cert_path: String,
     audit_db: Arc<crate::audit::AuditDb>,
+    host_groups: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
 ) -> anyhow::Result<()> {
     // Validate API key if auth is enabled
     let mut agent_name = "unknown".to_string();
+    let mut caller_group: Option<String> = None;
     if let Some(store) = &api_key_store {
         if !store.is_empty().await {
             let key = msg.get("api_key").and_then(|v| v.as_str()).unwrap_or("");
             match store.validate(key).await {
-                Some(identity) => agent_name = identity.name,
+                Some(identity) => {
+                    agent_name = identity.name;
+                    caller_group = identity.group;
+                }
                 None => {
                     write_frame(&mut send, &serde_json::json!({"type": "agent_ack", "ok": false, "error": "invalid api key"})).await?;
                     conn.close(quinn::VarInt::from_u32(0), b"auth failed");
@@ -383,6 +451,29 @@ async fn handle_agent_connection(
         )
         .await?;
         anyhow::bail!("agent_connect without host from {remote_addr}");
+    }
+
+    // Group isolation: reject before establishing any bridge connection.
+    // The runtime registration DB is authoritative; hosts.yaml is a fallback.
+    if let Some(ref cg) = caller_group {
+        let registered_group = host_groups.read().await.get(&host).cloned();
+        let host_group = registered_group.filter(|g| !g.is_empty()).or_else(|| {
+            router
+                .get(&host)
+                .map(|h| h.group.clone())
+                .filter(|g| !g.is_empty())
+        });
+        if host_group.as_deref() != Some(cg.as_str()) {
+            write_frame(
+                &mut send,
+                &serde_json::json!({"type": "agent_ack", "ok": false, "error": format!("host '{host}' is not in your group '{cg}'")}),
+            )
+            .await?;
+            conn.close(quinn::VarInt::from_u32(0), b"forbidden");
+            anyhow::bail!(
+                "agent group mismatch: caller={cg} host={host_group:?} from {remote_addr}"
+            );
+        }
     }
 
     let bridge_conn: quinn::Connection = if let Some(b) = registry.get(&host).await {
