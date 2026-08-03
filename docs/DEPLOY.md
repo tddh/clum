@@ -233,11 +233,21 @@ API Key 格式 `yk_{name}_{32hex}`，SHA-256 哈希存储在 SQLite。通过 HTT
 
 ```bash
 # Server 侧管理 API Key
-yunying-mcp agent add tddh        # 创建，输出 yk_tddh_xxxx
-yunying-mcp agent list            # 列出
-yunying-mcp agent rotate tddh     # 轮换
+yunying-mcp agent add tddh --admin          # 创建超管 Key（需显式 --admin）
+yunying-mcp agent add alice --group infra   # 创建组内 Key（仅访问 infra 组主机）
+yunying-mcp agent list            # 列出（含 GROUP 列）
+yunying-mcp agent rotate tddh     # 轮换（继承原 group）
 yunying-mcp agent revoke tddh     # 吊销
 ```
+
+**Group 隔离（RBAC）**：
+
+| Key 类型 | 权限 |
+|----------|------|
+| 无 group（超管） | 访问所有主机、所有工具 |
+| 有 group | 仅访问本组主机；`host_list`/`audit_query`/`list_recordings` 自动过滤；`reload_config`/`host_set_meta` 不可用 |
+
+主机的 group 在 `hosts.yaml` 的 `group` 字段或 `bridge add --group` 时指定。组内 Key 看不到组外主机的存在。
 
 **Bridge 认证**：
 
@@ -357,7 +367,7 @@ yunying-mcp audit cleanup --older-than 30
 ```
 ~/.yunying/                      # MCP Server 本地
 ├── audit.db                       # 审计数据库（SQLite）
-└── recordings/                    # 从 bridge 同步的 PTY 录制文件（asciinema v2）
+└── recordings/                    # PTY 录制文件（Bridge 实时推送 + 定期同步）
 
 /usr/local/bin/
 └── rmux-bridge                   # bridge 二进制

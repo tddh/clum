@@ -206,10 +206,13 @@ hosts:
 
 ```bash
 # API Key management
-yunying-mcp agent add <name>       # Create API key (outputs yk_<name>_<hex>)
-yunying-mcp agent list             # List all API keys
-yunying-mcp agent rotate <name>    # Rotate a key
+yunying-mcp agent add <name> (--group <g> | --admin)  # Create key (--admin = superadmin, --group = restricted)
+yunying-mcp agent list             # List all keys (shows GROUP column)
+yunying-mcp agent rotate <name>    # Rotate a key (inherits group)
 yunying-mcp agent revoke <name>    # Revoke a key
+
+# Group isolation: grouped keys can only access hosts in their group.
+# host_list/audit_query/recordings auto-filter; reload_config/host_set_meta blocked.
 
 # Bridge enrollment (dynamic registration, no hosts.yaml edit needed)
 yunying-mcp bridge add <hostname> [--group <g>] [--tags <t1,t2>]

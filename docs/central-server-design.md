@@ -405,7 +405,7 @@ Authorization: Bearer yk_tddh_a1b2c3d4...
 ### 4.4 管理命令
 
 ```bash
-yunying-server agent add tddh
+yunying-server agent add tddh --admin
 # API Key: yk_tddh_a1b2c3d4e5f6...（只展示一次）
 
 yunying-server agent list
@@ -475,7 +475,7 @@ yunying-server agent revoke ci-bot      # 立即失效
 | `files.rs` | Agent/CLI → Server → Bridge 流式中继 | Phase 1 |
 | `deploy.rs` | 通过 Server 路由 | Phase 1 |
 | `progress.rs` | 流式推送（SSE 或帧） | Phase 1 |
-| `recording_sync.rs` | Bridge 录制结束后主动推送到 Server（不拉） | Phase 1 |
+| `recording_sync.rs` | Dual-path: Bridge Push (real-time, quic_server.rs) + periodic Pull sync (recording_sync.rs) | Phase 1 |
 | `tunnel.rs` | CLI 本地监听 → QUIC → Server → QUIC → Bridge → TCP 目标 | Phase 1 |
 | CLI `connect` | CLI ↔ QUIC ↔ Server（透传）↔ QUIC ↔ Bridge ↔ rmux PTY | Phase 1 |
 | Bridge 审计 | **移除** Bridge 侧 SQLite，审计全部在 Server 侧记录 | Phase 1 |

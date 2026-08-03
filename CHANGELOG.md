@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **Group 隔离（RBAC）**：API Key 绑定 group（`agent add --group <g>`），Server 侧统一鉴权。组内 Key 只能访问本组主机，`host_list`/`host_filter`/`audit_query`/`list_recordings` 自动过滤，隧道按组隔离，`reload_config`/`host_set_meta` 仅超管可用。无 group 的 Key 为超管（向后兼容）。CLI 数据面（QUIC agent_connect）同步强制执行。
 - **Bridge 超时自动重连**：`ProtocolProxy` 包裹 `RwLock`，rmux SDK 连接超时后自动重连（generation 防并发重复重连）。
 - **QUIC 传输调优**：Bridge 客户端增加 idle timeout 120s、keep-alive 15s、BBR 拥塞控制、16MB 收发窗口；Server 端同步 idle timeout。
 - **Recording sync 连接复用**：录制同步优先使用 BridgeRegistry 已注册连接，避免每次同步新建 QUIC 连接（未注册主机回退直连）。
@@ -11,6 +12,7 @@
 - **Schema 审计修正**：修复 4 个 bug（`split_pane_with` 缺少 direction required、`respawn_pane` env 类型错误等）、7 处描述不准确；Skill 精简；路由改为 registry-first。
 
 ### Changed
+- **`agent add` 必须显式指定权限**：`--group <g>`（受限 Key）或 `--admin`（超管 Key）二选一，不指定直接报错，防止误建超管 Key。
 - **部署路径回退为 `/opt/agent-ops/`**：`deploy-bridge.sh` 和 `install.sh` 统一使用 `/opt/agent-ops/`（0.8.0 曾迁移到 `/opt/yunying/`，实际未全面落地）。
 
 ## [0.9.0] — 2026-07-30

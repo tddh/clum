@@ -377,6 +377,46 @@ Window 管理？
 ├── 调整布局 → `select_layout`
 └── 重命名 → `rename_window`
 
+## 包管理器非交互操作
+
+远程主机上的包管理器（apt、yum、dnf、pip、npm 等）可能在运行时弹出交互式
+TUI 弹窗（debconf、needrestart、whiptail 等），导致 exec 超时或终端卡死。
+
+**强制规则**：在远程主机上执行包管理命令时，**必须使用对应的非交互环境变量和参数**。
+不要依赖终端状态检测来处理弹窗——`terminal_state` 检测到 `confirm` 或 `editor`
+时命令已经卡住，不是预防。
+
+### 常见包管理器的非交互模式
+
+| 包管理器 | exec 命令格式 |
+|---------|-------------|
+| apt / apt-get | `DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get install -y <pkg>` |
+| dpkg | `DEBIAN_FRONTEND=noninteractive dpkg -i <pkg.deb>` |
+| yum | `yum install -y <pkg>` |
+| dnf | `dnf install -y <pkg>` |
+| zypper | `zypper install -y <pkg>` |
+| pip | `pip install --no-input <pkg>` |
+| npm (全局) | `npm install -g --yes <pkg>` |
+| pacman | `pacman -S --noconfirm <pkg>` |
+| apk | `apk add --no-cache <pkg>` |
+
+### DEBIAN_FRONTEND 说明
+
+`DEBIAN_FRONTEND=noninteractive` 禁止所有 debconf 交互弹窗：
+- whiptail/dialog 界面（如 mysql-server 设 root 密码、grub 更新选择）
+- needrestart 服务重启选择
+- EULA / 许可协议确认（如 msodbcsql17）
+- tzdata 时区选择
+
+`NEEDRESTART_MODE=a` 告诉 needrestart 自动重启受影响的服务，不询问。
+
+### batch_exec 特别提醒
+
+批量安装时非交互参数同样适用：
+```
+batch_exec(hosts=["k8s-n1","k8s-n2","k8s-n3"], command="DEBIAN_FRONTEND=noninteractive apt-get install -y nginx")
+```
+
 ## 违反后果
 
 违反以上规则 = BUG，必须立即修正。

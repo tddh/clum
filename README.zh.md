@@ -210,10 +210,13 @@ hosts:
 
 ```bash
 # API Key 管理
-yunying-mcp agent add <name>       # 创建 API Key（输出 yk_<name>_<hex>）
-yunying-mcp agent list             # 列出所有 Key
-yunying-mcp agent rotate <name>    # 轮换 Key
+yunying-mcp agent add <name> (--group <g> | --admin)  # 创建 Key（--admin = 超管，--group = 受限）
+yunying-mcp agent list             # 列出所有 Key（含 GROUP 列）
+yunying-mcp agent rotate <name>    # 轮换 Key（继承 group）
 yunying-mcp agent revoke <name>    # 吊销 Key
+
+# Group 隔离：组内 Key 只能访问本组主机。
+# host_list/audit_query/recordings 自动过滤；reload_config/host_set_meta 不可用。
 
 # Bridge 注册（动态注册，无需编辑 hosts.yaml）
 yunying-mcp bridge add <hostname> [--group <g>] [--tags <t1,t2>]
