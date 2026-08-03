@@ -88,7 +88,7 @@ impl BridgeRegistry {
                 labels: c.labels.clone(),
                 version: c.version.clone(),
                 os_info: c.os_info.clone(),
-                online: true,
+                online: c.conn.close_reason().is_none(),
                 registered_secs_ago: c.registered_at.elapsed().as_secs(),
             })
             .collect()
