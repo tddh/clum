@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.10.0] — 2026-08-04
+
+**项目改名：yunying → clum**（沿革：agent-ops → yunying → clum）。这是一次破坏性改名，请仔细阅读以下迁移说明。
+
+### Breaking
+- **crate 与二进制**：`yunying-core/mcp/cli` → `clum-core/mcp/cli`；二进制 `yunying-mcp`/`yunying-cli` → `clum-mcp`/`clum-cli`。release 产物更名为 `clum-{macos-arm64,linux-x86_64,windows-x86_64}`。
+- **MCP 客户端配置**：server key 建议从 `yunying` 改为 `clum`（工具前缀随之变为 `mcp__clum__*`），工具 `yunying_usage_rules` → `clum_usage_rules`。
+- **环境变量**：`YUNYING_SERVER_ADDR/API_KEY/CA_CERT` → `CLUM_SERVER_ADDR/API_KEY/CA_CERT`。过渡期内旧变量仍作为 fallback 生效（启动时打印 deprecation 警告）。
+- **默认会话名**：`yunying` → `clum`。远端已有的 `yunying` 会话保留不动。
+- **远端路径**：`/etc/yunying` → `/etc/clum`、`/root/.yunying` → `/root/.clum`、`/opt/yunying` → `/opt/clum`、`yunying-mcp.service` → `clum-mcp.service`。部署脚本内置幂等迁移前奏（自动备份 + 原子替换）。
+- **QUIC ALPN**：新标识 `clum`。**顺序铁律**：必须先升级中央 server（0.10 起双 ALPN 兼容 `clum`+`yunying`），再滚动升级 bridge/cli；新组件直连旧 server 会 `QUIC handshake failed`。
+
+### Compatibility (transitional)
+- Server 双 ALPN：接受 `clum` 与旧 `yunying`，未升级的 bridge 不断连。计划在所有 bridge 升级完成后的下一版本移除 `b"yunying"`。
+- `YUNYING_*` 环境变量 fallback 与旧 token 路径 `/etc/yunying/token` 读取，计划随 ALPN 旧值一并移除。
+- 已部署的 CA 证书（CN=yunying-ca）继续有效，不强制重签；新签发 CA 使用 CN=clum-ca。
+- 历史审计日志（audit.db）原样迁移保留。
+
+### Added
+- `scripts/migrate-to-clum.sh`：本机 `~/.yunying` → `~/.clum` 数据目录迁移脚本。
+- `clum_core::inject_env_fallback`：CLUM_*/YUNYING_* 环境变量兼容辅助函数。
+
 ## [0.9.2] — 2026-08-03
 
 ### Security
