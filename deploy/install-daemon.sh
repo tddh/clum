@@ -19,9 +19,9 @@ ssh "$REMOTE_HOST" "sudo systemctl daemon-reload && sudo systemctl enable --now 
 echo "rmux-daemon started"
 
 # 4. 写入 profile.d，方便用户直接使用 rmux CLI
-ssh "$REMOTE_HOST" "echo 'export RMUX_TMPDIR=\$HOME/.rmux' | sudo tee /etc/profile.d/yunying.sh > /dev/null"
-echo "Wrote RMUX_TMPDIR=\$HOME/.rmux to /etc/profile.d/yunying.sh"
+ssh "$REMOTE_HOST" "echo 'export RMUX_TMPDIR=\$HOME/.rmux' | sudo tee /etc/profile.d/clum.sh > /dev/null"
+echo "Wrote RMUX_TMPDIR=\$HOME/.rmux to /etc/profile.d/clum.sh"
 
 echo ""
 echo "=== Daemon deployment complete ==="
-echo "Users can now run: rmux a -t yunying"
+echo "Users can now run: rmux a -t clum"

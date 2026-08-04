@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-# yunying Bridge installer (Hub mode)
+# clum Bridge installer (Hub mode)
 # Usage: curl -fsSLk -H "Authorization: Bearer <TOKEN>" https://SERVER:9788/releases/install.sh | \
 #          BRIDGE_TOKEN=xxx SERVER_ADDR=10.0.0.1:9788 sh
 
@@ -24,7 +24,7 @@ esac
 
 BASE_URL="https://${SERVER_ADDR}"
 
-echo ">>> Installing yunying bridge (${ARCH})"
+echo ">>> Installing clum bridge (${ARCH})"
 echo ">>> Server: ${SERVER_ADDR}"
 
 # Stop existing service to avoid "Text file busy"
@@ -33,11 +33,21 @@ if systemctl is-active rmux-bridge >/dev/null 2>&1; then
     systemctl stop rmux-bridge
 fi
 
+# Migrate legacy layouts (idempotent)
+if [ -d /etc/yunying ] && [ ! -d /etc/clum ]; then
+    echo ">>> Migrating /etc/yunying -> /etc/clum"
+    mv /etc/yunying /etc/clum
+fi
+if [ -d /opt/agent-ops ] && [ ! -d /opt/clum ]; then
+    echo ">>> Migrating /opt/agent-ops -> /opt/clum"
+    mv /opt/agent-ops /opt/clum
+fi
+
 # Clean up legacy files
-rm -f /etc/yunying/token
+rm -f /etc/clum/token
 rm -rf /opt/yunying
 
-mkdir -p /etc/yunying /opt/agent-ops/recordings
+mkdir -p /etc/clum /opt/clum/recordings
 
 # Download binary (write to temp then move to avoid partial writes)
 echo ">>> Downloading rmux-bridge..."
@@ -49,16 +59,16 @@ mv -f /tmp/rmux-bridge.download /usr/local/bin/rmux-bridge
 # Download CA cert
 echo ">>> Downloading CA certificate..."
 curl -fsSLk -H "Authorization: Bearer ${BRIDGE_TOKEN}" \
-    "${BASE_URL}/releases/ca.crt" -o /etc/yunying/ca.crt
+    "${BASE_URL}/releases/ca.crt" -o /etc/clum/ca.crt
 
 # Write bridge.env
-cat > /etc/yunying/bridge.env << EOF
+cat > /etc/clum/bridge.env << EOF
 BRIDGE_AUTH_TOKEN=${BRIDGE_TOKEN}
-YUNYING_SERVER_ADDR=${SERVER_ADDR}
-YUNYING_CA_CERT=/etc/yunying/ca.crt
+CLUM_SERVER_ADDR=${SERVER_ADDR}
+CLUM_CA_CERT=/etc/clum/ca.crt
 RECORDING_ENABLED=true
-RECORDING_DIR=/opt/agent-ops/recordings
-BRIDGE_AUDIT_DB=/opt/agent-ops/bridge_events.db
+RECORDING_DIR=/opt/clum/recordings
+BRIDGE_AUDIT_DB=/opt/clum/bridge_events.db
 RMUX_SOCKET=/root/.rmux/rmux-0/default
 EOF
 
@@ -71,11 +81,11 @@ fi
 # Write systemd unit
 cat > /etc/systemd/system/rmux-bridge.service << EOF
 [Unit]
-Description=yunying Bridge
+Description=clum Bridge
 After=network.target rmux-daemon.service
 
 [Service]
-EnvironmentFile=/etc/yunying/bridge.env
+EnvironmentFile=/etc/clum/bridge.env
 ExecStart=/usr/local/bin/rmux-bridge
 Restart=always
 RestartSec=5

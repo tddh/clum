@@ -1,4 +1,4 @@
-# yunying build commands
+# clum build commands
 
 default: check
 
@@ -15,23 +15,23 @@ release:
 # 交叉编译 Linux x86_64
 release-linux:
     CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc cargo build --target x86_64-unknown-linux-musl --release -p rmux-bridge
-    CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc cargo build --target x86_64-unknown-linux-musl --release -p yunying-mcp
+    CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc cargo build --target x86_64-unknown-linux-musl --release -p clum-mcp
 
 # 交叉编译 Windows x86_64（MCP 客户端）
 release-windows:
-    cargo build --target x86_64-pc-windows-msvc --release -p yunying-mcp -p yunying-cli
+    cargo build --target x86_64-pc-windows-msvc --release -p clum-mcp -p clum-cli
 
 check-bridge:
     cargo check -p rmux-bridge
 
 check-mcp:
-    cargo check -p yunying-mcp
+    cargo check -p clum-mcp
 
 build-bridge:
     cargo build -p rmux-bridge --release
 
 build-mcp:
-    cargo build -p yunying-mcp --release
+    cargo build -p clum-mcp --release
 
 # ─── 测试 ────────────────────────────
 test:
@@ -81,7 +81,7 @@ update-all-bridges: release-linux
 
 # 部署/更新 MCP server
 deploy-mcp host='root@10.220.71.1':
-    bash deploy/deploy-mcp.sh ./target/x86_64-unknown-linux-musl/release/yunying-mcp {{host}}
+    bash deploy/deploy-mcp.sh ./target/x86_64-unknown-linux-musl/release/clum-mcp {{host}}
 
 # (deprecated) 旧部署脚本，使用 deploy-bridge 代替
 deploy host token='{{token}}':

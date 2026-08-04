@@ -21,7 +21,7 @@ if [ ! -f "$CA_KEY" ] || [ ! -f "$CA_CRT" ]; then
         -keyout "$CA_KEY" \
         -out "$CA_CRT" \
         -days 3650 -nodes \
-        -subj "/CN=yunying-ca" \
+        -subj "/CN=clum-ca" \
         -addext "basicConstraints=critical,CA:TRUE" \
         -addext "keyUsage=critical,keyCertSign,cRLSign"
     chmod 600 "$CA_KEY"
