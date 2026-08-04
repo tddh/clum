@@ -1,10 +1,10 @@
-# yunying 项目开发规则
+# clum 项目开发规则
 
 ## MCP 工具使用规则（最高优先级）
 
 **以下规则优先级最高，必须严格遵守：**
 
-1. **默认会话**：所有 yunying 操作必须使用 `session_name="yunying"`，除非用户明确指定其他会话名
+1. **默认会话**：所有 clum 操作必须使用 `session_name="clum"`，除非用户明确指定其他会话名
 2. **默认 Pane**：`pane_id` 可省略，server 自动选择 window 0 中编号最小的 pane。破坏性工具（`close_pane`、`paste_buffer`、`respawn_pane`）必须显式指定
 3. **禁止随意创建会话**：不要自作主张创建 `test-session`、`debug-session` 等新会话，除非用户明确要求
 4. **先 attach 后 create**：操作前先 `session_attach` 检查会话是否存在，不存在才 `session_create`
@@ -25,11 +25,11 @@
 ## 项目结构
 
 ```
-yunying/
+clum/
 ├── crates/              # Rust crates
-│   ├── yunying-cli/   # CLI 交互式终端
-│   ├── yunying-core/  # 共享类型（HostConfig, AuditEvent, AuditAction）
-│   ├── yunying-mcp/   # MCP Server（Central Server 模式 / stdio 本地模式）
+│   ├── clum-cli/   # CLI 交互式终端
+│   ├── clum-core/  # 共享类型（HostConfig, AuditEvent, AuditAction）
+│   ├── clum-mcp/   # MCP Server（Central Server 模式 / stdio 本地模式）
 │   └── rmux-bridge/   # Bridge proxy
 ├── config/              # 配置文件
 ├── docs/                # 文档

@@ -1,8 +1,8 @@
-# `yunying-cli connect` 交互式终端连接设计方案
+# `clum-cli connect` 交互式终端连接设计方案
 
 > **版本**: v1.2 | **日期**: 2026-07-19 | **状态**: 已实现
 >
-> PTY 透传（0x06/0x07 协议）已完整实现。同时新增 AI 对话面板（ratatui 交替屏 + SSE 流式输出），通过 opencode SDK `session.prompt()` 纯管道模式驱动 Sisyphus agent，agent 通过 yunying MCP 工具操作远程终端。已支持 SGR 鼠标协议（滚轮/触摸板翻页）。
+> PTY 透传（0x06/0x07 协议）已完整实现。同时新增 AI 对话面板（ratatui 交替屏 + SSE 流式输出），通过 opencode SDK `session.prompt()` 纯管道模式驱动 Sisyphus agent，agent 通过 clum MCP 工具操作远程终端。已支持 SGR 鼠标协议（滚轮/触摸板翻页）。
 
 ---
 
@@ -10,10 +10,10 @@
 
 ### 1.1 问题
 
-当前 yunying 的所有终端操作都是 **请求-响应模式**（MCP 工具调用）：
+当前 clum 的所有终端操作都是 **请求-响应模式**（MCP 工具调用）：
 
 ```
-AI Agent ──MCP exec──► yunying-mcp ──QUIC──► bridge ──► rmux
+AI Agent ──MCP exec──► clum-mcp ──QUIC──► bridge ──► rmux
               │
               └── 每次调用独立，执行完返回结果
 ```
@@ -29,11 +29,11 @@ AI Agent ──MCP exec──► yunying-mcp ──QUIC──► bridge ──�
 
 ### 1.2 目标
 
-新增 `yunying-cli connect` 命令，让用户从命令行 **交互式连接** 到远程 rmux 会话：
+新增 `clum-cli connect` 命令，让用户从命令行 **交互式连接** 到远程 rmux 会话：
 
 ```bash
 # 连接到远程主机的 rmux 会话
-$ yunying-cli connect prod-web-01 --session yunying --pane %0
+$ clum-cli connect prod-web-01 --session clum --pane %0
 
 # 效果等同于 SSH + tmux attach，但通过 QUIC 加密通道
 # 支持：实时输入输出、vim/top/htop、Ctrl+C、Tab 补全、窗口 resize
@@ -75,7 +75,7 @@ $ yunying-cli connect prod-web-01 --session yunying --pane %0
 
 ### 2.3 与 SSH 的区别
 
-| 维度 | SSH | yunying-cli connect |
+| 维度 | SSH | clum-cli connect |
 |------|-----|-------------------|
 | **执行环境** | 新建一个 shell 进程 | 接入已有的 rmux pane |
 | **断开后** | shell 终止，进程丢失 | shell 继续，进程存活 |
@@ -133,7 +133,7 @@ AI Agent 继续通过 MCP exec 操作同一个 pane %0：
 | **数据编码** | 原始字节（gmux、neosh、sshx） | 原始字节 | 终端 I/O 就是字节流，不需要额外编码 |
 | **Resize 协议** | JSON text（gmux）或 binary prefix（VROOM） | 控制流上的二进制帧 | 紧凑且类型安全 |
 | **历史回放** | Ghost Buffer（Quil、VS Code、sshx） | bridge 端环形缓冲区 | 重连时立即看到上下文 |
-| **认证** | Token + TLS（neosh、yunying 现有） | 复用现有 bridge token | 无需新认证机制 |
+| **认证** | Token + TLS（neosh、clum 现有） | 复用现有 bridge token | 无需新认证机制 |
 | **会话持久化** | 由 tmux/rmux daemon 管理 | 复用 rmux session | rmux 天然支持 detach/attach |
 
 ---
@@ -144,11 +144,11 @@ AI Agent 继续通过 MCP exec 操作同一个 pane %0：
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      yunying-cli connect                          │
+│                      clum-cli connect                          │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │  ┌──────────────┐    QUIC/TLS     ┌──────────────┐             │
-│  │  yunying   │ ═══════════════ │ rmux-bridge  │             │
+│  │  clum   │ ═══════════════ │ rmux-bridge  │             │
 │  │  CLI (新增)   │                 │ (改动)        │             │
 │  │              │                 │              │             │
 │  │ ┌──────────┐ │  控制流 (0x06)  │ ┌──────────┐ │             │
@@ -169,11 +169,11 @@ AI Agent 继续通过 MCP exec 操作同一个 pane %0：
 
 ```
 现有 MCP 工具（请求-响应）：
-  AI Agent ──MCP──► yunying-mcp ──QUIC 0x01──► bridge ──► rmux
+  AI Agent ──MCP──► clum-mcp ──QUIC 0x01──► bridge ──► rmux
   特点：每次调用独立，exec/capture_pane 是原子操作
 
 新增 connect 命令（交互式长连接）：
-  用户 ──CLI──► yunying CLI ──QUIC 0x06/0x07──► bridge ──► rmux
+  用户 ──CLI──► clum CLI ──QUIC 0x06/0x07──► bridge ──► rmux
   特点：持续双向流，实时 PTY 转发
 
 两者共享：
@@ -187,15 +187,15 @@ AI Agent 继续通过 MCP exec 操作同一个 pane %0：
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    yunying 完整能力矩阵                  │
+│                    clum 完整能力矩阵                  │
 ├─────────────────────────────────────────────────────────┤
 │                                                         │
 │  AI Agent 使用（MCP 工具）        人类使用（CLI 命令）     │
 │  ┌─────────────────────┐    ┌─────────────────────┐    │
-│  │ • exec              │    │ • yunying-cli connect  │    │
-│  │ • capture_pane      │    │ • yunying upload   │    │
-│  │ • send_keys         │    │ • yunying download │    │
-│  │ • file_upload       │    │ • yunying tunnel   │    │
+│  │ • exec              │    │ • clum-cli connect  │    │
+│  │ • capture_pane      │    │ • clum upload   │    │
+│  │ • send_keys         │    │ • clum download │    │
+│  │ • file_upload       │    │ • clum tunnel   │    │
 │  │ • batch_exec        │    │                      │    │
 │  │ • ...（67 个工具）   │    │                      │    │
 │  └─────────────────────┘    └─────────────────────┘    │
@@ -369,7 +369,7 @@ enum ServerControl {
 
 ### 5.6 字节级协议示例
 
-以 `yunying-cli connect prod-web-01 --session yunying --pane %0` 为例：
+以 `clum-cli connect prod-web-01 --session clum --pane %0` 为例：
 
 ```
 === QUIC 连接建立 ===
@@ -383,7 +383,7 @@ Client → Bridge:
   [0x01]                              # message type: Attach
   [0x23 0x00]                         # payload length: 35 bytes (9+2+2+1+2+2+16+1)
   [0x09 0x00]                         # session_name length: 9
-  "yunying"                         # session_name (UTF-8)
+  "clum"                         # session_name (UTF-8)
   [0x02]                              # pane_id length: 2
   "%0"                                # pane_id (UTF-8)
   [0x50 0x00]                         # initial_cols: 80
@@ -434,11 +434,11 @@ Bridge → Client (控制流):
 |------|------|---------|--------|------|
 | **Bridge** | `crates/rmux-bridge/src/files.rs` | 修改 | ~10 行 | `handle_quic_stream()` 新增 `0x06`/`0x07` 分支 |
 | **Bridge** | `crates/rmux-bridge/src/interactive.rs` | 新增 | ~200 行 | 交互式终端处理器 |
-| **CLI** | `crates/yunying-cli/Cargo.toml` | 新增 | ~20 行 | 新 crate 配置 |
-| **CLI** | `crates/yunying-cli/src/main.rs` | 新增 | ~80 行 | CLI 入口（clap） |
-| **CLI** | `crates/yunying-cli/src/connect.rs` | 新增 | ~250 行 | 交互式连接核心逻辑 |
-| **CLI** | `crates/yunying-cli/src/terminal.rs` | 新增 | ~80 行 | 本地终端管理 |
-| **CLI** | `crates/yunying-cli/src/protocol.rs` | 新增 | ~100 行 | 控制流/数据流协议编解码 |
+| **CLI** | `crates/clum-cli/Cargo.toml` | 新增 | ~20 行 | 新 crate 配置 |
+| **CLI** | `crates/clum-cli/src/main.rs` | 新增 | ~80 行 | CLI 入口（clap） |
+| **CLI** | `crates/clum-cli/src/connect.rs` | 新增 | ~250 行 | 交互式连接核心逻辑 |
+| **CLI** | `crates/clum-cli/src/terminal.rs` | 新增 | ~80 行 | 本地终端管理 |
+| **CLI** | `crates/clum-cli/src/protocol.rs` | 新增 | ~100 行 | 控制流/数据流协议编解码 |
 | **总计** | | | **~740 行** | |
 
 ### 6.2 Bridge 端实现
@@ -781,7 +781,7 @@ async fn write_process_exited(send: &mut SendStream, exit_code: i32) -> Result<(
 #### 6.3.1 新增 crate 结构
 
 ```
-crates/yunying-cli/
+crates/clum-cli/
 ├── Cargo.toml
 └── src/
     ├── main.rs          # CLI 入口（clap）
@@ -794,16 +794,16 @@ crates/yunying-cli/
 
 ```toml
 [package]
-name = "yunying-cli"
+name = "clum-cli"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "yunying-cli"
+name = "clum-cli"
 path = "src/main.rs"
 
 [dependencies]
-yunying-core = { path = "../yunying-core" }
+clum-core = { path = "../clum-core" }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 crossterm = { version = "0.29", features = ["event-stream"] }
@@ -820,22 +820,22 @@ futures = "0.3"
 #### 6.3.3 CLI 入口（`main.rs`）
 
 ```rust
-// crates/yunying-cli/src/main.rs
+// crates/clum-cli/src/main.rs
 
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "yunying-cli", about = "AI Agent 远程运维 CLI")]
+#[command(name = "clum-cli", about = "AI Agent 远程运维 CLI")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
     
     /// 主机配置文件路径
-    #[arg(long, default_value = "~/.yunying/hosts.yaml")]
+    #[arg(long, default_value = "~/.clum/hosts.yaml")]
     hosts_file: String,
     
     /// CA 证书路径（用于 TLS 验证）
-    #[arg(long, default_value = "~/.yunying/ca.crt")]
+    #[arg(long, default_value = "~/.clum/ca.crt")]
     ca_cert: String,
 }
 
@@ -847,7 +847,7 @@ enum Commands {
         host: String,
         
         /// rmux session 名称
-        #[arg(long, default_value = "yunying")]
+        #[arg(long, default_value = "clum")]
         session: String,
         
         /// pane ID
@@ -890,14 +890,14 @@ async fn main() -> anyhow::Result<()> {
 #### 6.3.4 交互式连接核心（`connect.rs`）
 
 ```rust
-// crates/yunying-cli/src/connect.rs
+// crates/clum-cli/src/connect.rs
 //
 // 参考：
 // - crossterm raw mode 模式：直接转发字节，不画 UI
 // - zellij-client/src/os_input_output.rs — 类似的 raw 终端转发
 // - neosh 的 session resume 机制
 
-use yunying_core::HostConfig;
+use clum_core::HostConfig;
 use anyhow::{Context, Result};
 use crossterm::terminal::{enable_raw_mode, disable_raw_mode};
 use serde_json;
@@ -1067,7 +1067,7 @@ pub async fn list_sessions(config: &HostConfig, ca_cert_path: &str) -> Result<()
 #### 6.3.5 本地终端管理（`terminal.rs`）
 
 ```rust
-// crates/yunying-cli/src/terminal.rs
+// crates/clum-cli/src/terminal.rs
 //
 // 参考：
 // - ratatui 的 raw mode 模式
@@ -1219,7 +1219,7 @@ pub async fn handle_interactive_control(...) -> Result<()> {
   "timestamp": "2026-07-07T10:30:00Z",
   "agent_name": "human-user",
   "host_name": "prod-web-01",
-  "session_name": "yunying",
+  "session_name": "clum",
   "pane_id": "%0",
   "action": "interactive_connect",
   "detail": "cols=120,rows=40,term=xterm-256color",
@@ -1310,7 +1310,7 @@ pub async fn handle_interactive_data(
 采用 **asciinema v2 格式**（业界标准终端录制格式），可直接用 `asciinema play` 回放：
 
 ```jsonl
-// ~/.yunying/recordings/2026-07-07/prod-web-01_yunying_%0_1720321800.cast
+// ~/.clum/recordings/2026-07-07/prod-web-01_clum_%0_1720321800.cast
 {"version": 2, "width": 120, "height": 40, "timestamp": 1720321800, "env": {"SHELL": "/bin/bash", "TERM": "xterm-256color"}}
 {"ts": 0.0, "type": "i", "data": "ls -la\n"}
 {"ts": 0.05, "type": "o", "data": "total 32\r\ndrwxr-xr-x  5 root root 4096 Jul  7 10:00 .\r\n..."}
@@ -1333,7 +1333,7 @@ pub async fn handle_interactive_data(
 │                                                                 │
 │  MCP 模式（AI Agent）              CLI 直连模式（人类）           │
 │  ┌───────────────────┐            ┌───────────────────┐        │
-│  │  yunying-mcp    │            │  yunying-cli    │        │
+│  │  clum-mcp    │            │  clum-cli    │        │
 │  │                   │            │                   │        │
 │  │  SQLite 审计日志   │            │  无本地审计        │        │
 │  │  (每次工具调用)    │            │  (防篡改无意义)    │        │
@@ -1355,7 +1355,7 @@ pub async fn handle_interactive_data(
 │           ┌──────────────────┐                                  │
 │           │  审计存储          │                                  │
 │           │  bridge 端:       │                                  │
-│           │  ~/.yunying/    │                                  │
+│           │  ~/.clum/    │                                  │
 │           │  ├── audit.db     │  ← 连接事件（SQLite）            │
 │           │  └── recordings/  │  ← PTY 录制（asciinema 格式）    │
 │           └──────────────────┘                                  │
@@ -1371,7 +1371,7 @@ pub async fn handle_interactive_data(
 | **粒度** | 每次工具调用一条记录 | 整个连接一条记录 + 连续 I/O 录制 |
 | **防篡改** | SQLite 在用户本地，可被修改 | 录制在 bridge 端（目标主机），用户无法修改 |
 | **回放** | 无（只有文本摘要） | asciinema 格式，可完整回放 |
-| **存储** | `~/.yunying/audit.db` | bridge 端 `~/.yunying/recordings/` |
+| **存储** | `~/.clum/audit.db` | bridge 端 `~/.clum/recordings/` |
 
 **CLI 审计实际上比 MCP 审计更安全**——录制文件在目标主机上，操作用户无法删除或篡改。
 
@@ -1379,21 +1379,21 @@ pub async fn handle_interactive_data(
 
 ```bash
 # 查询连接记录
-$ yunying audit query --type interactive --host prod-web-01
+$ clum audit query --type interactive --host prod-web-01
 
 TIME                 USER          HOST          SESSION     DURATION
-2026-07-07 10:30:00  human-user    prod-web-01   yunying   5m 23s
-2026-07-07 09:15:00  claude-sonnet prod-web-01   yunying   0m 3s    (MCP exec)
+2026-07-07 10:30:00  human-user    prod-web-01   clum   5m 23s
+2026-07-07 09:15:00  claude-sonnet prod-web-01   clum   0m 3s    (MCP exec)
 
 # 回放录制
-$ yunying replay ~/.yunying/recordings/prod-web-01_yunying_%0_1720321800.cast
+$ clum replay ~/.clum/recordings/prod-web-01_clum_%0_1720321800.cast
 
 # 列出所有录制
-$ yunying recordings list --host prod-web-01
+$ clum recordings list --host prod-web-01
 
 FILE                                                      SIZE    DATE
-prod-web-01_yunying_%0_1720321800.cast                  12KB    2026-07-07 10:30
-prod-web-01_yunying_%0_1720318200.cast                  45KB    2026-07-07 09:15
+prod-web-01_clum_%0_1720321800.cast                  12KB    2026-07-07 10:30
+prod-web-01_clum_%0_1720318200.cast                  45KB    2026-07-07 09:15
 ```
 
 #### 8.2.9 录制存储策略
@@ -1403,7 +1403,7 @@ prod-web-01_yunying_%0_1720318200.cast                  45KB    2026-07-07 09:15
 audit:
   recording:
     enabled: true
-    dir: ~/.yunying/recordings
+    dir: ~/.clum/recordings
     max_age_days: 30          # 保留 30 天
     max_size_mb: 500          # 最大 500MB
     compress: true            # gzip 压缩旧录制
@@ -1486,7 +1486,7 @@ AI 面板依赖 `opencode serve --port 14096` 作为后端：
 | 任务 | 说明 | 验收标准 |
 |------|------|---------|
 | Bridge 端 `handle_interactive_control/data` | 新增 0x06/0x07 流处理 | 能接受连接并转发数据 |
-| CLI crate 骨架 | `yunying-cli connect` 命令 | `just build` 通过 |
+| CLI crate 骨架 | `clum-cli connect` 命令 | `just build` 通过 |
 | 基础 PTY 转发 | stdin → send_key, output_stream → stdout | 能执行简单命令并看到输出 |
 | Raw mode 终端 | crossterm enable_raw_mode | 终端输入输出正常 |
 
@@ -1498,14 +1498,14 @@ AI 面板依赖 `opencode serve --port 14096` 作为后端：
 | Ghost Buffer 回放 | 连接时输出最近 ~64KB 历史 | 重连时能看到之前的输出 |
 | 优雅断开 | Ctrl+\ 或 `exit` 时发送 Detach 消息 | 断开后 session 继续存活 |
 | 错误处理 | session/pane 不存在时的友好提示 | 清晰的错误信息 |
-| `yunying list` | 列出可连接的 session/pane | 表格输出 |
+| `clum list` | 列出可连接的 session/pane | 表格输出 |
 
 ### Phase 3：高级特性（3-5 天，可选）
 
 | 任务 | 说明 | 验收标准 |
 |------|------|---------|
 | 断线重连 | QUIC 连接迁移 + rmux session reattach | 网络切换后自动恢复 |
-| 只读模式 | `yunying-cli connect --readonly` | 只能看不能输入 |
+| 只读模式 | `clum-cli connect --readonly` | 只能看不能输入 |
 | 审计集成 | ✅ 已实现：bridge 端 PTY 录制 + 事件日志 + MCP 同步拉取 | `query_bridge_audit` / `list_recordings` |
 | 多人共享 | 多个客户端 attach 同一个 pane | 所有人看到相同输出 |
 
@@ -1528,26 +1528,26 @@ AI 面板依赖 `opencode serve --port 14096` 作为后端：
 
 ```bash
 # 基础连接
-$ yunying-cli connect prod-web-01
-Connected to prod-web-01:yunying/%0 (120x40)
+$ clum-cli connect prod-web-01
+Connected to prod-web-01:clum/%0 (120x40)
 Last login: 2026-07-07 10:00:00
 $ ls -la
 ...
 
 # 指定 session 和 pane
-$ yunying-cli connect prod-web-01 --session debug --pane %1
+$ clum-cli connect prod-web-01 --session debug --pane %1
 
 # 只读模式（观察 AI Agent 操作）
-$ yunying-cli connect prod-web-01 --readonly
+$ clum-cli connect prod-web-01 --readonly
 
 # 列出可连接的会话（注意：list 是独立子命令，非 connect --list）
-$ yunying-cli list prod-web-01
+$ clum-cli list prod-web-01
 SESSION              HOST
-yunying            prod-web-01
+clum            prod-web-01
 debug                prod-web-01
 
 # 使用自定义 hosts 文件
-$ yunying-cli --hosts-file ./my-hosts.yaml connect staging-01
+$ clum-cli --hosts-file ./my-hosts.yaml connect staging-01
 ```
 
 ---
@@ -1559,7 +1559,7 @@ $ yunying-cli --hosts-file ./my-hosts.yaml connect staging-01
 除了 CLI 方案，还可以在 MCP server 中直接支持交互式终端连接，让 AI agent 通过工具调用来操作远程终端。
 
 ```
-AI Agent ──MCP tool call──► yunying-mcp ──QUIC 长连接──► bridge ──► rmux
+AI Agent ──MCP tool call──► clum-mcp ──QUIC 长连接──► bridge ──► rmux
                                 │
                           内部维持连接（类似 tunnel.rs 的模式）
                           StreamManager 管理多个 interactive session

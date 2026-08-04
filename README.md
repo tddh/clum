@@ -1,28 +1,28 @@
-# yunying
+# clum
 
-> *yunying* (云影) — from the I Ching hexagram Xun (巽, Wind): invisible yet pervasive, all things move with it unaware.
+> *clum* — remote reach for AI agents: one central server, every host within command. (Renamed from yunying in 0.10.0; lineage: agent-ops → yunying → clum.)
 
 > Secure infrastructure for AI agents and human operators managing Linux hosts — persistent terminal sessions powered by rmux, full-chain audit logging, MCP-native interface for AI clients + CLI PTY passthrough for humans, with file transfer and multi-host orchestration.
 
 [中文文档](README.zh.md)
 
-## Why yunying?
+## Why clum?
 
-AI agents have evolved from "generating commands for humans" to **autonomously operating terminals** — deploying services, diagnosing failures, running long builds and training jobs, all without human intervention. But traditional terminal tools (SSH, tmux) were designed for human interaction, not programmatic API calls. yunying is built on **rmux**, turning terminal sessions from a human interface into a programmable resource for both AI agents (via MCP) and human operators (via CLI PTY passthrough), with three production-grade layers on top.
+AI agents have evolved from "generating commands for humans" to **autonomously operating terminals** — deploying services, diagnosing failures, running long builds and training jobs, all without human intervention. But traditional terminal tools (SSH, tmux) were designed for human interaction, not programmatic API calls. clum is built on **rmux**, turning terminal sessions from a human interface into a programmable resource for both AI agents (via MCP) and human operators (via CLI PTY passthrough), with three production-grade layers on top.
 
 Three problems stand between agent prototypes and production deployment, and existing tools (plain SSH MCP servers, basic tmux wrappers) largely ignore them:
 
 - **Reliability**: Plain SSH drops running processes on disconnect — long-running tasks fail mid-flight. Traditional tmux automation relies on `send-keys + sleep + grep`, where any timing drift breaks the workflow.
 - **Auditability**: When AI operates servers in production, you must trace **who did what, when, on which machine, and with what result**. Most SSH tools lack built-in audit capabilities entirely.
-- **Security boundary**: Handing SSH keys directly to an AI client is a massive attack surface. yunying uses Bridge proxy + Token auth + TLS encryption to confine server access to the target host — the client side (both MCP and CLI) never holds server credentials.
+- **Security boundary**: Handing SSH keys directly to an AI client is a massive attack surface. clum uses Bridge proxy + Token auth + TLS encryption to confine server access to the target host — the client side (both MCP and CLI) never holds server credentials.
 
 The three layers: **Protocol layer** (MCP standard interface for AI clients + CLI PTY passthrough for human operators), **Management layer** (multi-host registry, group/tag filtering, broadcast operations), and **Compliance layer** (structured SQLite audit trail covering both MCP and CLI operations, ready for operational traceability). Together they fill the infrastructure gap between agent prototypes and production readiness.
 
 ### Where does it fit?
 
-yunying provides **secure, reliable, auditable remote access to Linux hosts** — terminal sessions, file transfer, port forwarding, and operation audit. It's not a replacement for SSH (transport layer), Ansible (configuration management), or tmux (terminal multiplexer). It's a new category: a **remote operations platform** that turns terminal sessions into programmable resources for both AI agents and humans.
+clum provides **secure, reliable, auditable remote access to Linux hosts** — terminal sessions, file transfer, port forwarding, and operation audit. It's not a replacement for SSH (transport layer), Ansible (configuration management), or tmux (terminal multiplexer). It's a new category: a **remote operations platform** that turns terminal sessions into programmable resources for both AI agents and humans.
 
-yunying doesn't care what runs inside the terminal — raw shell commands, Ansible playbooks, build scripts, or interactive debugging. It provides the **persistent session + audit trail + multi-host operations**, and you bring the tools.
+clum doesn't care what runs inside the terminal — raw shell commands, Ansible playbooks, build scripts, or interactive debugging. It provides the **persistent session + audit trail + multi-host operations**, and you bring the tools.
 
 **A few patterns:**
 
@@ -37,7 +37,7 @@ AI Agent (via MCP)
 
 # Pattern 2: Human investigates via CLI while AI assists
 Human (via CLI PTY passthrough)
-  → yunying-cli connect tf01  # same session AI was working in
+  → clum-cli connect tf01  # same session AI was working in
   → vim /etc/nginx/nginx.conf  # human edits in familiar tools
   AI Agent (via MCP)
   → exec: nginx -t && systemctl reload nginx  # AI validates & applies
@@ -54,14 +54,14 @@ AI (via MCP)
 - **Incident response**: AI or human jumps into a live session, reads system state, diagnoses root cause, and executes repairs — all within the same persistent terminal
 - **Ad-hoc operations**: Quick one-off commands across multiple hosts (`batch_exec`), file transfers, port forwarding — no Playbook needed
 - **Interactive debugging**: Persistent sessions for builds, long-running task monitoring, or interactive troubleshooting via both MCP (AI) and CLI PTY passthrough (human)
-- **Remote development**: `yunying-cli connect devbox` — work on a remote machine with your familiar terminal environment, with AI assistance one keystroke away (Ctrl+G)
-- **Compliance auditing**: Full-chain audit trail covering both AI and human operations on every host, queryable via `yunying-mcp audit query`
+- **Remote development**: `clum-cli connect devbox` — work on a remote machine with your familiar terminal environment, with AI assistance one keystroke away (Ctrl+G)
+- **Compliance auditing**: Full-chain audit trail covering both AI and human operations on every host, queryable via `clum-mcp audit query`
 
 ## Architecture
 
 ```mermaid
 graph LR
-    A[AI Client<br/>opencode/Claude/Cursor] <-->|HTTP :9788<br/>MCP Streamable HTTP| S[Central MCP Server<br/>yunying-mcp --mode http]
+    A[AI Client<br/>opencode/Claude/Cursor] <-->|HTTP :9788<br/>MCP Streamable HTTP| S[Central MCP Server<br/>clum-mcp --mode http]
     H[Human] <-->|QUIC :9788<br/>PTY / upload / tunnel| S
     S <-->|QUIC :9788<br/>reverse registration| C1[rmux-bridge<br/>host-1]
     S <-->|QUIC :9788| C2[rmux-bridge<br/>host-2]
@@ -71,8 +71,8 @@ graph LR
     C3 <-->|Unix Socket| D3[RMUX daemon]
 ```
 
-- **yunying-mcp (Central Server)** — Central MCP Server: HTTP :9788 for AI clients (MCP protocol) + QUIC :9788 for Bridge registration and CLI data plane. Provides 67 tools, centralized audit, API Key auth, and static file serving.
-- **yunying-cli** — CLI for humans: PTY passthrough (`connect`), file transfer (`upload`/`download` — files or directories, chunked streaming with SHA-256, `--exclude` globs for directories), port forwarding (`tunnel` — auto-reconnects on network loss, `--give-up-after`), session listing (`list`), recording playback (`replay`). Built-in AI chat panel (Ctrl+G).
+- **clum-mcp (Central Server)** — Central MCP Server: HTTP :9788 for AI clients (MCP protocol) + QUIC :9788 for Bridge registration and CLI data plane. Provides 67 tools, centralized audit, API Key auth, and static file serving.
+- **clum-cli** — CLI for humans: PTY passthrough (`connect`), file transfer (`upload`/`download` — files or directories, chunked streaming with SHA-256, `--exclude` globs for directories), port forwarding (`tunnel` — auto-reconnects on network loss, `--give-up-after`), session listing (`list`), recording playback (`replay`). Built-in AI chat panel (Ctrl+G).
 - **rmux-bridge** — Agent deployed on each Linux host. Reverse-connects to the Central Server, handles tool execution, file I/O, PTY sessions, and recording push.
 - **RMUX daemon** — Terminal multiplexer on each Linux host (rmux-based).
 
@@ -80,10 +80,10 @@ graph LR
 
 | Component | Runs on | Connects to |
 |-----------|---------|-------------|
-| `yunying-mcp --mode http` | Central server (1 instance) | — |
+| `clum-mcp --mode http` | Central server (1 instance) | — |
 | `rmux-bridge` | Each target Linux host | Central Server (QUIC, reverse registration) |
 | AI clients | Any machine | Central Server (HTTP, MCP protocol) |
-| `yunying-cli` | Operator machine | Central Server (QUIC, `--server-addr`) |
+| `clum-cli` | Operator machine | Central Server (QUIC, `--server-addr`) |
 
 > 💡 New bridges deploy with one command: `curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/releases/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=SERVER:9788 sh`
 
@@ -93,14 +93,14 @@ graph LR
 
 | Feature | Description |
 |---------|-------------|
-| **Interactive terminal** | `yunying-cli connect` — PTY-passthrough to remote rmux sessions + built-in AI chat panel (Ctrl+G) with real-time SSE streaming, supports vim/htop/TUI |
+| **Interactive terminal** | `clum-cli connect` — PTY-passthrough to remote rmux sessions + built-in AI chat panel (Ctrl+G) with real-time SSE streaming, supports vim/htop/TUI |
 | **Session management** | Create/destroy/list sessions, multi-pane splits, window layouts |
 | **Command execution** | `exec` one-shot execution (sentinel detection + exit code, full scrollback capture for large outputs, auto-reconnect on connection drop), interactive programs via send_keys + capture_pane |
 | **Output waiting** | `wait_for_text` for terminal text, `wait_exit` for process exit |
-| **File transfer** | Upload/download over QUIC (`yunying-cli` and MCP tools), recursive directory transfer with concurrency and `--exclude` globs, chunked streaming with SHA-256 verification |
+| **File transfer** | Upload/download over QUIC (`clum-cli` and MCP tools), recursive directory transfer with concurrency and `--exclude` globs, chunked streaming with SHA-256 verification |
 | **Port forwarding** | Local port forwarding tunnels through QUIC to access remote internal services |
 | **Multi-host orchestration** | Host registry with group/tag/label filtering, broadcast_keys for multi-pane |
-| **Audit logging** | SQLite audit logs + bridge-side PTY recording (asciinema v2) + event log + MCP periodic sync + `yunying-cli replay` playback |
+| **Audit logging** | SQLite audit logs + bridge-side PTY recording (asciinema v2) + event log + MCP periodic sync + `clum-cli replay` playback |
 | **Terminal state awareness** | `capture_pane`, `exec`, `wait_for_text`, `wait_stable`, `pane_info` return `terminal_state` (ready/running/editor/pager/password/confirm/repl/unknown) and cursor position, so AI agents know what the terminal is currently doing |
 | **Exec safety check** | `exec` refuses execution when terminal is not in `ready` state (e.g., inside vim, less, password prompt), returning `refused: true` with actionable guidance to prevent command injection |
 
@@ -134,8 +134,8 @@ PTY passthrough mode forwards raw terminal bytes — mouse events work when the 
 
 ```bash
 # Native build (macOS dev)
-cargo build -p yunying-mcp --release
-cargo build -p yunying-cli --release
+cargo build -p clum-mcp --release
+cargo build -p clum-cli --release
 
 # Cross-compile bridge + MCP server for Linux x86_64 (static)
 just release-linux
@@ -180,7 +180,7 @@ hosts:
 ```json
 {
   "mcp": {
-    "yunying": {
+    "clum": {
       "type": "remote",
       "url": "https://SERVER:9788/mcp",
       "headers": { "Authorization": "Bearer yk_name_..." }
@@ -194,9 +194,9 @@ hosts:
 ```json
 {
   "mcp": {
-    "yunying": {
+    "clum": {
       "type": "local",
-      "command": ["/path/to/yunying-mcp"],
+      "command": ["/path/to/clum-mcp"],
       "args": ["--ca-cert", "/path/to/ca.crt", "--hosts-file", "/path/to/hosts.yaml"],
       "enabled": true
     }
@@ -210,19 +210,19 @@ hosts:
 
 ```bash
 # API Key management
-yunying-mcp agent add <name> (--group <g> | --admin)  # Create key (--admin = superadmin, --group = restricted)
-yunying-mcp agent list             # List all keys (shows GROUP column)
-yunying-mcp agent rotate <name>    # Rotate a key (inherits group)
-yunying-mcp agent revoke <name>    # Revoke a key
+clum-mcp agent add <name> (--group <g> | --admin)  # Create key (--admin = superadmin, --group = restricted)
+clum-mcp agent list             # List all keys (shows GROUP column)
+clum-mcp agent rotate <name>    # Rotate a key (inherits group)
+clum-mcp agent revoke <name>    # Revoke a key
 
 # Group isolation: grouped keys can only access hosts in their group.
 # host_list/audit_query/recordings auto-filter; reload_config/host_set_meta blocked.
 
 # Bridge enrollment (dynamic registration, no hosts.yaml edit needed)
-yunying-mcp bridge add <hostname> --tags <t1,t2> [--group <g>]
-yunying-mcp bridge list
-yunying-mcp bridge remove <hostname>
-yunying-mcp bridge join <hostname>   # Generate a new join token (offline recovery)
+clum-mcp bridge add <hostname> --tags <t1,t2> [--group <g>]
+clum-mcp bridge list
+clum-mcp bridge remove <hostname>
+clum-mcp bridge join <hostname>   # Generate a new join token (offline recovery)
 ```
 
 ## Security
@@ -242,23 +242,23 @@ yunying-mcp bridge join <hostname>   # Generate a new join token (offline recove
 
 ```bash
 # Recent operations
-yunying-mcp audit query --format table
+clum-mcp audit query --format table
 
 # Commands on specific host
-yunying-mcp audit query --host tf01 --action exec --since 2026-06-01
+clum-mcp audit query --host tf01 --action exec --since 2026-06-01
 
 # Statistics
-yunying-mcp audit stats
+clum-mcp audit stats
 
 # Manual cleanup
-yunying-mcp audit cleanup --older-than 30
+clum-mcp audit cleanup --older-than 30
 ```
 
-Audit data stored at `~/.yunying/audit.db`, retained 90 days, max 500 MB.
+Audit data stored at `~/.clum/audit.db`, retained 90 days, max 500 MB.
 
 ## Knowledge Base (Design Concept)
 
-yunying produces detailed audit trails for every operation, but raw audit logs answer "what happened" — not "why it happened" or "how to fix it next time." This section outlines a design philosophy for turning operational experience into a shared knowledge base. The implementation is deliberately left to users, because **knowledge base backends are a matter of team infrastructure preference, not tooling prescription**.
+clum produces detailed audit trails for every operation, but raw audit logs answer "what happened" — not "why it happened" or "how to fix it next time." This section outlines a design philosophy for turning operational experience into a shared knowledge base. The implementation is deliberately left to users, because **knowledge base backends are a matter of team infrastructure preference, not tooling prescription**.
 
 ### The Problem
 
@@ -272,7 +272,7 @@ After an AI-driven troubleshooting session:
 
 ```
 ┌─────────────┐    session activity    ┌──────────────────┐
-│  yunying  │ ─── audit events ────→ │  Knowledge        │
+│  clum  │ ─── audit events ────→ │  Knowledge        │
 │  (MCP)      │    (SQLite)            │  Extraction       │
 └─────────────┘                        │  (AI review)      │
                                        └────────┬─────────┘
@@ -308,7 +308,7 @@ The output is a **structured JSON entry**, not a Markdown file — so the output
 We intentionally do NOT build platform-specific integrations. Instead, users define a **sink** — a script, command, or webhook that receives the knowledge entry via `stdin` (JSON). Examples:
 
 ```bash
-# ~/.yunying/sink.sh — push to ONES wiki
+# ~/.clum/sink.sh — push to ONES wiki
 curl -X POST "https://ones.example.com/wiki/api" \
   -H "Authorization: Bearer $TOKEN" \
   -d "$(cat)"
@@ -326,7 +326,7 @@ echo "$(cat)" >> knowledge.jsonl && git commit -am "add troubleshooting entry"
 - **User reviews before publishing**: AI-generated entries should be reviewed and edited before being pushed to shared storage.
 - **JSON as interchange**: structured data can be transformed to Markdown, API payloads, database rows, etc.
 
-This design keeps yunying focused on operations while enabling teams to build their own knowledge pipelines on top of the audit data it already generates.
+This design keeps clum focused on operations while enabling teams to build their own knowledge pipelines on top of the audit data it already generates.
 
 ## Tools
 
@@ -348,7 +348,7 @@ This design keeps yunying focused on operations while enabling teams to build th
 | Tunnel | `tunnel_create`, `tunnel_list`, `tunnel_close` |
 | Deploy | `deploy_bridge` |
 | Audit | `audit_query`, `query_bridge_audit`, `list_recordings`, `get_recording` |
-| System | `yunying_usage_rules` |
+| System | `clum_usage_rules` |
 
 > 💡 `stream_pane` is ideal for real-time output monitoring of long-running commands (blocking read, incremental return), replacing capture_pane polling.
 

@@ -1,4 +1,4 @@
-# yunying 部署文档
+# clum 部署文档
 
 > 最后更新：2026-07-30
 
@@ -7,11 +7,11 @@
 ```
 ┌─────────────────┐  HTTP :9788 (MCP)   ┌────────────────────────────────────────┐
 │  AI 客户端        │◄──────────────────►│        Central MCP Server              │
-│ (OpenCode/Claude) │                     │        yunying-mcp --mode http        │
+│ (OpenCode/Claude) │                     │        clum-mcp --mode http        │
 └─────────────────┘                     │                                        │
 ┌─────────────────┐  QUIC :9788         │  TCP :9788  HTTP/2 (MCP 生态)          │
 │  人类运维         │◄──────────────────►│  UDP :9788  QUIC (Bridge/CLI)          │
-│  (yunying-cli)   │  PTY/upload/tunnel  │                                        │
+│  (clum-cli)   │  PTY/upload/tunnel  │                                        │
 └─────────────────┘                     │  集中审计 + API Key + 注册表 + 静态文件  │
                                         └───────────┬──────────┬─────────────────┘
                                                     │ QUIC     │ QUIC
@@ -25,8 +25,8 @@
                                           └─────────────┘  └──────────────┘
 ```
 
-- **yunying-mcp (Central Server)**: 中央 MCP Server，双栈监听。AI 客户端通过 HTTP 连接，Bridge 通过 QUIC 反向注册。
-- **yunying-cli**: 命令行工具，通过 QUIC 连接 Server 中继到 Bridge。支持 connect/upload/download/tunnel/list/replay；upload/download 支持文件与目录（1MB 分块流式传输，目录上传支持 `--exclude` 过滤）。
+- **clum-mcp (Central Server)**: 中央 MCP Server，双栈监听。AI 客户端通过 HTTP 连接，Bridge 通过 QUIC 反向注册。
+- **clum-cli**: 命令行工具，通过 QUIC 连接 Server 中继到 Bridge。支持 connect/upload/download/tunnel/list/replay；upload/download 支持文件与目录（1MB 分块流式传输，目录上传支持 `--exclude` 过滤）。
 - **rmux-bridge**: 部署在每台目标 Linux 主机，主动连接 Server 注册，处理工具执行、文件 I/O、PTY、录制推送。
 - **RMUX daemon**: 每个 Linux 主机上的终端多路复用器。
 
@@ -39,21 +39,21 @@
 just deploy-mcp host=root@<server-ip>
 
 # 或手动调用脚本
-bash deploy/deploy-mcp.sh ./target/x86_64-unknown-linux-musl/release/yunying-mcp root@<server-ip>
+bash deploy/deploy-mcp.sh ./target/x86_64-unknown-linux-musl/release/clum-mcp root@<server-ip>
 ```
 
 脚本自动完成：
-- 上传二进制到 `/usr/local/bin/yunying-mcp`
-- 上传证书（ca.crt、server.crt、server.key）到 `/etc/yunying/`
-- 上传 `hosts.yaml` 到 `/etc/yunying/`
+- 上传二进制到 `/usr/local/bin/clum-mcp`
+- 上传证书（ca.crt、server.crt、server.key）到 `/etc/clum/`
+- 上传 `hosts.yaml` 到 `/etc/clum/`
 - 首次部署时生成默认 `server-config.yaml`
-- 创建 `yunying-mcp.service` systemd 服务并启动
+- 创建 `clum-mcp.service` systemd 服务并启动
 
 ### 2. 添加 Bridge
 
 ```bash
 # Server 侧生成 token
-yunying-mcp bridge add my-host --tags gpu,web
+clum-mcp bridge add my-host --tags gpu,web
 # 输出 token 和安装命令
 
 # 目标机器一键安装
@@ -66,7 +66,7 @@ curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/rele
 ```json
 {
   "mcp": {
-    "yunying": {
+    "clum": {
       "type": "remote",
       "url": "https://SERVER:9788/mcp",
       "headers": { "Authorization": "Bearer yk_tddh_..." }
@@ -91,8 +91,8 @@ curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/rele
 
 ```bash
 # 本机构建（macOS 开发）
-cargo build -p yunying-mcp --release
-cargo build -p yunying-cli --release
+cargo build -p clum-mcp --release
+cargo build -p clum-cli --release
 
 # 交叉编译 bridge（Linux x86_64，静态链接）
 CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc \
@@ -104,8 +104,8 @@ just build-mcp              # 本机构建 mcp
 ```
 
 构建产物：
-- `target/release/yunying-mcp` — MCP server（本地运行）
-- `target/release/yunying-cli` — 命令行工具（本地运行）
+- `target/release/clum-mcp` — MCP server（本地运行）
+- `target/release/clum-cli` — 命令行工具（本地运行）
 - `target/x86_64-unknown-linux-musl/release/rmux-bridge` — bridge（部署到远程）
 
 ### 2. 部署
@@ -122,7 +122,7 @@ bash deploy/install-daemon.sh root@<your-bridge-ip>
 - 安装 rmux（如未安装）
 - 上传项目定制的 `rmux-daemon.service`（配置 `RMUX_TMPDIR=%h/.rmux`，启动参数 `--config-default --config-quiet` 自动启用 passthrough 等必要选项）
 - 启动 daemon
-- 写入 `/etc/profile.d/yunying.sh`（`export RMUX_TMPDIR=$HOME/.rmux`），用户登录后可直接 `rmux a -t yunying`
+- 写入 `/etc/profile.d/clum.sh`（`export RMUX_TMPDIR=$HOME/.rmux`），用户登录后可直接 `rmux a -t clum`
 
 **步骤 2b：部署 bridge**
 
@@ -138,8 +138,8 @@ bash deploy/deploy-bridge.sh root@<your-bridge-ip>
 
 部署脚本自动完成：
 - 上传 `rmux-bridge` 二进制到 `/usr/local/bin/rmux-bridge`
-- 下载 CA 证书到 `/etc/yunying/ca.crt`
-- 写入配置到 `/etc/yunying/bridge.env`（权限 600，含 BRIDGE_AUTH_TOKEN、YUNYING_SERVER_ADDR、YUNYING_CA_CERT）
+- 下载 CA 证书到 `/etc/clum/ca.crt`
+- 写入配置到 `/etc/clum/bridge.env`（权限 600，含 BRIDGE_AUTH_TOKEN、YUNYING_SERVER_ADDR、YUNYING_CA_CERT）
 - 创建 `rmux-bridge.service`（`systemctl enable --now`）
 
 **其他 Justfile 命令：**
@@ -153,11 +153,11 @@ bash deploy/deploy-bridge.sh root@<your-bridge-ip>
 
 ```ini
 [Unit]
-Description=yunying Bridge
+Description=clum Bridge
 After=network.target rmux-daemon.service
 
 [Service]
-EnvironmentFile=/etc/yunying/bridge.env
+EnvironmentFile=/etc/clum/bridge.env
 ExecStart=/usr/local/bin/rmux-bridge
 Restart=always
 RestartSec=5
@@ -216,12 +216,12 @@ ssh root@<your-bridge-ip> "systemctl status rmux-bridge --no-pager"
 | `--static-dir` | 无 | 静态文件服务目录（install.sh、ca.crt、releases 等） |
 | `--hosts-file` | `config/hosts.yaml` | 主机注册表路径（直连回退用） |
 | `--ca-cert` | 无 | CA 证书路径（必填，不传则拒绝连接） |
-| `--audit-db` | `~/.yunying/audit.db` | 审计数据库路径 |
+| `--audit-db` | `~/.clum/audit.db` | 审计数据库路径 |
 | `--audit-retention-days` | `90` | 审计数据保留天数 |
 | `--audit-max-size-mb` | `500` | 审计数据库大小上限 (MB) |
 | `--audit-cleanup-interval-secs` | `600` | 自动清理间隔（秒） |
 | `--audit-sync-interval-secs` | `300` | 录制文件同步拉取间隔（秒） |
-| `--recordings-dir` | `~/.yunying/recordings` | 本地录制存储目录 |
+| `--recordings-dir` | `~/.clum/recordings` | 本地录制存储目录 |
 | `--recordings-retention-days` | `90` | 本地录制保留天数 |
 | `--recordings-max-size-mb` | `5000` | 本地录制容量上限 (MB) |
 
@@ -233,11 +233,11 @@ API Key 格式 `yk_{name}_{32hex}`，SHA-256 哈希存储在 SQLite。通过 HTT
 
 ```bash
 # Server 侧管理 API Key
-yunying-mcp agent add tddh --admin          # 创建超管 Key（需显式 --admin）
-yunying-mcp agent add alice --group infra   # 创建组内 Key（仅访问 infra 组主机）
-yunying-mcp agent list            # 列出（含 GROUP 列）
-yunying-mcp agent rotate tddh     # 轮换（继承原 group）
-yunying-mcp agent revoke tddh     # 吊销
+clum-mcp agent add tddh --admin          # 创建超管 Key（需显式 --admin）
+clum-mcp agent add alice --group infra   # 创建组内 Key（仅访问 infra 组主机）
+clum-mcp agent list            # 列出（含 GROUP 列）
+clum-mcp agent rotate tddh     # 轮换（继承原 group）
+clum-mcp agent revoke tddh     # 吊销
 ```
 
 **Group 隔离（RBAC）**：
@@ -255,7 +255,7 @@ Bridge 使用静态 token 认证，通过常数时间比较（防时序攻击）
 
 ```bash
 # Central Server 模式：Server 侧生成 token
-yunying-mcp bridge add my-host --tags gpu,web
+clum-mcp bridge add my-host --tags gpu,web
 
 # 直连模式：hosts.yaml 配置
 # config/hosts.yaml
@@ -297,7 +297,7 @@ hosts:
 ```json
 {
   "mcp": {
-    "yunying": {
+    "clum": {
       "type": "remote",
       "url": "https://SERVER:9788/mcp",
       "headers": { "Authorization": "Bearer yk_name_..." }
@@ -311,9 +311,9 @@ hosts:
 ```json
 {
   "mcp": {
-    "yunying": {
+    "clum": {
       "type": "local",
-      "command": ["/path/to/yunying-mcp"],
+      "command": ["/path/to/clum-mcp"],
       "args": ["--hosts-file", "config/hosts.yaml", "--ca-cert", "certs/ca.crt"],
       "enabled": true
     }
@@ -326,7 +326,7 @@ hosts:
 ```bash
 # 直接调 MCP 测试
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"host_list","arguments":{}}}' \
-  | target/release/yunying-mcp --hosts-file config/hosts.test.yaml --ca-cert /tmp/bridge-remote.crt 2>/dev/null
+  | target/release/clum-mcp --hosts-file config/hosts.test.yaml --ca-cert /tmp/bridge-remote.crt 2>/dev/null
 ```
 
 信任首次连接：将远程 bridge 的 `bridge.crt` 复制到本地，通过 `--ca-cert` 参数指定。
@@ -348,31 +348,31 @@ ssh root@<your-bridge-ip> "ls -la \$HOME/.rmux/rmux-*/default"
 
 ```bash
 # 查最近操作
-yunying-mcp audit query --format table
+clum-mcp audit query --format table
 
 # 查特定主机的命令执行记录
-yunying-mcp audit query --host tf01 --action exec --since 2026-06-01
+clum-mcp audit query --host tf01 --action exec --since 2026-06-01
 
 # 统计概览
-yunying-mcp audit stats
+clum-mcp audit stats
 
 # 手动清理
-yunying-mcp audit cleanup --older-than 30
+clum-mcp audit cleanup --older-than 30
 ```
 
-审计数据默认存储在 `~/.yunying/audit.db`，保留 90 天，上限 500MB。
+审计数据默认存储在 `~/.clum/audit.db`，保留 90 天，上限 500MB。
 
 ## 目录结构
 
 ```
-~/.yunying/                      # MCP Server 本地
+~/.clum/                      # MCP Server 本地
 ├── audit.db                       # 审计数据库（SQLite）
 └── recordings/                    # PTY 录制文件（Bridge 实时推送 + 定期同步）
 
 /usr/local/bin/
 └── rmux-bridge                   # bridge 二进制
 
-/etc/yunying/                    # 远程主机配置
+/etc/clum/                    # 远程主机配置
 ├── bridge.env                    # BRIDGE_AUTH_TOKEN + SERVER_ADDR + CA 路径（权限 600）
 ├── ca.crt                        # CA 根证书
 ├── bridge.crt                    # 主机 TLS 证书（可选，直连回退用）
@@ -387,7 +387,7 @@ yunying-mcp audit cleanup --older-than 30
 └── rmux-bridge.service           # bridge systemd 服务
 
 /etc/profile.d/
-└── yunying.sh                  # RMUX_TMPDIR 环境变量
+└── clum.sh                  # RMUX_TMPDIR 环境变量
 ```
 
 ## 故障排查
@@ -411,7 +411,7 @@ rmux daemon 的 socket 路径由 `RMUX_TMPDIR` 环境变量控制。项目定制
 
 如果需要在自定义路径运行 rmux daemon，同步更新：
 - `rmux-daemon.service` 中的 `Environment=RMUX_TMPDIR=...`
-- `/etc/profile.d/yunying.sh` 中的 `export RMUX_TMPDIR=...`
+- `/etc/profile.d/clum.sh` 中的 `export RMUX_TMPDIR=...`
 - bridge 的 `--rmux-socket` 参数（部署脚本自动检测）
 
 ### TLS 安全模式
@@ -432,7 +432,7 @@ rmux daemon 的 socket 路径由 `RMUX_TMPDIR` 环境变量控制。项目定制
 ```bash
 # 生成 CA
 openssl req -x509 -newkey rsa:4096 -keyout ca.key -out ca.crt -days 3650 -nodes \
-  -subj "/CN=yunying-ca" -addext "basicConstraints=critical,CA:TRUE"
+  -subj "/CN=clum-ca" -addext "basicConstraints=critical,CA:TRUE"
 
 # 为 bridge 签发（替换 <your-bridge-ip> 为实际 IP）
 openssl req -new -newkey rsa:2048 -keyout bridge.key -out bridge.csr -nodes \
@@ -441,6 +441,6 @@ openssl x509 -req -in bridge.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
   -out bridge.crt -days 365
 
 # MCP server 启动时指定 CA
-yunying-mcp --ca-cert ca.crt ...
+clum-mcp --ca-cert ca.crt ...
 ```
 

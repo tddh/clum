@@ -1,13 +1,13 @@
 ---
-name: yunying-mcp
-description: "使用 yunying MCP 工具操作远程主机的规范流程"
+name: clum-mcp
+description: "使用 clum MCP 工具操作远程主机的规范流程"
 ---
 
-# yunying MCP 使用指南
+# clum MCP 使用指南
 
-## What is yunying
+## What is clum
 
-yunying is a **remote Linux operations platform** — not a simple SSH tool. Understanding these core concepts is essential before using any tools.
+clum is a **remote Linux operations platform** — not a simple SSH tool. Understanding these core concepts is essential before using any tools.
 
 ### Core Concepts
 
@@ -22,22 +22,22 @@ yunying is a **remote Linux operations platform** — not a simple SSH tool. Und
 
 ### Tool Selection Principles
 
-- **Host is in the registry (`host_list`)** → Prefer yunying tools (they provide audit, persistence, and security management).
-- **Host is NOT in the registry** → Use SSH/SCP/rsync directly. yunying can't reach hosts it doesn't know about.
-- **User explicitly asks for SSH** → Respect the user's choice. Even if yunying could do it, use SSH when the user says so.
+- **Host is in the registry (`host_list`)** → Prefer clum tools (they provide audit, persistence, and security management).
+- **Host is NOT in the registry** → Use SSH/SCP/rsync directly. clum can't reach hosts it doesn't know about.
+- **User explicitly asks for SSH** → Respect the user's choice. Even if clum could do it, use SSH when the user says so.
 
 ### Your Role
 
-You are an SRE engineer operating remote Linux hosts via yunying MCP tools. You do NOT SSH directly to hosts — you operate through a Bridge proxy that manages an rmux terminal multiplexer on each host.
+You are an SRE engineer operating remote Linux hosts via clum MCP tools. You do NOT SSH directly to hosts — you operate through a Bridge proxy that manages an rmux terminal multiplexer on each host.
 
 ## 强制规则
 
 ### 1. 默认会话名
 
-**必须使用** `session_name="yunying"`，除非用户明确说"创建新会话"或指定其他名称。
+**必须使用** `session_name="clum"`，除非用户明确说"创建新会话"或指定其他名称。
 
 - ❌ 禁止自作主张创建 `test-session`、`debug-session` 等
-- ✅ 始终使用 `yunying` 作为默认会话
+- ✅ 始终使用 `clum` 作为默认会话
 
 ### 2. 默认 Pane
 
@@ -51,8 +51,8 @@ You are an SRE engineer operating remote Linux hosts via yunying MCP tools. You 
 ### 3. 操作流程
 
 ```
-session_attach(host, session_name="yunying")
-→ 如果不存在：session_create(host, session_name="yunying")
+session_attach(host, session_name="clum")
+→ 如果不存在：session_create(host, session_name="clum")
 → exec(host, session_name, command="ls")  // pane_id 可省略
 ```
 
@@ -68,7 +68,7 @@ session_attach(host, session_name="yunying")
 ### 4. 禁止行为
 
 - ❌ 未经用户同意创建新会话
-- ❌ 使用非 `yunying` 会话名（除非用户指定）
+- ❌ 使用非 `clum` 会话名（除非用户指定）
 - ❌ 执行完命令后主动清理 session
 - ❌ 对 `close_pane`/`paste_buffer`/`respawn_pane` 省略 pane_id
 
@@ -143,16 +143,16 @@ DROP TABLE users;
 
 ```
 # 1. 检查会话是否存在
-session_attach(host="tf01", session_name="yunying")
+session_attach(host="tf01", session_name="clum")
 
 # 2. 如果不存在，创建会话
-session_create(host="tf01", session_name="yunying")
+session_create(host="tf01", session_name="clum")
 
 # 3. 直接执行命令（pane_id 可省略，自动探测）
-exec(host="tf01", session_name="yunying", command="ls -la")
+exec(host="tf01", session_name="clum", command="ls -la")
 
 # 4. 也可以指定 pane_id
-exec(host="tf01", session_name="yunying", pane_id="%3", command="ls -la")
+exec(host="tf01", session_name="clum", pane_id="%3", command="ls -la")
 ```
 
 ### ❌ 错误示例
@@ -165,10 +165,10 @@ session_create(host="tf01", session_name="test-session")  # ❌ 违反规则
 exec(host="tf01", session_name="test-session", command="ls")  # ❌ 违反规则
 
 # 错误 3：破坏性工具省略 pane_id
-close_pane(host="tf01", session_name="yunying")  # ❌ 必须指定 pane_id
+close_pane(host="tf01", session_name="clum")  # ❌ 必须指定 pane_id
 
 # 错误 4：执行完主动清理
-close_pane(host="tf01", session_name="yunying", pane_id="%0")  # ❌ 违反规则
+close_pane(host="tf01", session_name="clum", pane_id="%0")  # ❌ 违反规则
 ```
 
 ## 终端状态感知（terminal_state）

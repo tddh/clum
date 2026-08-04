@@ -1,4 +1,4 @@
-# Contributing to yunying
+# Contributing to clum
 
 Thanks for your interest in contributing!
 
@@ -9,8 +9,8 @@ Thanks for your interest in contributing!
 cargo install just
 
 # Clone & build
-git clone git@github.com:tddh/yunying.git
-cd yunying
+git clone git@github.com:tddh/clum.git
+cd clum
 just check        # Verify compilation
 just test         # Run tests
 just lint         # Clippy with -D warnings
@@ -21,9 +21,9 @@ just fmt-check    # Check formatting
 
 ```
 crates/
-├── yunying-core/    # Shared types (HostConfig, AuditEvent, SessionInfo)
-├── yunying-mcp/     # MCP Server — Central Server (HTTP + QUIC) or local stdio mode
-├── yunying-cli/     # CLI tool — human PTY passthrough to remote sessions
+├── clum-core/    # Shared types (HostConfig, AuditEvent, SessionInfo)
+├── clum-mcp/     # MCP Server — Central Server (HTTP + QUIC) or local stdio mode
+├── clum-cli/     # CLI tool — human PTY passthrough to remote sessions
 └── rmux-bridge/     # Bridge daemon — deployed on target Linux hosts
 ```
 

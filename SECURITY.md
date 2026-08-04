@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in yunying, please **do not** open a public issue.
+If you discover a security vulnerability in clum, please **do not** open a public issue.
 
 Instead, email the maintainer directly. We will respond within 48 hours and work on a fix.
 
@@ -15,10 +15,10 @@ Instead, email the maintainer directly. We will respond within 48 hours and work
 
 ## Security Model
 
-yunying consists of four components connected over TLS:
+clum consists of four components connected over TLS:
 
-1. **yunying-mcp** — Central MCP Server: HTTP for AI clients + QUIC for Bridge registration and CLI data plane
-2. **yunying-cli** — CLI tool for humans to attach to remote sessions via Server relay
+1. **clum-mcp** — Central MCP Server: HTTP for AI clients + QUIC for Bridge registration and CLI data plane
+2. **clum-cli** — CLI tool for humans to attach to remote sessions via Server relay
 3. **rmux-bridge** — Bridge daemon deployed on target Linux hosts, reverse-connects to Central Server
 4. **AI clients** — Connect to Central Server via Streamable HTTP with API Key auth
 

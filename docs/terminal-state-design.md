@@ -6,7 +6,7 @@
 
 ## 1. 问题
 
-yunying 当前的 `capture_pane`、`pane_info`、`wait_for_text` 等工具只返回原始文本，不告诉 AI 终端当前处于什么状态。AI 必须自己从文本中推断：
+clum 当前的 `capture_pane`、`pane_info`、`wait_for_text` 等工具只返回原始文本，不告诉 AI 终端当前处于什么状态。AI 必须自己从文本中推断：
 
 - 命令执行完了吗？还是在等输入？
 - 终端在等密码输入吗？
@@ -401,13 +401,13 @@ let cursor = resp.get("cursor");
 
 | 文件 | 改动 | 理由 |
 |------|------|------|
-| `crates/yunying-mcp/src/tools/exec.rs` | `exec_in_session` 从最后一次 capture_pane 响应中提取 `terminal_state` + `cursor` | exec 在 MCP 层实现，依赖 bridge capture_pane 先返回这些字段 |
+| `crates/clum-mcp/src/tools/exec.rs` | `exec_in_session` 从最后一次 capture_pane 响应中提取 `terminal_state` + `cursor` | exec 在 MCP 层实现，依赖 bridge capture_pane 先返回这些字段 |
 
 ### 5.3 不改动的文件
 
 | 文件 | 理由 |
 |------|------|
-| `crates/yunying-core/src/types.rs` | `TerminalState` 只在 bridge 侧序列化，不需要在 core 中定义 |
+| `crates/clum-core/src/types.rs` | `TerminalState` 只在 bridge 侧序列化，不需要在 core 中定义 |
 | `config/hosts.yaml` | 第一版不加 `shell_prompt_regex`，后续按需扩展 |
 
 ### 5.4 依赖

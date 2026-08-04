@@ -1,6 +1,6 @@
-# yunying MCP 工具文档
+# clum MCP 工具文档
 
-> yunying 是一个 MCP Server，使 AI Agent 能够通过 RMUX SDK 远程控制 Linux 主机的交互式终端会话。所有工具通过 `host` 参数路由到目标主机。
+> clum 是一个 MCP Server，使 AI Agent 能够通过 RMUX SDK 远程控制 Linux 主机的交互式终端会话。所有工具通过 `host` 参数路由到目标主机。
 
 ## 约定
 
@@ -113,7 +113,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | 主机名称 |
-| `session_name` | string | | 会话名称（可选，默认 `yunying`） |
+| `session_name` | string | | 会话名称（可选，默认 `clum`） |
 
 **返回** `{"ok": true, "session_name": "...", "pane_id": "%N"}`
 
@@ -299,7 +299,7 @@
 | `running` | boolean | | 仅运行中 |
 | `exited` | boolean | | 仅已退出 |
 
-**返回** `{"ok": true, "panes": [{"pane_id": "%2", "session_name": "yunying", "window_index": 0, "title": "nginx-log", "command": [...], "working_directory": "/var/log", "process": "running", "pid": 12345}], "count": 1}`
+**返回** `{"ok": true, "panes": [{"pane_id": "%2", "session_name": "clum", "window_index": 0, "title": "nginx-log", "command": [...], "working_directory": "/var/log", "process": "running", "pid": 12345}], "count": 1}`
 
 ### `find_sessions`
 
@@ -310,7 +310,7 @@
 | `host` | string | ✅ | 主机名 |
 | `name` | string | | session 名称（省略返回全部） |
 
-**返回** `{"ok": true, "sessions": [{"session_name": "yunying"}], "count": 1}`
+**返回** `{"ok": true, "sessions": [{"session_name": "clum"}], "count": 1}`
 
 ### `get_pane_title`
 
@@ -333,7 +333,7 @@
 | `host` | string | ✅ |
 | `title` | string | ✅ |
 
-**返回** `{"ok": true, "found": true, "pane": {"pane_id": "%2", "session_name": "yunying", "title": "nginx-log", ...}}`
+**返回** `{"ok": true, "found": true, "pane": {"pane_id": "%2", "session_name": "clum", "title": "nginx-log", ...}}`
 
 ### `host_capabilities`
 
@@ -859,7 +859,7 @@
 
 审计系统自动记录所有 MCP 工具调用到 SQLite 数据库，支持安全审计、运维排错、用量统计。
 
-**数据库路径**：`~/.yunying/audit.db`（可通过 `--audit-db` 自定义）
+**数据库路径**：`~/.clum/audit.db`（可通过 `--audit-db` 自定义）
 **保留策略**：90 天 + 500MB 上限（先触发者生效）
 **自动清理**：MCP Server 启动时后台每 10 分钟检查一次
 
@@ -868,14 +868,14 @@
 ### `audit query`
 
 ```bash
-yunying-mcp audit query [--db <path>] [--host <host>] [--action <action>]
+clum-mcp audit query [--db <path>] [--host <host>] [--action <action>]
     [--agent <agent>] [--since <ISO8601>] [--until <ISO8601>]
     [--success <true|false>] [--limit <n>] [--format <table|json|jsonl>]
 ```
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
-| `--db` | path | | 数据库路径，默认 `~/.yunying/audit.db` |
+| `--db` | path | | 数据库路径，默认 `~/.clum/audit.db` |
 | `--host` | string | | 按主机名过滤 |
 | `--action` | string | | 按操作类型过滤（Exec、FileUpload 等） |
 | `--agent` | string | | 按 AI Agent 名称过滤 |
@@ -888,7 +888,7 @@ yunying-mcp audit query [--db <path>] [--host <host>] [--action <action>]
 ### `audit stats`
 
 ```bash
-yunying-mcp audit stats [--db <path>] [--since <ISO8601>]
+clum-mcp audit stats [--db <path>] [--since <ISO8601>]
 ```
 
 输出总数、成功率、Top 主机/操作/Agent、平均耗时、最近失败。
@@ -896,7 +896,7 @@ yunying-mcp audit stats [--db <path>] [--since <ISO8601>]
 ### `audit cleanup`
 
 ```bash
-yunying-mcp audit cleanup [--db <path>] [--older-than <days>] [--max-size <mb>]
+clum-mcp audit cleanup [--db <path>] [--older-than <days>] [--max-size <mb>]
 ```
 
 手动触发清理。
@@ -942,8 +942,8 @@ yunying-mcp audit cleanup [--db <path>] [--older-than <days>] [--max-size <mb>]
 | 特殊按键 | `send_keys`（`\x03`=Ctrl-C, `\n`=Enter） |
 | 搜索 | `find_pane_text` / `find_text_all` / `wait_for_bytes` |
 | 能力检测 | `host_capabilities` / `wait_stable` |
-| 审计查询 | `yunying-mcp audit query --host tf01 --action exec --format table` |
-| 审计统计 | `yunying-mcp audit stats` |
+| 审计查询 | `clum-mcp audit query --host tf01 --action exec --format table` |
+| 审计统计 | `clum-mcp audit stats` |
 | 多机并发执行 | `batch_exec` |
 
 ---
@@ -994,7 +994,7 @@ Execute the same command on multiple hosts concurrently. Sends the command to al
 - 单台主机故障（连接失败/超时/命令错误）不抛异常，在对应 result 中标记 `ok: false` + `error`
 - `total_duration_ms` 是墙钟时间（所有主机中最长的那台），反映并发效果
 - 非零 exit_code 会导致对应主机的 `ok: false`，但输出始终会捕获——检查 per-host 的 `exit_code` 字段判断命令实际结果
-- 内部通过 `yunying` session 的默认 pane `%0` 执行，行为与 `exec` 一致
+- 内部通过 `clum` session 的默认 pane `%0` 执行，行为与 `exec` 一致
 
 ### `batch_upload`
 
@@ -1244,7 +1244,7 @@ tunnel_create host="tf01" local_port=8080 remote_host="api.internal" remote_port
       "timestamp": "2026-07-22T15:26:31+00:00",
       "client_addr": "10.230.21.231:52743",
       "event_type": "attach",
-      "session_name": "yunying",
+      "session_name": "clum",
       "pane_id": "%0",
       "detail": null,
       "duration_secs": null,
@@ -1276,9 +1276,9 @@ tunnel_create host="tf01" local_port=8080 remote_host="api.internal" remote_port
     {
       "host": "tf001",
       "date": "2026-07-22",
-      "file": "yunying__0_1784733267_4899.cast",
+      "file": "clum__0_1784733267_4899.cast",
       "size_bytes": 199466,
-      "path": "/Users/xxx/.yunying/recordings/tf001/2026-07-22/yunying__0_1784733267_4899.cast"
+      "path": "/Users/xxx/.clum/recordings/tf001/2026-07-22/clum__0_1784733267_4899.cast"
     }
   ],
   "count": 1
@@ -1301,20 +1301,20 @@ tunnel_create host="tf01" local_port=8080 remote_host="api.internal" remote_port
 
 ```json
 {
-  "path": "/Users/xxx/.yunying/recordings/tf001/2026-07-22/yunying__0_1784733267_4899.cast",
+  "path": "/Users/xxx/.clum/recordings/tf001/2026-07-22/clum__0_1784733267_4899.cast",
   "content": "{\"version\":2,...}\n[0.011, \"o\", \"...\"]\n..."
 }
 ```
 
 **安全限制**：路径必须在 recordings 目录内，路径穿越会被拒绝。
 
-**回放方式**：使用 CLI `yunying-cli replay <file.cast> [--speed 2.0] [--idle 1.0]` 或第三方工具 `asciinema play`。
+**回放方式**：使用 CLI `clum-cli replay <file.cast> [--speed 2.0] [--idle 1.0]` 或第三方工具 `asciinema play`。
 
 ---
 
 ## 系统
 
-### `yunying_usage_rules`
+### `clum_usage_rules`
 
 ⚠️ 占位工具，**不要调用**。使用规则已内置于 MCP server instructions，无需通过工具获取。
 
