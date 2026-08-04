@@ -22,11 +22,11 @@ struct Cli {
     ca_cert: String,
 
     /// Central server address. If set, connect via server relay instead of direct to bridge.
-    #[arg(long, env = "YUNYING_SERVER_ADDR")]
+    #[arg(long, env = "CLUM_SERVER_ADDR")]
     server_addr: Option<String>,
 
     /// API key for server authentication.
-    #[arg(long, env = "YUNYING_API_KEY")]
+    #[arg(long, env = "CLUM_API_KEY")]
     api_key: Option<String>,
 }
 
@@ -151,6 +151,8 @@ async fn get_connection(
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let _ = rustls::crypto::ring::default_provider().install_default();
+    clum_core::inject_env_fallback("CLUM_SERVER_ADDR", "YUNYING_SERVER_ADDR");
+    clum_core::inject_env_fallback("CLUM_API_KEY", "YUNYING_API_KEY");
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::WARN)
         .with_writer(std::io::stderr)

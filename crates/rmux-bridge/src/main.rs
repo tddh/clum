@@ -20,6 +20,8 @@ use crate::protocol::ProtocolProxy;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    clum_core::inject_env_fallback("CLUM_SERVER_ADDR", "YUNYING_SERVER_ADDR");
+    clum_core::inject_env_fallback("CLUM_CA_CERT", "YUNYING_CA_CERT");
     let config = config::BridgeConfig::parse();
 
     tracing_subscriber::fmt()

@@ -283,7 +283,7 @@ fn build_client_tls(ca_cert_path: Option<&str>) -> anyhow::Result<rustls::Client
     let mut config = rustls::ClientConfig::builder()
         .with_root_certificates(root_store)
         .with_no_client_auth();
-    config.alpn_protocols = vec![b"yunying".to_vec()];
+    config.alpn_protocols = vec![b"clum".to_vec()];
     Ok(config)
 }
 

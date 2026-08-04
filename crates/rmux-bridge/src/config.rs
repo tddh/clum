@@ -69,11 +69,11 @@ pub struct BridgeConfig {
     pub bridge_audit_db: Option<PathBuf>,
 
     /// Central server address (host:port). If set, bridge registers with server.
-    #[arg(long, env = "YUNYING_SERVER_ADDR")]
+    #[arg(long, env = "CLUM_SERVER_ADDR")]
     pub server_addr: Option<String>,
 
     /// CA certificate for verifying server TLS (private CA). Omit for public CA.
-    #[arg(long, env = "YUNYING_CA_CERT")]
+    #[arg(long, env = "CLUM_CA_CERT")]
     pub ca_cert: Option<PathBuf>,
 }
 

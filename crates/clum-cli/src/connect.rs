@@ -36,7 +36,7 @@ pub async fn connect_via_server(
     let mut tls_config = rustls::ClientConfig::builder()
         .with_root_certificates(roots)
         .with_no_client_auth();
-    tls_config.alpn_protocols = vec![b"yunying".to_vec()];
+    tls_config.alpn_protocols = vec![b"clum".to_vec()];
 
     let quic_tls = quinn::crypto::rustls::QuicClientConfig::try_from(tls_config)
         .map_err(|e| anyhow::anyhow!("QUIC TLS config error: {}", e))?;
