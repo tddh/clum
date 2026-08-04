@@ -85,7 +85,7 @@ pub async fn run_mcp_stdio_loop(
                     &json!({
                         "protocolVersion": "2024-11-05",
                         "capabilities": { "tools": {}, "progress": {} },
-                        "serverInfo": { "name": "yunying-mcp", "version": env!("CARGO_PKG_VERSION") },
+                        "serverInfo": { "name": "clum-mcp", "version": env!("CARGO_PKG_VERSION") },
                         "instructions": crate::schema::instructions()
                     }),
                 )

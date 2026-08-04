@@ -112,8 +112,8 @@ mod tests {
     use super::*;
     use crate::audit::query::{OutputFormat, QueryParams};
     use chrono::Utc;
-    use uuid::Uuid;
     use clum_core::types::{AuditAction, AuditEvent};
+    use uuid::Uuid;
 
     fn make_event(action: AuditAction, host: &str, success: bool) -> AuditEvent {
         AuditEvent {

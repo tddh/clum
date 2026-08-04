@@ -227,7 +227,7 @@ where
 
         let response = match req_type {
             "new_session" => {
-                let name = request["name"].as_str().unwrap_or("yunying");
+                let name = request["name"].as_str().unwrap_or("clum");
                 let detached = request["detached"].as_bool().unwrap_or(true);
                 protocol_proxy.handle_new_session(name, detached).await
             }

@@ -10,15 +10,15 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "yunying-cli", about = "AI Agent 远程运维 CLI")]
+#[command(name = "clum-cli", about = "AI Agent 远程运维 CLI")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
 
-    #[arg(long, default_value = "~/.yunying/hosts.yaml")]
+    #[arg(long, default_value = "~/.clum/hosts.yaml")]
     hosts_file: String,
 
-    #[arg(long, default_value = "~/.yunying/ca.crt")]
+    #[arg(long, default_value = "~/.clum/ca.crt")]
     ca_cert: String,
 
     /// Central server address. If set, connect via server relay instead of direct to bridge.
@@ -35,7 +35,7 @@ enum Commands {
     Connect {
         host: String,
 
-        #[arg(long, default_value = "yunying")]
+        #[arg(long, default_value = "clum")]
         session: String,
 
         #[arg(long)]
@@ -245,7 +245,7 @@ async fn main() -> anyhow::Result<()> {
             } else if let Some(server) = &cli.server_addr {
                 let url = format!("http://{server}/recordings/{expanded}");
                 eprintln!("Fetching recording from {url} ...");
-                let tmp_file = std::env::temp_dir().join("yunying-replay.cast");
+                let tmp_file = std::env::temp_dir().join("clum-replay.cast");
                 let tmp_path = tmp_file.to_string_lossy().to_string();
                 let mut cmd = std::process::Command::new("curl");
                 cmd.args(["-fsSL", "-o", &tmp_path]);

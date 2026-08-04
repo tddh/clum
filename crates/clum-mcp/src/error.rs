@@ -195,7 +195,7 @@ mod tests {
         assert_eq!(r.code, "SESSION_NOT_FOUND");
         assert!(r.hint.contains("session_create"));
 
-        let r = classify_message("session already exists: yunying");
+        let r = classify_message("session already exists: clum");
         assert_eq!(r.code, "SESSION_EXISTS");
 
         let r = classify_message("tunnel not found: abc");

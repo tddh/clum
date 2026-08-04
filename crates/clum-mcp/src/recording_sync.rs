@@ -13,9 +13,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::Context;
+use clum_core::HostConfig;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use clum_core::HostConfig;
 
 use crate::registry::BridgeRegistry;
 use crate::router::HostRouter;
@@ -40,11 +40,11 @@ pub struct RecordingSyncConfig {
     pub max_size_mb: u64,
 }
 
-/// Resolve the default recordings directory: `~/.yunying/recordings`.
+/// Resolve the default recordings directory: `~/.clum/recordings`.
 pub fn default_recordings_dir() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join(".yunying/recordings")
+        .join(".clum/recordings")
 }
 
 /// Run the recording sync loop forever. Intended to be spawned as a background
@@ -500,17 +500,17 @@ mod tests {
         let h2 = root.join("host2/2026-07-23");
         tokio::fs::create_dir_all(&h1).await.unwrap();
         tokio::fs::create_dir_all(&h2).await.unwrap();
-        tokio::fs::write(h1.join("yunying-abc.cast"), "data1")
+        tokio::fs::write(h1.join("clum-abc.cast"), "data1")
             .await
             .unwrap();
         tokio::fs::write(h1.join("build-xyz.cast"), "data22")
             .await
             .unwrap();
-        tokio::fs::write(h2.join("yunying-def.cast"), "data333")
+        tokio::fs::write(h2.join("clum-def.cast"), "data333")
             .await
             .unwrap();
         // Non-cast file should be ignored.
-        tokio::fs::write(h1.join("yunying-abc.meta"), "{}")
+        tokio::fs::write(h1.join("clum-abc.meta"), "{}")
             .await
             .unwrap();
 
@@ -530,20 +530,20 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(only_date.len(), 1);
-        assert_eq!(only_date[0]["file"], "yunying-def.cast");
+        assert_eq!(only_date[0]["file"], "clum-def.cast");
 
         // Filter by session prefix.
-        let only_session = list_local_recordings(root, None, None, Some("yunying"))
+        let only_session = list_local_recordings(root, None, None, Some("clum"))
             .await
             .unwrap();
         assert_eq!(only_session.len(), 2);
 
         // Combined host + session.
-        let combined = list_local_recordings(root, Some("host1"), None, Some("yunying"))
+        let combined = list_local_recordings(root, Some("host1"), None, Some("clum"))
             .await
             .unwrap();
         assert_eq!(combined.len(), 1);
-        assert_eq!(combined[0]["file"], "yunying-abc.cast");
+        assert_eq!(combined[0]["file"], "clum-abc.cast");
         assert_eq!(combined[0]["size_bytes"], 5);
     }
 

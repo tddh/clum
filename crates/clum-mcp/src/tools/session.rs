@@ -52,7 +52,7 @@ pub(crate) async fn reload_config(ctx: &ToolContext) -> Result<Value> {
 
 pub(crate) async fn session_create(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"].as_str().unwrap_or("yunying");
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let host = super::common::resolve_host_config(ctx, host_name).await?;
 
     let mut tls = connect_to_host(ctx, &host).await?;

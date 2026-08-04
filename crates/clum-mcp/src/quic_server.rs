@@ -84,7 +84,7 @@ pub async fn run_quic_server(
         .parse()
         .context("invalid QUIC listen addr")?;
     let endpoint = quinn::Endpoint::server(server_config, addr)?;
-    tracing::info!("QUIC server listening on udp/{addr} (ALPN: yunying)");
+    tracing::info!("QUIC server listening on udp/{addr} (ALPN: clum)");
 
     let token_map: Arc<tokio::sync::RwLock<HashMap<String, String>>> =
         Arc::new(tokio::sync::RwLock::new(config.bridge_token_hashes));

@@ -270,7 +270,7 @@ mod tests {
             event_type: "auth_success".to_string(),
             client_addr: "127.0.0.1:12345".to_string(),
             client_id: Some("client-1".to_string()),
-            session_name: Some("yunying".to_string()),
+            session_name: Some("clum".to_string()),
             pane_id: Some("%0".to_string()),
             cols: Some(80),
             rows: Some(24),
@@ -308,12 +308,9 @@ mod tests {
         assert_eq!(failures[0]["client_addr"], "192.168.1.100:54321");
 
         // Query by session_name
-        let sessions = db
-            .query(None, Some("yunying"), None, None, 100)
-            .await
-            .unwrap();
+        let sessions = db.query(None, Some("clum"), None, None, 100).await.unwrap();
         assert_eq!(sessions.len(), 1);
-        assert_eq!(sessions[0]["session_name"], "yunying");
+        assert_eq!(sessions[0]["session_name"], "clum");
         assert_eq!(sessions[0]["pane_id"], "%0");
         assert_eq!(sessions[0]["detail"]["method"], "token");
     }

@@ -108,7 +108,7 @@ impl ServerConfig {
         expand_opt_path(&self.audit_db).unwrap_or_else(|| {
             let dir = dirs::home_dir()
                 .unwrap_or_else(|| PathBuf::from("."))
-                .join(".yunying");
+                .join(".clum");
             std::fs::create_dir_all(&dir).ok();
             dir.join("audit.db")
         })

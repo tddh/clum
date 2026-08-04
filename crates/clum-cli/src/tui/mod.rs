@@ -8,6 +8,7 @@ use std::time::Duration;
 use std::os::unix::io::AsRawFd;
 
 use anyhow::{Context, Result};
+use clum_core::HostConfig;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use crossterm::ExecutableCommand;
@@ -16,7 +17,6 @@ use ratatui::Terminal;
 use ratatui_crossterm::CrosstermBackend;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Mutex;
-use clum_core::HostConfig;
 
 use crate::connect::connect_to_bridge_quic;
 use crate::protocol::{

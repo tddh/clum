@@ -368,7 +368,7 @@ async fn push_recording(conn: &quinn::Connection, path: &std::path::Path) -> any
 }
 
 async fn persist_token(token: &str) -> anyhow::Result<()> {
-    let path = std::path::Path::new("/etc/yunying/token");
+    let path = std::path::Path::new("/etc/clum/token");
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent).await.ok();
     }

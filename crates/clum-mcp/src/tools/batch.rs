@@ -97,7 +97,7 @@ pub(crate) async fn batch_exec(
                 }
             };
 
-            let session_name = "yunying";
+            let session_name = "clum";
 
             // 创建 session 并获取 pane_id
             let pane_id = match super::common::create_session_inner(&mut stream, session_name).await

@@ -6,8 +6,8 @@ use super::exec::exec_in_session;
 use super::ToolContext;
 use crate::transport::{connect_via_registry, send_json_frame};
 use chrono::Utc;
-use uuid::Uuid;
 use clum_core::types::{AuditAction, AuditEvent};
+use uuid::Uuid;
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn audit(
@@ -107,7 +107,7 @@ pub(crate) async fn deploy_bridge(
                 })),
             };
 
-            let session_name = "yunying";
+            let session_name = "clum";
             let pane_id = match create_session_inner(&mut stream, session_name).await {
                 Ok(resp) => resp.get("pane_id")
                     .and_then(|v| v.as_str())

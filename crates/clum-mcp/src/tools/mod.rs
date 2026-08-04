@@ -120,7 +120,7 @@ async fn authorize(ctx: &ToolContext, tool_name: &str, args: &Value) -> Result<(
         anyhow::bail!("forbidden: '{tool_name}' requires superadmin (no group)");
     }
 
-    if tool_name == "yunying_usage_rules" {
+    if tool_name == "clum_usage_rules" {
         return Ok(());
     }
 
@@ -160,7 +160,7 @@ pub async fn execute_tool(
     authorize(ctx, tool_name, &args).await?;
 
     match tool_name {
-        "yunying_usage_rules" => Ok(json!({})),
+        "clum_usage_rules" => Ok(json!({})),
         "host_list" => discovery::host_list(ctx).await,
         "host_filter" => discovery::host_filter(ctx, args).await,
         "host_set_meta" => discovery::host_set_meta(ctx, args).await,

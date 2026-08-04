@@ -3,10 +3,10 @@
 //! `reload()` for zero-downtime configuration updates.
 
 use anyhow::{Context, Result};
+use clum_core::types::HostConfig;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
-use clum_core::types::HostConfig;
 
 /// Maps host names to their `HostConfig` for fast lookup by tool handlers.
 /// Wraps the inner map in a `RwLock` to support atomic configuration reloads
@@ -111,7 +111,7 @@ mod tests {
         let id = COUNTER.fetch_add(1, Ordering::SeqCst);
         let dir = std::env::temp_dir();
         let path = dir.join(format!(
-            "yunying-test-hosts-{}-{}.yaml",
+            "clum-test-hosts-{}-{}.yaml",
             std::process::id(),
             id
         ));
@@ -241,7 +241,7 @@ hosts:
 
     #[test]
     fn test_load_missing_file() {
-        let path = std::env::temp_dir().join("yunying-nonexistent-file.yaml");
+        let path = std::env::temp_dir().join("clum-nonexistent-file.yaml");
         let result = HostRouter::from_file(&path);
         assert!(result.is_err());
     }

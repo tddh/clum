@@ -1,9 +1,9 @@
 use crate::audit;
 use chrono::Utc;
 use clap::Parser;
+use clum_core::types::{AuditAction, AuditEvent};
 use std::path::PathBuf;
 use uuid::Uuid;
-use clum_core::types::{AuditAction, AuditEvent};
 
 use crate::resolve_audit_db_path;
 
@@ -73,7 +73,7 @@ pub async fn run_audit_command() -> anyhow::Result<()> {
     }
 
     let cli = AuditCli::parse_from(
-        std::iter::once("yunying-mcp".to_string()).chain(std::env::args().skip(2)),
+        std::iter::once("clum-mcp".to_string()).chain(std::env::args().skip(2)),
     );
     match cli.command {
         AuditCommand::Query {

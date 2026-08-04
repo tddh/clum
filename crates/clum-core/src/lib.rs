@@ -34,7 +34,10 @@ mod tests {
         std::env::remove_var(new_key);
         std::env::set_var(legacy_key, "legacy-value");
         inject_env_fallback(new_key, legacy_key);
-        assert_eq!(std::env::var_os(new_key).map(|v| v.into_string()), Some(Ok("legacy-value".to_string())));
+        assert_eq!(
+            std::env::var_os(new_key).map(|v| v.into_string()),
+            Some(Ok("legacy-value".to_string()))
+        );
         std::env::remove_var(new_key);
         std::env::remove_var(legacy_key);
     }
@@ -45,7 +48,10 @@ mod tests {
         std::env::set_var(new_key, "new-value");
         std::env::set_var(legacy_key, "legacy-value");
         inject_env_fallback(new_key, legacy_key);
-        assert_eq!(std::env::var_os(new_key).map(|v| v.into_string()), Some(Ok("new-value".to_string())));
+        assert_eq!(
+            std::env::var_os(new_key).map(|v| v.into_string()),
+            Some(Ok("new-value".to_string()))
+        );
         std::env::remove_var(new_key);
         std::env::remove_var(legacy_key);
     }

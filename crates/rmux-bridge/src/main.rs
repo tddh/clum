@@ -262,10 +262,13 @@ async fn main() -> anyhow::Result<()> {
 }
 
 fn load_registration_token(env_token: &str) -> String {
-    if let Ok(file_token) = std::fs::read_to_string("/etc/yunying/token") {
-        let trimmed = file_token.trim().to_string();
-        if !trimmed.is_empty() {
-            return trimmed;
+    // Transitional: read new path first, fall back to legacy pre-0.10 path.
+    for path in ["/etc/clum/token", "/etc/yunying/token"] {
+        if let Ok(file_token) = std::fs::read_to_string(path) {
+            let trimmed = file_token.trim().to_string();
+            if !trimmed.is_empty() {
+                return trimmed;
+            }
         }
     }
     env_token.to_string()

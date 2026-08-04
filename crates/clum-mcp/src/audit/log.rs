@@ -1,6 +1,6 @@
 use crate::audit::AuditDb;
-use rusqlite::params;
 use clum_core::types::AuditEvent;
+use rusqlite::params;
 
 impl AuditDb {
     /// Async wrapper: logs an audit event via spawn_blocking.

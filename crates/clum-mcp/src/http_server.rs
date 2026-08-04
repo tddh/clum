@@ -328,14 +328,14 @@ pub async fn run_http_server(
             )
             .await?;
             let addr: std::net::SocketAddr = listen_addr.parse()?;
-            tracing::info!("yunying-mcp HTTPS server listening on {listen_addr}");
+            tracing::info!("clum-mcp HTTPS server listening on {listen_addr}");
             axum_server::bind_rustls(addr, rustls_config)
                 .serve(app.into_make_service())
                 .await?;
         }
         _ => {
             let listener = tokio::net::TcpListener::bind(listen_addr).await?;
-            tracing::info!("yunying-mcp HTTP server listening on {listen_addr} (no TLS)");
+            tracing::info!("clum-mcp HTTP server listening on {listen_addr} (no TLS)");
             axum::serve(listener, app).await?;
         }
     }

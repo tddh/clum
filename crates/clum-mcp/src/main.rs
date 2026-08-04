@@ -27,7 +27,7 @@ use std::sync::Arc;
 use anyhow::Context;
 
 #[derive(Parser)]
-#[command(name = "yunying-mcp", version, about)]
+#[command(name = "clum-mcp", version, about)]
 struct Cli {
     #[arg(long, default_value = "stdio")]
     mode: String,
@@ -88,7 +88,7 @@ pub(crate) fn resolve_audit_db_path(custom: Option<PathBuf>) -> PathBuf {
     custom.unwrap_or_else(|| {
         let dir = dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join(".yunying");
+            .join(".clum");
         std::fs::create_dir_all(&dir).ok();
         dir.join("audit.db")
     })
@@ -272,7 +272,7 @@ async fn main() -> anyhow::Result<()> {
             let key = server_key;
 
             tracing::info!(
-                "yunying-mcp server starting (http mode on {})",
+                "clum-mcp server starting (http mode on {})",
                 listen.as_deref().unwrap_or("0.0.0.0:9788")
             );
 
@@ -346,7 +346,7 @@ async fn main() -> anyhow::Result<()> {
         }
         _ => {
             let tools_definition = schema::tools_definition();
-            tracing::info!("yunying-mcp server starting (stdio mode)");
+            tracing::info!("clum-mcp server starting (stdio mode)");
             handler::run_mcp_stdio_loop(ctx, tools_definition).await
         }
     }
@@ -360,7 +360,7 @@ async fn run_agent_command(args: &[String]) -> anyhow::Result<()> {
     match args.first().map(|s| s.as_str()) {
         Some("add") => {
             let name = args.get(1).ok_or_else(|| {
-                anyhow::anyhow!("usage: yunying-mcp agent add <name> (--group <group> | --admin)")
+                anyhow::anyhow!("usage: clum-mcp agent add <name> (--group <group> | --admin)")
             })?;
             let is_admin = args.iter().any(|a| a == "--admin");
             let group = args
@@ -405,7 +405,7 @@ async fn run_agent_command(args: &[String]) -> anyhow::Result<()> {
         Some("rotate") => {
             let name = args
                 .get(1)
-                .ok_or_else(|| anyhow::anyhow!("usage: yunying-mcp agent rotate <name>"))?;
+                .ok_or_else(|| anyhow::anyhow!("usage: clum-mcp agent rotate <name>"))?;
             let key = store.rotate(name).await?;
             println!("New API Key: {key}");
             println!("Old key expires in 24h.");
@@ -413,12 +413,12 @@ async fn run_agent_command(args: &[String]) -> anyhow::Result<()> {
         Some("revoke") => {
             let name = args
                 .get(1)
-                .ok_or_else(|| anyhow::anyhow!("usage: yunying-mcp agent revoke <name>"))?;
+                .ok_or_else(|| anyhow::anyhow!("usage: clum-mcp agent revoke <name>"))?;
             store.revoke(name).await?;
             println!("Agent '{name}' revoked.");
         }
         _ => {
-            eprintln!("usage: yunying-mcp agent <add|list|rotate|revoke> [name]");
+            eprintln!("usage: clum-mcp agent <add|list|rotate|revoke> [name]");
             std::process::exit(1);
         }
     }
@@ -433,7 +433,7 @@ async fn run_bridge_command(args: &[String]) -> anyhow::Result<()> {
         Some("add") => {
             let hostname = args.get(1).ok_or_else(|| {
                 anyhow::anyhow!(
-                    "usage: yunying-mcp bridge add <hostname> --tags infra,server [--group production] [--config path]"
+                    "usage: clum-mcp bridge add <hostname> --tags infra,server [--group production] [--config path]"
                 )
             })?;
             let tags: Vec<String> = args
@@ -452,7 +452,7 @@ async fn run_bridge_command(args: &[String]) -> anyhow::Result<()> {
                 .position(|a| a == "--config")
                 .and_then(|i| args.get(i + 1))
                 .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from("/etc/yunying/server-config.yaml"));
+                .unwrap_or_else(|| PathBuf::from("/etc/clum/server-config.yaml"));
             let config = server_config::ServerConfig::load(&config_path)?;
             let server_addr = &config.server_addr;
 
@@ -483,20 +483,20 @@ async fn run_bridge_command(args: &[String]) -> anyhow::Result<()> {
         Some("remove") => {
             let hostname = args
                 .get(1)
-                .ok_or_else(|| anyhow::anyhow!("usage: yunying-mcp bridge remove <hostname>"))?;
+                .ok_or_else(|| anyhow::anyhow!("usage: clum-mcp bridge remove <hostname>"))?;
             store.remove(hostname).await?;
             println!("Bridge '{hostname}' revoked.");
         }
         Some("join") => {
             let hostname = args
                 .get(1)
-                .ok_or_else(|| anyhow::anyhow!("usage: yunying-mcp bridge join <hostname>"))?;
+                .ok_or_else(|| anyhow::anyhow!("usage: clum-mcp bridge join <hostname>"))?;
             let token = store.join(hostname).await?;
             println!("New join token for '{hostname}': {token}");
             println!("Update the bridge's token file or env, then restart it.");
         }
         _ => {
-            eprintln!("usage: yunying-mcp bridge <add|list|remove|join> [hostname]");
+            eprintln!("usage: clum-mcp bridge <add|list|remove|join> [hostname]");
             std::process::exit(1);
         }
     }
