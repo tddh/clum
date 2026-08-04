@@ -2,6 +2,7 @@ mod ai;
 mod connect;
 mod protocol;
 mod replay;
+mod transfer;
 mod tui;
 
 use anyhow::Context;
@@ -64,14 +65,18 @@ enum Commands {
         idle: Option<f64>,
     },
 
-    /// Upload a file to a remote host
+    /// Upload a file or directory to a remote host
     Upload {
         host: String,
         local_path: String,
         remote_path: String,
+
+        /// Glob patterns to exclude when uploading a directory (repeatable)
+        #[arg(long)]
+        exclude: Vec<String>,
     },
 
-    /// Download a file from a remote host
+    /// Download a file or directory from a remote host
     Download {
         host: String,
         remote_path: String,
@@ -262,6 +267,7 @@ async fn main() -> anyhow::Result<()> {
             host,
             local_path,
             remote_path,
+            exclude,
         } => {
             let conn = get_connection(
                 &server_addr,
@@ -272,51 +278,9 @@ async fn main() -> anyhow::Result<()> {
                 "upload",
             )
             .await?;
-            let (mut send, mut recv) = conn.open_bi().await?;
-
-            let file_data = tokio::fs::read(&local_path)
-                .await
-                .map_err(|e| anyhow::anyhow!("read {local_path}: {e}"))?;
-            let file_size = file_data.len() as u64;
-
-            send.write_all(&[0x02]).await?; // STREAM_UPLOAD
-            send.write_all(&[0x01]).await?; // overwrite mode
-            send.write_all(&(remote_path.len() as u16).to_le_bytes())
-                .await?;
-            send.write_all(remote_path.as_bytes()).await?;
-            send.write_all(&file_size.to_le_bytes()).await?;
-            send.write_all(&file_data).await?;
-            send.finish()?;
-
-            let mut status = [0u8; 1];
-            recv.read_exact(&mut status).await?;
-            match status[0] {
-                0x00 => {
-                    let mut size_buf = [0u8; 8];
-                    recv.read_exact(&mut size_buf).await?;
-                    let total = u64::from_le_bytes(size_buf);
-                    let mut hash = [0u8; 32];
-                    recv.read_exact(&mut hash).await?;
-                    println!(
-                        "uploaded {local_path} → {host}:{remote_path} ({total} bytes, sha256:{})",
-                        hex::encode(hash)
-                    );
-                    Ok(())
-                }
-                0x01 => {
-                    println!("skipped {remote_path} (already exists)");
-                    Ok(())
-                }
-                0x02 => {
-                    let mut len_buf = [0u8; 2];
-                    recv.read_exact(&mut len_buf).await?;
-                    let msg_len = u16::from_le_bytes(len_buf) as usize;
-                    let mut msg = vec![0u8; msg_len];
-                    recv.read_exact(&mut msg).await?;
-                    anyhow::bail!("upload failed: {}", String::from_utf8_lossy(&msg))
-                }
-                _ => anyhow::bail!("unexpected upload status: 0x{:02x}", status[0]),
-            }
+            let result = transfer::upload(&conn, &local_path, &remote_path, &exclude).await;
+            conn.close(0u32.into(), b"done");
+            result
         }
         Commands::Download {
             host,
@@ -332,42 +296,9 @@ async fn main() -> anyhow::Result<()> {
                 "download",
             )
             .await?;
-            let (mut send, mut recv) = conn.open_bi().await?;
-
-            send.write_all(&[0x03]).await?; // STREAM_DOWNLOAD
-            send.write_all(&(remote_path.len() as u16).to_le_bytes())
-                .await?;
-            send.write_all(remote_path.as_bytes()).await?;
-            send.finish()?;
-
-            let mut status = [0u8; 1];
-            recv.read_exact(&mut status).await?;
-
-            match status[0] {
-                0x00 => {
-                    let mut size_buf = [0u8; 8];
-                    recv.read_exact(&mut size_buf).await?;
-                    let file_size = u64::from_le_bytes(size_buf);
-
-                    let mut file_data = vec![0u8; file_size as usize];
-                    recv.read_exact(&mut file_data).await?;
-
-                    tokio::fs::write(&local_path, &file_data)
-                        .await
-                        .map_err(|e| anyhow::anyhow!("write {local_path}: {e}"))?;
-                    println!("downloaded {host}:{remote_path} → {local_path} ({file_size} bytes)");
-                    Ok(())
-                }
-                0x02 => {
-                    let mut len_buf = [0u8; 2];
-                    recv.read_exact(&mut len_buf).await?;
-                    let msg_len = u16::from_le_bytes(len_buf) as usize;
-                    let mut msg = vec![0u8; msg_len];
-                    recv.read_exact(&mut msg).await?;
-                    anyhow::bail!("download failed: {}", String::from_utf8_lossy(&msg))
-                }
-                _ => anyhow::bail!("unexpected download status: 0x{:02x}", status[0]),
-            }
+            let result = transfer::download(&conn, &remote_path, &local_path).await;
+            conn.close(0u32.into(), b"done");
+            result
         }
         Commands::Tunnel {
             host,
