@@ -28,12 +28,9 @@ for f in ca.crt server.crt server.key; do
 done
 ssh "$REMOTE" "sudo chmod 600 /etc/yunying/server.key 2>/dev/null; sudo chmod 644 /etc/yunying/ca.crt /etc/yunying/server.crt 2>/dev/null" || true
 
-# 4. Upload hosts.yaml
-HOSTS_FILE="${HOSTS_FILE:-config/hosts.yaml}"
-if [ -f "$HOSTS_FILE" ]; then
-    scp "$HOSTS_FILE" "$REMOTE:/tmp/hosts.yaml"
-    ssh "$REMOTE" "sudo mv /tmp/hosts.yaml /etc/yunying/hosts.yaml && sudo chmod 600 /etc/yunying/hosts.yaml"
-fi
+# 4. Ensure hosts.yaml exists (never overwrite — the server-side file is
+# authoritative; bridges enroll into the runtime registry DB).
+ssh "$REMOTE" "test -f /etc/yunying/hosts.yaml || (echo 'hosts: []' | sudo tee /etc/yunying/hosts.yaml > /dev/null && sudo chmod 600 /etc/yunying/hosts.yaml)"
 
 # 5. Write server-config.yaml if not present
 ssh "$REMOTE" "test -f /etc/yunying/server-config.yaml" 2>/dev/null || {

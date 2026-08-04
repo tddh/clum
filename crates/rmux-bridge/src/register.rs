@@ -13,7 +13,9 @@ use crate::protocol::ProtocolProxy;
 pub struct RegisterConfig {
     pub server_addr: String,
     pub ca_cert: Option<String>,
-    pub token: String,
+    /// Shared with the control-stream reader so rotated tokens take effect
+    /// on the next registration attempt without a restart.
+    pub token: Arc<tokio::sync::RwLock<String>>,
     pub rmux_socket: String,
     pub recording_enabled: bool,
     pub recording_dir: std::path::PathBuf,
@@ -76,10 +78,11 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
 
     let machine_id = read_machine_id();
     let os_info = read_os_info();
+    let token = config.token.read().await.clone();
 
     let reg_msg = serde_json::json!({
         "type": "bridge_register",
-        "token": config.token,
+        "token": token,
         "version": env!("CARGO_PKG_VERSION"),
         "capabilities": ["exec", "file", "tunnel", "interactive"],
         "machine_id": machine_id,
@@ -132,6 +135,7 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
     });
 
     // Control stream reader: handle server pushes (token rotation)
+    let rotated_token = Arc::clone(&config.token);
     tokio::spawn(async move {
         while let Ok(data) = read_frame(&mut recv).await {
             let msg: serde_json::Value = match serde_json::from_slice(&data) {
@@ -144,6 +148,10 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
                         Ok(()) => tracing::info!("token rotated and persisted"),
                         Err(e) => tracing::error!("failed to persist rotated token: {e}"),
                     }
+                    // Update in-memory even if persist failed: the running
+                    // process must use the new token on its next registration
+                    // attempt; only a restart would fall back to the stale file.
+                    *rotated_token.write().await = new_token.to_string();
                 }
             }
         }

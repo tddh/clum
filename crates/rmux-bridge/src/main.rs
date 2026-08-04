@@ -243,7 +243,7 @@ async fn main() -> anyhow::Result<()> {
                 .ca_cert
                 .as_ref()
                 .map(|p| p.to_string_lossy().to_string()),
-            token,
+            token: std::sync::Arc::new(tokio::sync::RwLock::new(token)),
             rmux_socket: config.rmux_socket.clone(),
             recording_enabled: config.recording_enabled,
             recording_dir: config.resolve_recording_dir(),
