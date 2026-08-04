@@ -139,7 +139,7 @@ bash deploy/deploy-bridge.sh root@<your-bridge-ip>
 部署脚本自动完成：
 - 上传 `rmux-bridge` 二进制到 `/usr/local/bin/rmux-bridge`
 - 下载 CA 证书到 `/etc/clum/ca.crt`
-- 写入配置到 `/etc/clum/bridge.env`（权限 600，含 BRIDGE_AUTH_TOKEN、YUNYING_SERVER_ADDR、YUNYING_CA_CERT）
+- 写入配置到 `/etc/clum/bridge.env`（权限 600，含 BRIDGE_AUTH_TOKEN、CLUM_SERVER_ADDR、CLUM_CA_CERT）
 - 创建 `rmux-bridge.service`（`systemctl enable --now`）
 
 **其他 Justfile 命令：**
