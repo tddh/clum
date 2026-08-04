@@ -10,6 +10,11 @@
 ### Added
 - HTTP 认证中间件测试：白名单判定 + 各类凭证（API key / bridge token / download token / 无效凭证）的 403/401 行为，共 5 个用例。
 - **yunying-cli 文件传输增强**：`upload`/`download` 支持目录传输（目录上传逐文件并发 + `--exclude` glob 过滤；目录下载走 bridge 0x04 协议，相对路径做穿越校验），并改为 1MB 分块流式传输（不再整文件读入内存），输出含 SHA-256 校验。
+- **yunying-cli tunnel 自动重连**：断网后本地端口保持监听，QUIC 连接死亡即时检测（idle timeout 3600s→60s）+ 指数退避重连（1s→30s）；`--give-up-after` 控制断网多久后退出（默认 2h，`0` = 永不退出）。
+
+### Fixed
+- **Bridge 轮换 token 内存生效**：此前 token 轮换只把新 token 落盘 `/etc/yunying/token`，运行中的 bridge 仍用启动时加载的旧 token 注册，Server 重启后触发 `unknown token` 失联。现 token 经 `Arc<RwLock>` 共享，轮换推送后立即在内存生效（不触发重注册），下次注册尝试即用新 token。
+- **deploy-mcp.sh 不再覆盖远端 hosts.yaml**：此前会用本地占位文件无条件覆盖服务器上的权威配置；现仅在远端文件不存在时创建空文件。
 
 ## [0.9.1] — 2026-08-03
 
