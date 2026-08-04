@@ -16,7 +16,7 @@ use ratatui::Terminal;
 use ratatui_crossterm::CrosstermBackend;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Mutex;
-use yunying_core::HostConfig;
+use clum_core::HostConfig;
 
 use crate::connect::connect_to_bridge_quic;
 use crate::protocol::{

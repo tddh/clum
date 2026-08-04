@@ -7,7 +7,7 @@ use super::ToolContext;
 use crate::transport::{connect_via_registry, send_json_frame};
 use chrono::Utc;
 use uuid::Uuid;
-use yunying_core::types::{AuditAction, AuditEvent};
+use clum_core::types::{AuditAction, AuditEvent};
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn audit(

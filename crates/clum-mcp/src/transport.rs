@@ -283,11 +283,11 @@ pub async fn recv_json_frame<S: tokio::io::AsyncReadExt + Unpin>(
     let mut len_buf = [0u8; 4];
     stream.read_exact(&mut len_buf).await?;
     let len = u32::from_le_bytes(len_buf) as usize;
-    if len > yunying_core::MAX_FRAME_SIZE {
+    if len > clum_core::MAX_FRAME_SIZE {
         anyhow::bail!(
             "frame too large: {} bytes (max {})",
             len,
-            yunying_core::MAX_FRAME_SIZE
+            clum_core::MAX_FRAME_SIZE
         );
     }
     let mut buf = vec![0u8; len];
@@ -401,14 +401,14 @@ pub async fn connect_to_bridge_hybrid_stream(
 
 pub async fn connect_to_host(
     ctx: &crate::tools::ToolContext,
-    host: &yunying_core::types::HostConfig,
+    host: &clum_core::types::HostConfig,
 ) -> Result<BridgeStream> {
     connect_via_registry(&ctx.bridge_registry, host, &ctx.ca_cert_path).await
 }
 
 pub async fn connect_to_host_stream(
     ctx: &crate::tools::ToolContext,
-    host: &yunying_core::types::HostConfig,
+    host: &clum_core::types::HostConfig,
     idle_timeout_secs: u64,
     keepalive_secs: u64,
 ) -> Result<BridgeStream> {
@@ -451,7 +451,7 @@ pub async fn connect_to_host_stream(
 
 pub async fn connect_via_registry(
     registry: &std::sync::Arc<crate::registry::BridgeRegistry>,
-    host: &yunying_core::types::HostConfig,
+    host: &clum_core::types::HostConfig,
     ca_cert_path: &str,
 ) -> Result<BridgeStream> {
     if let Some(bridge) = registry.get(&host.name).await {

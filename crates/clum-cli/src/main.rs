@@ -114,9 +114,9 @@ fn expand_tilde(path: &str) -> String {
     path.to_string()
 }
 
-fn load_host_config(hosts_file: &str, host_name: &str) -> anyhow::Result<yunying_core::HostConfig> {
+fn load_host_config(hosts_file: &str, host_name: &str) -> anyhow::Result<clum_core::HostConfig> {
     let contents = std::fs::read_to_string(hosts_file)?;
-    let registry: yunying_core::HostRegistry = serde_yml::from_str(&contents)?;
+    let registry: clum_core::HostRegistry = serde_yml::from_str(&contents)?;
     registry
         .hosts
         .into_iter()

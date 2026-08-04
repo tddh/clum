@@ -207,14 +207,14 @@ async fn main() -> anyhow::Result<()> {
                     Ok(count) => {
                         tracing::info!("SIGHUP: successfully reloaded {} hosts from config", count);
                         sig_audit_db
-                            .log(yunying_core::types::AuditEvent {
+                            .log(clum_core::types::AuditEvent {
                                 event_id: uuid::Uuid::new_v4(),
                                 timestamp: chrono::Utc::now(),
                                 agent_name: "system".to_string(),
                                 host_name: String::new(),
                                 session_name: String::new(),
                                 pane_id: None,
-                                action: yunying_core::types::AuditAction::ConfigReload,
+                                action: clum_core::types::AuditAction::ConfigReload,
                                 detail: "SIGHUP received".to_string(),
                                 output_summary: None,
                                 success: true,

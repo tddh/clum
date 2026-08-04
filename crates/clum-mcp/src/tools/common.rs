@@ -11,7 +11,7 @@ use crate::transport::{recv_json_frame, send_json_frame, BridgeStream};
 pub(crate) async fn resolve_host_config(
     ctx: &ToolContext,
     host_name: &str,
-) -> Result<yunying_core::types::HostConfig> {
+) -> Result<clum_core::types::HostConfig> {
     // 1. 先查 hosts.yaml 静态配置（direct 模式）
     if let Some(h) = ctx.router.get(host_name) {
         return Ok(h);
@@ -19,7 +19,7 @@ pub(crate) async fn resolve_host_config(
     // 2. 查 BridgeRegistry 已反向注册的 bridge（enrolled 模式）
     let enrolled = ctx.bridge_registry.list().await;
     if enrolled.iter().any(|b| b.hostname == host_name) {
-        return Ok(yunying_core::types::HostConfig {
+        return Ok(clum_core::types::HostConfig {
             name: host_name.to_string(),
             bridge_addr: None,
             bridge_token: None,
@@ -49,7 +49,7 @@ pub(crate) async fn create_session_inner(
 pub(crate) async fn resolve_hosts(
     ctx: &ToolContext,
     names: &[String],
-) -> Vec<(String, Option<yunying_core::types::HostConfig>)> {
+) -> Vec<(String, Option<clum_core::types::HostConfig>)> {
     let mut result = Vec::with_capacity(names.len());
     for name in names {
         let h = resolve_host_config(ctx, name).await.ok();

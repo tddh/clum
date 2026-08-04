@@ -8,7 +8,7 @@ use super::exec::exec_in_session;
 use super::ToolContext;
 use crate::files::OverwriteMode;
 use crate::transport::connect_via_registry;
-use yunying_core::types::AuditAction;
+use clum_core::types::AuditAction;
 
 pub(crate) async fn batch_exec(
     ctx: &ToolContext,

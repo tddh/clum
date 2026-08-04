@@ -8,7 +8,7 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
 use crate::transport::{connect_to_host_stream, recv_json_frame, send_json_frame};
-use yunying_core::types::HostConfig;
+use clum_core::types::HostConfig;
 
 const STREAM_FRAME_MAGIC: u8 = 0x02;
 const MAX_BUFFER_SIZE: usize = 10000;

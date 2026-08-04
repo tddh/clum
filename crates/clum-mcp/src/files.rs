@@ -8,7 +8,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Semaphore;
-use yunying_core::types::HostConfig;
+use clum_core::types::HostConfig;
 
 use crate::registry::BridgeRegistry;
 

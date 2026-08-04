@@ -513,14 +513,14 @@ async fn handle_agent_connection(
         .and_then(|v| v.as_str())
         .unwrap_or("unknown");
     audit_db
-        .log(yunying_core::types::AuditEvent {
+        .log(clum_core::types::AuditEvent {
             event_id: uuid::Uuid::new_v4(),
             timestamp: chrono::Utc::now(),
             agent_name: agent_name.clone(),
             host_name: host.clone(),
             session_name: String::new(),
             pane_id: None,
-            action: yunying_core::types::AuditAction::AgentRelay,
+            action: clum_core::types::AuditAction::AgentRelay,
             detail: format!("purpose={purpose} addr={remote_addr}"),
             output_summary: None,
             success: true,

@@ -11,7 +11,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
 
 use crate::bridge_audit::BridgeAuditDb;
 use crate::protocol::ProtocolProxy;
-use yunying_core::MAX_FRAME_SIZE;
+use clum_core::MAX_FRAME_SIZE;
 
 /// Main event loop: reads length-prefixed JSON frames from `tls_stream`,
 /// dispatches each request to `protocol_proxy`, and writes back the response.

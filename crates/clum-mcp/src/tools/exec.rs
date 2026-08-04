@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use super::ToolContext;
 use crate::transport::{connect_to_host, recv_json_frame, send_json_frame};
-use yunying_core::types::AuditAction;
+use clum_core::types::AuditAction;
 
 /// 将字面量转义序列转为实际控制字符。
 /// 兜底处理 OpenCode 等 MCP 客户端未正确 JSON-转义的情况。

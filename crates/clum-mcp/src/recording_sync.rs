@@ -15,7 +15,7 @@ use std::sync::Arc;
 use anyhow::Context;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use yunying_core::HostConfig;
+use clum_core::HostConfig;
 
 use crate::registry::BridgeRegistry;
 use crate::router::HostRouter;

@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use yunying_core::HostConfig;
+use clum_core::HostConfig;
 
 const QUIC_WINDOW_SIZE: u32 = 16 * 1024 * 1024;
 

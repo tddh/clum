@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 
 use super::ToolContext;
 use crate::transport::{connect_to_host, recv_json_frame, send_json_frame};
-use yunying_core::types::AuditAction;
+use clum_core::types::AuditAction;
 
 pub(crate) async fn split_window(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;

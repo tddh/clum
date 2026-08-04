@@ -233,7 +233,7 @@ pub async fn execute_tool(
                     let has_error = value.get("error").and_then(|v| v.as_str()).is_some();
                     audit(
                         ctx,
-                        yunying_core::types::AuditAction::BridgeAuditQuery,
+                        clum_core::types::AuditAction::BridgeAuditQuery,
                         &host,
                         "",
                         None,
@@ -249,7 +249,7 @@ pub async fn execute_tool(
                     let err_msg = format!("{:#}", e);
                     audit(
                         ctx,
-                        yunying_core::types::AuditAction::BridgeAuditQuery,
+                        clum_core::types::AuditAction::BridgeAuditQuery,
                         &host,
                         "",
                         None,
@@ -334,7 +334,7 @@ pub async fn execute_tool(
                     let value = json!({ "recordings": list, "count": list.len() });
                     audit(
                         ctx,
-                        yunying_core::types::AuditAction::AuditQuery,
+                        clum_core::types::AuditAction::AuditQuery,
                         "",
                         "",
                         None,
@@ -351,7 +351,7 @@ pub async fn execute_tool(
                     let err_msg = format!("{:#}", e);
                     audit(
                         ctx,
-                        yunying_core::types::AuditAction::AuditQuery,
+                        clum_core::types::AuditAction::AuditQuery,
                         "",
                         "",
                         None,
@@ -395,7 +395,7 @@ pub async fn execute_tool(
                 Ok(value) => {
                     audit(
                         ctx,
-                        yunying_core::types::AuditAction::AuditQuery,
+                        clum_core::types::AuditAction::AuditQuery,
                         "",
                         "",
                         None,
@@ -412,7 +412,7 @@ pub async fn execute_tool(
                     let err_msg = format!("{:#}", e);
                     audit(
                         ctx,
-                        yunying_core::types::AuditAction::AuditQuery,
+                        clum_core::types::AuditAction::AuditQuery,
                         "",
                         "",
                         None,

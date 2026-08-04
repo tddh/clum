@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
 use super::ToolContext;
-use yunying_core::types::AuditAction;
+use clum_core::types::AuditAction;
 
 pub(crate) async fn file_upload(
     ctx: &ToolContext,

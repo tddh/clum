@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
-use yunying_core::types::HostConfig;
+use clum_core::types::HostConfig;
 
 /// Maps host names to their `HostConfig` for fast lookup by tool handlers.
 /// Wraps the inner map in a `RwLock` to support atomic configuration reloads
@@ -22,7 +22,7 @@ impl HostRouter {
         let content = std::fs::read_to_string(path)
             .with_context(|| format!("failed to read hosts file: {}", path.display()))?;
 
-        let registry: yunying_core::types::HostRegistry =
+        let registry: clum_core::types::HostRegistry =
             serde_yml::from_str(&content).context("failed to parse hosts YAML")?;
 
         let hosts: HashMap<String, HostConfig> = registry
@@ -47,7 +47,7 @@ impl HostRouter {
             format!("failed to read hosts file: {}", self.source_path.display())
         })?;
 
-        let registry: yunying_core::types::HostRegistry =
+        let registry: clum_core::types::HostRegistry =
             serde_yml::from_str(&content).context("failed to parse hosts YAML")?;
 
         let new_hosts: HashMap<String, HostConfig> = registry

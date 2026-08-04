@@ -113,7 +113,7 @@ mod tests {
     use crate::audit::query::{OutputFormat, QueryParams};
     use chrono::Utc;
     use uuid::Uuid;
-    use yunying_core::types::{AuditAction, AuditEvent};
+    use clum_core::types::{AuditAction, AuditEvent};
 
     fn make_event(action: AuditAction, host: &str, success: bool) -> AuditEvent {
         AuditEvent {

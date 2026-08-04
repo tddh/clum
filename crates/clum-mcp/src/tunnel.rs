@@ -12,7 +12,7 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
-use yunying_core::types::HostConfig;
+use clum_core::types::HostConfig;
 
 use crate::transport::connect_to_bridge_quic_tunnel;
 

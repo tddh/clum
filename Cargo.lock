@@ -443,6 +443,76 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
+name = "clum-cli"
+version = "0.9.2"
+dependencies = [
+ "anyhow",
+ "clap",
+ "clum-core",
+ "crossterm",
+ "futures",
+ "glob",
+ "hex",
+ "libc",
+ "opencode-client-sdk",
+ "quinn",
+ "ratatui",
+ "ratatui-crossterm",
+ "rustls",
+ "rustls-pemfile",
+ "serde",
+ "serde_json",
+ "serde_yml",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "clum-core"
+version = "0.9.2"
+dependencies = [
+ "chrono",
+ "serde",
+ "uuid",
+]
+
+[[package]]
+name = "clum-mcp"
+version = "0.9.2"
+dependencies = [
+ "anyhow",
+ "axum",
+ "axum-server",
+ "chrono",
+ "clap",
+ "clum-core",
+ "dirs",
+ "futures",
+ "getrandom 0.2.17",
+ "glob",
+ "hex",
+ "quinn",
+ "regex",
+ "rmcp",
+ "rusqlite",
+ "rustls",
+ "rustls-pemfile",
+ "serde",
+ "serde_json",
+ "serde_yml",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "cmake"
 version = "0.1.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2340,6 +2410,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "clap",
+ "clum-core",
  "futures",
  "hex",
  "libc",
@@ -2358,7 +2429,6 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "webpki-roots 0.26.11",
- "yunying-core",
 ]
 
 [[package]]
@@ -3852,76 +3922,6 @@ dependencies = [
  "quote",
  "syn 2.0.119",
  "synstructure",
-]
-
-[[package]]
-name = "yunying-cli"
-version = "0.9.2"
-dependencies = [
- "anyhow",
- "clap",
- "crossterm",
- "futures",
- "glob",
- "hex",
- "libc",
- "opencode-client-sdk",
- "quinn",
- "ratatui",
- "ratatui-crossterm",
- "rustls",
- "rustls-pemfile",
- "serde",
- "serde_json",
- "serde_yml",
- "sha2",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "yunying-core",
-]
-
-[[package]]
-name = "yunying-core"
-version = "0.9.2"
-dependencies = [
- "chrono",
- "serde",
- "uuid",
-]
-
-[[package]]
-name = "yunying-mcp"
-version = "0.9.2"
-dependencies = [
- "anyhow",
- "axum",
- "axum-server",
- "chrono",
- "clap",
- "dirs",
- "futures",
- "getrandom 0.2.17",
- "glob",
- "hex",
- "quinn",
- "regex",
- "rmcp",
- "rusqlite",
- "rustls",
- "rustls-pemfile",
- "serde",
- "serde_json",
- "serde_yml",
- "sha2",
- "tempfile",
- "tokio",
- "tower",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "yunying-core",
 ]
 
 [[package]]
