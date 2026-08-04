@@ -2334,7 +2334,7 @@ dependencies = [
 
 [[package]]
 name = "rmux-bridge"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -3856,12 +3856,13 @@ dependencies = [
 
 [[package]]
 name = "yunying-cli"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "anyhow",
  "clap",
  "crossterm",
  "futures",
+ "glob",
  "hex",
  "libc",
  "opencode-client-sdk",
@@ -3873,6 +3874,8 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yml",
+ "sha2",
+ "tempfile",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -3881,7 +3884,7 @@ dependencies = [
 
 [[package]]
 name = "yunying-core"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "chrono",
  "serde",
@@ -3890,7 +3893,7 @@ dependencies = [
 
 [[package]]
 name = "yunying-mcp"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -3914,6 +3917,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "tokio",
+ "tower",
  "tracing",
  "tracing-subscriber",
  "uuid",

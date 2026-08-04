@@ -463,7 +463,7 @@ async fn run_bridge_command(args: &[String]) -> anyhow::Result<()> {
             println!("Token:  {token}");
             println!();
             println!("Install command (on target machine):");
-            println!("  curl -fsSLk -H \"Authorization: Bearer {token}\" https://{server_addr}/install.sh | \\");
+            println!("  curl -fsSLk -H \"Authorization: Bearer {token}\" https://{server_addr}/releases/install.sh | \\");
             println!("    BRIDGE_TOKEN={token} SERVER_ADDR={server_addr} sh");
         }
         Some("list") => {

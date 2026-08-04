@@ -26,7 +26,7 @@
 ```
 
 - **yunying-mcp (Central Server)**: 中央 MCP Server，双栈监听。AI 客户端通过 HTTP 连接，Bridge 通过 QUIC 反向注册。
-- **yunying-cli**: 命令行工具，通过 QUIC 连接 Server 中继到 Bridge。支持 connect/upload/download/tunnel/list/replay。
+- **yunying-cli**: 命令行工具，通过 QUIC 连接 Server 中继到 Bridge。支持 connect/upload/download/tunnel/list/replay；upload/download 支持文件与目录（1MB 分块流式传输，目录上传支持 `--exclude` 过滤）。
 - **rmux-bridge**: 部署在每台目标 Linux 主机，主动连接 Server 注册，处理工具执行、文件 I/O、PTY、录制推送。
 - **RMUX daemon**: 每个 Linux 主机上的终端多路复用器。
 
@@ -57,7 +57,7 @@ yunying-mcp bridge add my-host --tags gpu,web
 # 输出 token 和安装命令
 
 # 目标机器一键安装
-curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/install.sh | \
+curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/releases/install.sh | \
   BRIDGE_TOKEN=<token> SERVER_ADDR=SERVER:9788 sh
 ```
 
@@ -129,7 +129,7 @@ bash deploy/install-daemon.sh root@<your-bridge-ip>
 ```bash
 # 方式 1：Central Server 模式一键安装（推荐，bridge 主动注册到 Server）
 curl -fsSLk -H "Authorization: Bearer <download_token>" \
-  https://SERVER:9788/install.sh | \
+  https://SERVER:9788/releases/install.sh | \
   BRIDGE_TOKEN=<token> SERVER_ADDR=SERVER:9788 sh
 
 # 方式 2：手动部署

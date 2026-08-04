@@ -72,7 +72,7 @@ graph LR
 ```
 
 - **yunying-mcp（Central Server）** — 中央 MCP Server：HTTP :9788 面向 AI 客户端（MCP 协议）+ QUIC :9788 面向 Bridge 注册和 CLI 数据平面。提供 67 个工具、集中审计、API Key 认证、静态文件服务。
-- **yunying-cli** — 命令行工具：PTY 透传（`connect`）、文件传输（`upload`/`download`）、端口转发（`tunnel`）、会话列表（`list`）、录制回放（`replay`）。内置 AI 对话面板（Ctrl+G）。
+- **yunying-cli** — 命令行工具：PTY 透传（`connect`）、文件传输（`upload`/`download`，支持文件与目录、分块流式传输 + SHA-256 校验、目录 `--exclude` 过滤）、端口转发（`tunnel`）、会话列表（`list`）、录制回放（`replay`）。内置 AI 对话面板（Ctrl+G）。
 - **rmux-bridge** — 部署在每台 Linux 主机的 Agent。主动连接 Central Server 注册，处理工具执行、文件 I/O、PTY 会话、录制推送。
 - **RMUX daemon** — 每台 Linux 主机上的终端多路复用器（基于 rmux）。
 
@@ -85,7 +85,7 @@ graph LR
 | AI 客户端 | 任意机器 | Central Server（HTTP，MCP 协议） |
 | `yunying-cli` | 运维人员机器 | Central Server（QUIC，`--server-addr`） |
 
-> 💡 新 Bridge 一键部署：`curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=SERVER:9788 sh`
+> 💡 新 Bridge 一键部署：`curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/releases/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=SERVER:9788 sh`
 
 > 💡 部署时 bridge 会自动检测 RMUX socket 路径，无需手动配置。
 
@@ -97,7 +97,7 @@ graph LR
 | **交互式会话管理** | 创建/销毁/列举会话，多窗格分屏，窗口布局                                                      |
 | **命令执行**    | `exec` 一站式执行（sentinel 检测 + exit code 提取，scrollback 全量捕获大输出，断连自动重连恢复），支持交互式程序（send_keys + capture_pane） |
 | **输出等待**    | `wait_for_text` 等待终端出现指定文本，`wait_exit` 等待进程退出                              |
-| **文件传输**    | QUIC 通道上传/下载，支持目录递归上传和下载 + 并发                                              |
+| **文件传输**    | QUIC 通道上传/下载（`yunying-cli` 与 MCP 工具），目录递归传输 + 并发 + `--exclude` glob 过滤，分块流式 + SHA-256 校验 |
 | **端口转发**    | 通过 QUIC 隧道访问远程内网服务（数据库、API 等）                                              |
 | **多主机编排**   | 主机注册表 + 分组/标签/模式过滤，broadcast_keys 多窗格广播                                    |
 | **操作审计**    | SQLite 审计日志 + bridge 端 PTY 全量录制（asciinema v2）+ 事件日志 + MCP 定期同步 + `yunying-cli replay` 回放 |

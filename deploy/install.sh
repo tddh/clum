@@ -2,7 +2,7 @@
 set -e
 
 # yunying Bridge installer (Hub mode)
-# Usage: curl -fsSLk -H "Authorization: Bearer <TOKEN>" https://SERVER:9788/install.sh | \
+# Usage: curl -fsSLk -H "Authorization: Bearer <TOKEN>" https://SERVER:9788/releases/install.sh | \
 #          BRIDGE_TOKEN=xxx SERVER_ADDR=10.0.0.1:9788 sh
 
 if [ -z "${BRIDGE_TOKEN}" ]; then
@@ -23,7 +23,6 @@ case "$ARCH" in
 esac
 
 BASE_URL="https://${SERVER_ADDR}"
-AUTH="-H \"Authorization: Bearer ${BRIDGE_TOKEN}\""
 
 echo ">>> Installing yunying bridge (${ARCH})"
 echo ">>> Server: ${SERVER_ADDR}"
@@ -42,13 +41,15 @@ mkdir -p /etc/yunying /opt/agent-ops/recordings
 
 # Download binary (write to temp then move to avoid partial writes)
 echo ">>> Downloading rmux-bridge..."
-eval curl -fsSLk ${AUTH} "${BASE_URL}/releases/rmux-bridge-linux-${ARCH}" -o /tmp/rmux-bridge.download
+curl -fsSLk -H "Authorization: Bearer ${BRIDGE_TOKEN}" \
+    "${BASE_URL}/releases/rmux-bridge-linux-${ARCH}" -o /tmp/rmux-bridge.download
 chmod +x /tmp/rmux-bridge.download
 mv -f /tmp/rmux-bridge.download /usr/local/bin/rmux-bridge
 
 # Download CA cert
 echo ">>> Downloading CA certificate..."
-eval curl -fsSLk ${AUTH} "${BASE_URL}/ca.crt" -o /etc/yunying/ca.crt
+curl -fsSLk -H "Authorization: Bearer ${BRIDGE_TOKEN}" \
+    "${BASE_URL}/releases/ca.crt" -o /etc/yunying/ca.crt
 
 # Write bridge.env
 cat > /etc/yunying/bridge.env << EOF

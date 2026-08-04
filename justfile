@@ -91,5 +91,5 @@ deploy host token='{{token}}':
 # ─── 推送 ────────────────────────────
 push-all:
     git push origin master
-    git push gitlab master
+    #git push gitlab master
     git push gitee master

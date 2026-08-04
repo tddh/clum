@@ -36,3 +36,4 @@ axum-server = { version = "0.7", features = ["tls-rustls"] }
 
 [dev-dependencies]
 tempfile = "3"
+tower = { version = "0.5", features = ["util"] }

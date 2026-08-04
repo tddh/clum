@@ -72,7 +72,7 @@ graph LR
 ```
 
 - **yunying-mcp (Central Server)** — Central MCP Server: HTTP :9788 for AI clients (MCP protocol) + QUIC :9788 for Bridge registration and CLI data plane. Provides 67 tools, centralized audit, API Key auth, and static file serving.
-- **yunying-cli** — CLI for humans: PTY passthrough (`connect`), file transfer (`upload`/`download`), port forwarding (`tunnel`), session listing (`list`), recording playback (`replay`). Built-in AI chat panel (Ctrl+G).
+- **yunying-cli** — CLI for humans: PTY passthrough (`connect`), file transfer (`upload`/`download` — files or directories, chunked streaming with SHA-256, `--exclude` globs for directories), port forwarding (`tunnel`), session listing (`list`), recording playback (`replay`). Built-in AI chat panel (Ctrl+G).
 - **rmux-bridge** — Agent deployed on each Linux host. Reverse-connects to the Central Server, handles tool execution, file I/O, PTY sessions, and recording push.
 - **RMUX daemon** — Terminal multiplexer on each Linux host (rmux-based).
 
@@ -85,7 +85,7 @@ graph LR
 | AI clients | Any machine | Central Server (HTTP, MCP protocol) |
 | `yunying-cli` | Operator machine | Central Server (QUIC, `--server-addr`) |
 
-> 💡 New bridges deploy with one command: `curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=SERVER:9788 sh`
+> 💡 New bridges deploy with one command: `curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/releases/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=SERVER:9788 sh`
 
 > 💡 During deployment, the bridge auto-detects the RMUX socket path — no manual configuration needed.
 
@@ -97,7 +97,7 @@ graph LR
 | **Session management** | Create/destroy/list sessions, multi-pane splits, window layouts |
 | **Command execution** | `exec` one-shot execution (sentinel detection + exit code, full scrollback capture for large outputs, auto-reconnect on connection drop), interactive programs via send_keys + capture_pane |
 | **Output waiting** | `wait_for_text` for terminal text, `wait_exit` for process exit |
-| **File transfer** | Upload/download over QUIC, recursive directory upload and download with concurrency |
+| **File transfer** | Upload/download over QUIC (`yunying-cli` and MCP tools), recursive directory transfer with concurrency and `--exclude` globs, chunked streaming with SHA-256 verification |
 | **Port forwarding** | Local port forwarding tunnels through QUIC to access remote internal services |
 | **Multi-host orchestration** | Host registry with group/tag/label filtering, broadcast_keys for multi-pane |
 | **Audit logging** | SQLite audit logs + bridge-side PTY recording (asciinema v2) + event log + MCP periodic sync + `yunying-cli replay` playback |

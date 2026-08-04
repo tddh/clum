@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.9.2] — 2026-08-03
+
+### Security
+- **Bridge / Download token 权限收敛**：此前 bridge token 与 download token 验证通过后可访问全部非 `/mcp` 路由，包括 `/admin/download-token`（签发下载令牌）和 `/recordings/*`（**所有主机的终端会话录制**）。现收敛为仅 `/releases/` 前缀（部署产物），其余路径返回 403 并记录告警日志。
+- **部署产物路径统一**：`/install.sh`、`/ca.crt` 移入 `/releases/` 下（根路径独立路由移除），一键部署 URL 变为 `https://SERVER:9788/releases/install.sh`。注意：已部署 bridge 不受影响（运行时走 QUIC）；重新执行一键部署时需使用新 URL，服务器 static_dir 中需将 `install.sh`、`ca.crt` 移入 `releases/` 子目录。
+- **install.sh 去除 eval 注入面**：`eval curl ${AUTH}` 改为直接 `curl -H "Authorization: Bearer ..."` 调用。
+
+### Added
+- HTTP 认证中间件测试：白名单判定 + 各类凭证（API key / bridge token / download token / 无效凭证）的 403/401 行为，共 5 个用例。
+- **yunying-cli 文件传输增强**：`upload`/`download` 支持目录传输（目录上传逐文件并发 + `--exclude` glob 过滤；目录下载走 bridge 0x04 协议，相对路径做穿越校验），并改为 1MB 分块流式传输（不再整文件读入内存），输出含 SHA-256 校验。
+
 ## [0.9.1] — 2026-08-03
 
 ### Added

@@ -38,6 +38,33 @@ struct AuthIdentity {
     group: Option<String>,
 }
 
+/// Deploy artifacts downloadable with a bridge token / download token.
+/// Everything bootstrap-related lives under `/releases/` (install.sh, ca.crt,
+/// bridge binaries — see deploy/install.sh). All other paths (e.g.
+/// `/recordings`, `/admin/*`) require an API key.
+fn is_download_path(path: &str) -> bool {
+    path.starts_with("/releases/")
+}
+
+/// Gate for bridge tokens and download tokens: only `/releases/*` is in
+/// scope. Denials are logged so probing attempts show up in server logs.
+async fn authorize_download_path(
+    path: &str,
+    token_kind: &str,
+    next: Next,
+    request: Request<axum::body::Body>,
+) -> Result<Response, StatusCode> {
+    if is_download_path(path) {
+        return Ok(next.run(request).await);
+    }
+    tracing::warn!(
+        token = token_kind,
+        path = %path,
+        "non-API-key token attempted access outside /releases/ — denied"
+    );
+    Err(StatusCode::FORBIDDEN)
+}
+
 #[derive(Clone)]
 pub struct YunyingServer {
     ctx: Arc<ToolContext>,
@@ -175,24 +202,84 @@ async fn auth_middleware(
                 return Ok(next.run(request).await);
             }
             if !is_mcp {
+                let path = request.uri().path().to_string();
                 if t.starts_with("dl_") {
                     use sha2::{Digest, Sha256};
                     let hash = hex::encode(Sha256::digest(t.as_bytes()));
-                    let tokens = auth.download_tokens.read().await;
-                    if let Some(expires) = tokens.get(&hash) {
-                        if *expires > std::time::Instant::now() {
-                            return Ok(next.run(request).await);
-                        }
+                    let valid = {
+                        let tokens = auth.download_tokens.read().await;
+                        tokens
+                            .get(&hash)
+                            .is_some_and(|expires| *expires > std::time::Instant::now())
+                    };
+                    if valid {
+                        return authorize_download_path(&path, "download token", next, request)
+                            .await;
                     }
                 }
                 if auth.bridge_store.validate_token(t).await {
-                    return Ok(next.run(request).await);
+                    return authorize_download_path(&path, "bridge token", next, request).await;
                 }
             }
             Err(StatusCode::UNAUTHORIZED)
         }
         _ => Err(StatusCode::UNAUTHORIZED),
     }
+}
+
+/// Non-MCP route surface: deployment artifacts under /releases/, recording
+/// browsing, and download-token issuance. Extracted so tests exercise the
+/// exact production routes. Auth is applied by the caller as a layer.
+fn build_download_routes(
+    mut app: Router,
+    static_dir: Option<std::path::PathBuf>,
+    download_tokens: DownloadTokenMap,
+) -> Router {
+    if let Some(dir) = static_dir {
+        let dir = Arc::new(dir);
+        // Scope each route to its own subdir: serve_static's canonicalize
+        // containment check then blocks cross-subdir traversal
+        // (e.g. /releases/../recordings/...).
+        let releases_dir = Arc::new(dir.join("releases"));
+        let recordings_dir = Arc::new(dir.join("recordings"));
+        app = app
+            .route(
+                "/releases/{*path}",
+                axum::routing::get(
+                    move |axum::extract::Path(path): axum::extract::Path<String>| {
+                        let dir = Arc::clone(&releases_dir);
+                        async move { serve_static(dir, &path).await }
+                    },
+                ),
+            )
+            .route(
+                "/recordings/{*path}",
+                axum::routing::get(
+                    move |axum::extract::Path(path): axum::extract::Path<String>| {
+                        let dir = Arc::clone(&recordings_dir);
+                        async move { serve_static(dir, &path).await }
+                    },
+                ),
+            );
+    }
+
+    let admin_tokens = Arc::clone(&download_tokens);
+    app.route(
+        "/admin/download-token",
+        axum::routing::post(move || {
+            let tokens = Arc::clone(&admin_tokens);
+            async move {
+                use sha2::{Digest, Sha256};
+                let mut bytes = [0u8; 16];
+                getrandom::getrandom(&mut bytes).expect("CSPRNG failed");
+                let token = format!("dl_{}", hex::encode(bytes));
+                let hash = hex::encode(Sha256::digest(token.as_bytes()));
+                let expires = std::time::Instant::now() + std::time::Duration::from_secs(3600);
+                tokens.write().await.insert(hash, expires);
+                axum::Json(serde_json::json!({"token": token, "expires_in_secs": 3600}))
+            }
+        }),
+    )
 }
 
 pub async fn run_http_server(
@@ -223,60 +310,8 @@ pub async fn run_http_server(
     let download_tokens: DownloadTokenMap =
         Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
 
-    let mut app = Router::new().nest_service("/mcp", service);
-
-    if let Some(dir) = static_dir {
-        let dir = Arc::new(dir);
-        let dir1 = Arc::clone(&dir);
-        let dir2 = Arc::clone(&dir);
-        let dir3 = Arc::clone(&dir);
-        let dir4 = Arc::clone(&dir);
-        app = app
-            .route(
-                "/install.sh",
-                axum::routing::get(move || serve_static(Arc::clone(&dir1), "install.sh")),
-            )
-            .route(
-                "/ca.crt",
-                axum::routing::get(move || serve_static(Arc::clone(&dir2), "ca.crt")),
-            )
-            .route(
-                "/releases/{*path}",
-                axum::routing::get(
-                    move |axum::extract::Path(path): axum::extract::Path<String>| {
-                        let dir = Arc::clone(&dir3);
-                        async move { serve_static(dir, &format!("releases/{path}")).await }
-                    },
-                ),
-            )
-            .route(
-                "/recordings/{*path}",
-                axum::routing::get(
-                    move |axum::extract::Path(path): axum::extract::Path<String>| {
-                        let dir = Arc::clone(&dir4);
-                        async move { serve_static(dir, &format!("recordings/{path}")).await }
-                    },
-                ),
-            );
-    }
-
-    let admin_tokens = Arc::clone(&download_tokens);
-    app = app.route(
-        "/admin/download-token",
-        axum::routing::post(move || {
-            let tokens = Arc::clone(&admin_tokens);
-            async move {
-                use sha2::{Digest, Sha256};
-                let mut bytes = [0u8; 16];
-                getrandom::getrandom(&mut bytes).expect("CSPRNG failed");
-                let token = format!("dl_{}", hex::encode(bytes));
-                let hash = hex::encode(Sha256::digest(token.as_bytes()));
-                let expires = std::time::Instant::now() + std::time::Duration::from_secs(3600);
-                tokens.write().await.insert(hash, expires);
-                axum::Json(serde_json::json!({"token": token, "expires_in_secs": 3600}))
-            }
-        }),
-    );
+    let app = Router::new().nest_service("/mcp", service);
+    let app = build_download_routes(app, static_dir, Arc::clone(&download_tokens));
 
     let auth_state = AuthState {
         store: key_store_for_auth,
@@ -311,10 +346,16 @@ async fn serve_static(
     dir: Arc<std::path::PathBuf>,
     path: &str,
 ) -> Result<axum::response::Response, StatusCode> {
+    // Defense in depth: reject any ".." path component outright. The
+    // per-subdir canonicalize containment check below is the primary guard.
+    if path.split('/').any(|c| c == "..") {
+        return Err(StatusCode::FORBIDDEN);
+    }
     let requested = dir.join(path);
     let canonical_dir = dir
         .canonicalize()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        // Base dir not provisioned (e.g. no releases/ yet) — nothing to serve.
+        .map_err(|_| StatusCode::NOT_FOUND)?;
     match requested.canonicalize() {
         Ok(canonical_path) if canonical_path.starts_with(&canonical_dir) => {
             match tokio::fs::read(&canonical_path).await {
@@ -348,5 +389,249 @@ async fn serve_static(
             }
             Err(StatusCode::FORBIDDEN)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use tower::ServiceExt;
+
+    struct TestEnv {
+        app: Router,
+        api_key: String,
+        bridge_token: String,
+        download_token: String,
+        _tmp: tempfile::TempDir,
+    }
+
+    async fn setup() -> TestEnv {
+        let tmp = tempfile::tempdir().unwrap();
+
+        let static_dir = tmp.path().join("static");
+        std::fs::create_dir_all(static_dir.join("releases")).unwrap();
+        std::fs::create_dir_all(static_dir.join("recordings")).unwrap();
+        std::fs::write(
+            static_dir.join("releases/rmux-bridge-linux-x86_64"),
+            b"binary",
+        )
+        .unwrap();
+        std::fs::write(static_dir.join("recordings/tf01.cast"), b"cast").unwrap();
+
+        let key_store = ApiKeyStore::open(&tmp.path().join("keys.db")).unwrap();
+        let api_key = key_store.add("admin", None).await.unwrap();
+
+        let bridge_store = Arc::new(
+            crate::bridge_store::BridgeStore::open(&tmp.path().join("bridges.db")).unwrap(),
+        );
+        let bridge_token = crate::bridge_store::generate_bridge_token();
+        bridge_store
+            .add("testhost", &bridge_token, &[], None)
+            .await
+            .unwrap();
+
+        let download_token = "dl_testtoken".to_string();
+        let download_tokens: DownloadTokenMap =
+            Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
+        {
+            use sha2::{Digest, Sha256};
+            let hash = hex::encode(Sha256::digest(download_token.as_bytes()));
+            download_tokens.write().await.insert(
+                hash,
+                std::time::Instant::now() + std::time::Duration::from_secs(3600),
+            );
+        }
+
+        let app = build_download_routes(
+            Router::new(),
+            Some(static_dir),
+            Arc::clone(&download_tokens),
+        );
+        let auth_state = AuthState {
+            store: key_store,
+            download_tokens,
+            bridge_store,
+        };
+        let app = app.layer(middleware::from_fn_with_state(auth_state, auth_middleware));
+
+        TestEnv {
+            app,
+            api_key,
+            bridge_token,
+            download_token,
+            _tmp: tmp,
+        }
+    }
+
+    async fn request(env: &TestEnv, method: &str, uri: &str, token: Option<&str>) -> StatusCode {
+        let mut builder = Request::builder().method(method).uri(uri);
+        if let Some(t) = token {
+            builder = builder.header("authorization", format!("Bearer {t}"));
+        }
+        let resp = env
+            .app
+            .clone()
+            .oneshot(builder.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        resp.status()
+    }
+
+    #[test]
+    fn download_path_whitelist() {
+        assert!(is_download_path("/releases/install.sh"));
+        assert!(is_download_path("/releases/ca.crt"));
+        assert!(is_download_path("/releases/rmux-bridge-linux-x86_64"));
+        assert!(!is_download_path("/install.sh"));
+        assert!(!is_download_path("/ca.crt"));
+        assert!(!is_download_path("/recordings/tf01.cast"));
+        assert!(!is_download_path("/admin/download-token"));
+        assert!(!is_download_path("/mcp"));
+        assert!(!is_download_path("/releases"));
+        assert!(!is_download_path("/"));
+    }
+
+    #[tokio::test]
+    async fn bridge_token_scoped_to_releases() {
+        let env = setup().await;
+        assert_eq!(
+            request(
+                &env,
+                "GET",
+                "/releases/rmux-bridge-linux-x86_64",
+                Some(&env.bridge_token)
+            )
+            .await,
+            StatusCode::OK
+        );
+        assert_eq!(
+            request(
+                &env,
+                "POST",
+                "/admin/download-token",
+                Some(&env.bridge_token)
+            )
+            .await,
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            request(
+                &env,
+                "GET",
+                "/recordings/tf01.cast",
+                Some(&env.bridge_token)
+            )
+            .await,
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            request(&env, "GET", "/install.sh", Some(&env.bridge_token)).await,
+            StatusCode::FORBIDDEN
+        );
+    }
+
+    #[tokio::test]
+    async fn download_token_scoped_to_releases() {
+        let env = setup().await;
+        assert_eq!(
+            request(
+                &env,
+                "GET",
+                "/releases/rmux-bridge-linux-x86_64",
+                Some(&env.download_token)
+            )
+            .await,
+            StatusCode::OK
+        );
+        assert_eq!(
+            request(
+                &env,
+                "POST",
+                "/admin/download-token",
+                Some(&env.download_token)
+            )
+            .await,
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            request(
+                &env,
+                "GET",
+                "/recordings/tf01.cast",
+                Some(&env.download_token)
+            )
+            .await,
+            StatusCode::FORBIDDEN
+        );
+    }
+
+    #[tokio::test]
+    async fn api_key_access_unaffected() {
+        let env = setup().await;
+        assert_eq!(
+            request(&env, "POST", "/admin/download-token", Some(&env.api_key)).await,
+            StatusCode::OK
+        );
+        assert_eq!(
+            request(&env, "GET", "/recordings/tf01.cast", Some(&env.api_key)).await,
+            StatusCode::OK
+        );
+        assert_eq!(
+            request(
+                &env,
+                "GET",
+                "/releases/rmux-bridge-linux-x86_64",
+                Some(&env.api_key)
+            )
+            .await,
+            StatusCode::OK
+        );
+    }
+
+    #[tokio::test]
+    async fn traversal_probe_releases_to_recordings() {
+        let env = setup().await;
+        let raw = request(
+            &env,
+            "GET",
+            "/releases/../recordings/tf01.cast",
+            Some(&env.bridge_token),
+        )
+        .await;
+        let encoded = request(
+            &env,
+            "GET",
+            "/releases/%2e%2e/recordings/tf01.cast",
+            Some(&env.bridge_token),
+        )
+        .await;
+        assert!(
+            matches!(raw, StatusCode::FORBIDDEN | StatusCode::NOT_FOUND),
+            "raw .. traversal returned {raw}"
+        );
+        assert!(
+            matches!(encoded, StatusCode::FORBIDDEN | StatusCode::NOT_FOUND),
+            "encoded .. traversal returned {encoded}"
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_or_invalid_token_rejected() {
+        let env = setup().await;
+        assert_eq!(
+            request(&env, "GET", "/releases/rmux-bridge-linux-x86_64", None).await,
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            request(
+                &env,
+                "GET",
+                "/releases/rmux-bridge-linux-x86_64",
+                Some("bogus")
+            )
+            .await,
+            StatusCode::UNAUTHORIZED
+        );
     }
 }
