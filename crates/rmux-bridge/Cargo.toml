@@ -8,7 +8,7 @@ name = "rmux-bridge"
 path = "src/main.rs"
 
 [dependencies]
-yunying-core.workspace = true
+clum-core.workspace = true
 tokio.workspace = true
 rustls.workspace = true
 rustls-pemfile.workspace = true

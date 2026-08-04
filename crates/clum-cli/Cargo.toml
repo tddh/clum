@@ -1,14 +1,14 @@
 [package]
-name = "yunying-cli"
+name = "clum-cli"
 version.workspace = true
 edition.workspace = true
 
 [[bin]]
-name = "yunying-cli"
+name = "clum-cli"
 path = "src/main.rs"
 
 [dependencies]
-yunying-core.workspace = true
+clum-core.workspace = true
 anyhow.workspace = true
 clap = { workspace = true, features = ["derive", "env"] }
 crossterm = { version = "0.29", features = ["event-stream"] }

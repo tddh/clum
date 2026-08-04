@@ -1,5 +1,5 @@
 [package]
-name = "yunying-core"
+name = "clum-core"
 version.workspace = true
 edition.workspace = true
 

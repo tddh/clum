@@ -1,14 +1,14 @@
 [package]
-name = "yunying-mcp"
+name = "clum-mcp"
 version.workspace = true
 edition.workspace = true
 
 [[bin]]
-name = "yunying-mcp"
+name = "clum-mcp"
 path = "src/main.rs"
 
 [dependencies]
-yunying-core.workspace = true
+clum-core.workspace = true
 tokio.workspace = true
 rustls.workspace = true
 rustls-pemfile.workspace = true
