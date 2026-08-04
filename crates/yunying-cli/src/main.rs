@@ -4,6 +4,7 @@ mod protocol;
 mod replay;
 mod transfer;
 mod tui;
+mod tunnel;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
@@ -83,7 +84,7 @@ enum Commands {
         local_path: String,
     },
 
-    /// Create a local port forward to a remote service
+    /// Create a local port forward to a remote service (auto-reconnects on network loss)
     Tunnel {
         host: String,
 
@@ -94,6 +95,10 @@ enum Commands {
         /// Remote target (host:port)
         #[arg(long)]
         remote: String,
+
+        /// Give up and exit after being offline this long (30s/10m/2h or seconds; 0 = never)
+        #[arg(long, default_value = "2h")]
+        give_up_after: String,
     },
 }
 
@@ -304,86 +309,25 @@ async fn main() -> anyhow::Result<()> {
             host,
             local,
             remote,
+            give_up_after,
         } => {
             let (remote_host, remote_port) = remote
                 .split_once(':')
                 .ok_or_else(|| anyhow::anyhow!("invalid --remote format, expected host:port"))?;
             let remote_port: u16 = remote_port.parse()?;
-
-            let conn = get_connection(
+            let give_up_after = tunnel::parse_duration(&give_up_after)?;
+            tunnel::run(
                 &server_addr,
                 &ca_cert,
                 &api_key,
                 &hosts_file,
                 &host,
-                "tunnel",
+                local,
+                remote_host,
+                remote_port,
+                give_up_after,
             )
-            .await?;
-            let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{local}")).await?;
-            println!(
-                "tunnel: 127.0.0.1:{local} → {host}:{remote_host}:{remote_port} (Ctrl+C to stop)"
-            );
-
-            loop {
-                let (mut tcp_stream, peer) = listener.accept().await?;
-                let conn = conn.clone();
-                let rh = remote_host.to_string();
-                let rp = remote_port;
-                tokio::spawn(async move {
-                    let (mut send, mut recv) = match conn.open_bi().await {
-                        Ok(s) => s,
-                        Err(e) => {
-                            eprintln!("open stream failed: {e}");
-                            return;
-                        }
-                    };
-                    if send.write_all(&[0x05]).await.is_err() {
-                        return;
-                    }
-                    if send
-                        .write_all(&(rh.len() as u16).to_le_bytes())
-                        .await
-                        .is_err()
-                    {
-                        return;
-                    }
-                    if send.write_all(rh.as_bytes()).await.is_err() {
-                        return;
-                    }
-                    if send.write_all(&rp.to_le_bytes()).await.is_err() {
-                        return;
-                    }
-
-                    let (mut tcp_read, mut tcp_write) = tcp_stream.split();
-                    let t2q = async {
-                        use tokio::io::AsyncReadExt;
-                        let mut buf = [0u8; 8192];
-                        loop {
-                            match tcp_read.read(&mut buf).await {
-                                Ok(0) => break,
-                                Ok(n) => {
-                                    if send.write_all(&buf[..n]).await.is_err() {
-                                        break;
-                                    }
-                                }
-                                Err(_) => break,
-                            }
-                        }
-                        let _ = send.finish();
-                    };
-                    let q2t = async {
-                        use tokio::io::AsyncWriteExt;
-                        let mut buf = [0u8; 8192];
-                        while let Ok(Some(n)) = recv.read(&mut buf).await {
-                            if tcp_write.write_all(&buf[..n]).await.is_err() {
-                                break;
-                            }
-                        }
-                    };
-                    tokio::join!(t2q, q2t);
-                    tracing::debug!("tunnel connection from {peer} closed");
-                });
-            }
+            .await
         }
     };
     crate::ai::kill_serve().await;

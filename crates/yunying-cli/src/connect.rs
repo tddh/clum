@@ -8,7 +8,7 @@ const QUIC_WINDOW_SIZE: u32 = 16 * 1024 * 1024;
 
 fn build_transport_config() -> quinn::TransportConfig {
     let mut transport = quinn::TransportConfig::default();
-    transport.max_idle_timeout(Some(Duration::from_secs(3600).try_into().unwrap()));
+    transport.max_idle_timeout(Some(Duration::from_secs(60).try_into().unwrap()));
     transport.keep_alive_interval(Some(Duration::from_secs(15)));
     transport.stream_receive_window(quinn::VarInt::from_u32(QUIC_WINDOW_SIZE));
     transport.send_window(QUIC_WINDOW_SIZE as u64);
