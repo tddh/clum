@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug in yunying
+about: Report a bug in clum
 title: "[Bug] "
 labels: bug
 assignees: ''
@@ -18,7 +18,7 @@ Steps to reproduce:
 What you expected to happen.
 
 **Environment:**
-- yunying version: [e.g. 0.1.0]
+- clum version: [e.g. 0.1.0]
 - OS: [e.g. macOS 14, Ubuntu 24.04]
 - Rust version: [e.g. 1.85]
 

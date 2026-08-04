@@ -1,5 +1,5 @@
-# yunying MCP Server configuration
-# Usage: yunying-mcp --mode http --config /etc/yunying/server-config.yaml
+# clum MCP Server configuration
+# Usage: clum-mcp --mode http --config /etc/clum/server-config.yaml
 #
 # All values can be overridden by CLI args (e.g. --listen, --ca-cert).
 
@@ -7,17 +7,17 @@
 listen: "0.0.0.0:9788"
 
 # ─── TLS ───
-server_cert: "/etc/yunying/server.crt"
-server_key: "/etc/yunying/server.key"
-ca_cert: "/etc/yunying/ca.crt"
+server_cert: "/etc/clum/server.crt"
+server_key: "/etc/clum/server.key"
+ca_cert: "/etc/clum/ca.crt"
 
 # ─── Host registry ───
-hosts_file: "/etc/yunying/hosts.yaml"
+hosts_file: "/etc/clum/hosts.yaml"
 
 # ─── Storage ───
-audit_db: "/root/.yunying/audit.db"
-recordings_dir: "/root/.yunying/recordings"
-static_dir: "/root/.yunying"
+audit_db: "/root/.clum/audit.db"
+recordings_dir: "/root/.clum/recordings"
+static_dir: "/root/.clum"
 
 # ─── Audit settings ───
 audit_retention_days: 90

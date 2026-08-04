@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest an idea for yunying
+about: Suggest an idea for clum
 title: "[Feature] "
 labels: enhancement
 assignees: ''

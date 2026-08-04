@@ -1,8 +1,8 @@
 {
     "mcp": {
-        "yunying": {
+        "clum": {
             "type": "local",
-            "command": ["/path/to/yunying-mcp"],
+            "command": ["/path/to/clum-mcp"],
             "args": [
                 "--ca-cert", "/path/to/ca.crt",
                 "--hosts-file", "/path/to/hosts.yaml"
