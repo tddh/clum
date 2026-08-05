@@ -278,7 +278,7 @@ async fn main() -> anyhow::Result<()> {
         } => {
             let conn = get_connection(
                 &server_addr,
-                ca_cert.as_deref().as_deref(),
+                ca_cert.as_deref(),
                 &api_key,
                 &hosts_file,
                 &host,
@@ -296,7 +296,7 @@ async fn main() -> anyhow::Result<()> {
         } => {
             let conn = get_connection(
                 &server_addr,
-                ca_cert.as_deref().as_deref(),
+                ca_cert.as_deref(),
                 &api_key,
                 &hosts_file,
                 &host,
@@ -320,7 +320,7 @@ async fn main() -> anyhow::Result<()> {
             let give_up_after = forward::parse_duration(&give_up_after)?;
             forward::run(
                 &server_addr,
-                ca_cert.as_deref().as_deref(),
+                ca_cert.as_deref(),
                 &api_key,
                 &hosts_file,
                 &host,
