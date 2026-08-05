@@ -243,12 +243,15 @@ async fn main() -> anyhow::Result<()> {
             let local_path = if path.exists() {
                 expanded
             } else if let Some(server) = &cli.server_addr {
-                let url = format!("http://{server}/recordings/{expanded}");
+                let url = format!("https://{server}/recordings/{expanded}");
                 eprintln!("Fetching recording from {url} ...");
                 let tmp_file = std::env::temp_dir().join("clum-replay.cast");
                 let tmp_path = tmp_file.to_string_lossy().to_string();
                 let mut cmd = std::process::Command::new("curl");
                 cmd.args(["-fsSL", "-o", &tmp_path]);
+                if let Some(ca) = &cli.ca_cert {
+                    cmd.args(["--cacert", ca]);
+                }
                 if let Some(key) = &cli.api_key {
                     cmd.args(["-H", &format!("Authorization: Bearer {key}")]);
                 }
