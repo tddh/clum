@@ -27,7 +27,7 @@ fn sanitize_path(raw: &str) -> anyhow::Result<String> {
 // ─── QUIC stream handlers ───
 
 /// QUIC stream dispatcher: read stream type byte, route to handler.
-/// 0x01 = JSON protocol frames (LE32 length prefix), 0x02 = file upload, 0x03 = file download, 0x05 = port tunnel.
+/// 0x01 = JSON protocol frames (LE32 length prefix), 0x02 = file upload, 0x03 = file download, 0x05 = port forward.
 #[allow(clippy::too_many_arguments)]
 pub async fn handle_quic_stream(
     send: quinn::SendStream,
@@ -65,7 +65,7 @@ pub async fn handle_quic_stream(
         }
         0x02 => handle_upload_quic(send, recv).await,
         0x03 => handle_download_quic(send, recv).await,
-        0x05 => handle_tunnel_quic(send, recv).await,
+        0x05 => handle_forward_quic(send, recv).await,
         0x06 => {
             crate::interactive::handle_interactive_control(
                 send,
@@ -279,7 +279,7 @@ async fn collect_remote_files(
     Ok(())
 }
 
-async fn handle_tunnel_quic(
+async fn handle_forward_quic(
     mut send: quinn::SendStream,
     mut recv: quinn::RecvStream,
 ) -> anyhow::Result<()> {
@@ -338,7 +338,7 @@ async fn handle_tunnel_quic(
 
     tokio::try_join!(tcp_to_quic, quic_to_tcp)?;
 
-    tracing::info!("QUIC tunnel closed: {}", target);
+    tracing::info!("QUIC forward closed: {}", target);
     Ok(())
 }
 

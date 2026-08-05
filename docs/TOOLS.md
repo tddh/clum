@@ -38,9 +38,9 @@
 | `INVALID_PARAMS` | 缺少必填参数，对照该工具的 inputSchema |
 | `SESSION_NOT_FOUND` / `SESSION_EXISTS` | 会话不存在 / 已存在 |
 | `PANE_NOT_FOUND` / `PANE_BUSY` | pane 不存在 / 非空闲 |
-| `WINDOW_NOT_FOUND` / `TUNNEL_NOT_FOUND` | 窗口 / 隧道不存在 |
+| `WINDOW_NOT_FOUND` / `FORWARD_NOT_FOUND` | 窗口 / 隧道不存在 |
 | `PATH_TRAVERSAL` | 路径含 `..` 被拒绝 |
-| `TUNNEL_DENIED` | 隧道目标不在 `allowed_tunnel_targets` 白名单 |
+| `FORWARD_DENIED` | 隧道目标不在 `allowed_forward_targets` 白名单 |
 | `AUTH_FAILED` | bridge token 不匹配 |
 | `FORBIDDEN` | API Key 分组隔离：主机不在该 key 可访问的分组内 |
 | `BRIDGE_UNREACHABLE` / `CONNECTION_LOST` | bridge 未运行 / 连接中断（可重试） |
@@ -1075,9 +1075,9 @@ Download a file from multiple hosts concurrently. Each host's file is saved to `
 
 ## 端口转发
 
-### `tunnel_create`
+### `forward_create`
 
-创建本地端口转发隧道，通过 QUIC 加密通道访问远程主机的内部服务（如数据库、Redis、内部 API）。在本地指定地址和端口开启 TCP 监听，将连接转发到远程目标。如果主机配置了 `allowed_tunnel_targets` 白名单，只有匹配的目标才允许创建隧道（不配置则全部允许）。
+创建本地端口转发隧道，通过 QUIC 加密通道访问远程主机的内部服务（如数据库、Redis、内部 API）。在本地指定地址和端口开启 TCP 监听，将连接转发到远程目标。如果主机配置了 `allowed_forward_targets` 白名单，只有匹配的目标才允许创建隧道（不配置则全部允许）。
 
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|:---:|--------|------|
@@ -1092,7 +1092,7 @@ Download a file from multiple hosts concurrently. Each host's file is saved to `
 ```json
 {
   "ok": true,
-  "tunnel_id": "t_abc123",
+  "forward_id": "t_abc123",
   "local_addr": "127.0.0.1:15432",
   "remote": "db-server:5432"
 }
@@ -1102,15 +1102,15 @@ Download a file from multiple hosts concurrently. Each host's file is saved to `
 
 ```
 // 访问远程数据库
-tunnel_create host="tf01" local_port=15432 remote_host="db-server" remote_port=5432
+forward_create host="tf01" local_port=15432 remote_host="db-server" remote_port=5432
 // 然后通过 localhost:15432 连接 PostgreSQL
 
 // 访问远程内网 API
-tunnel_create host="tf01" local_port=8080 remote_host="api.internal" remote_port=8080
+forward_create host="tf01" local_port=8080 remote_host="api.internal" remote_port=8080
 // 然后通过 localhost:8080 访问 API
 ```
 
-### `tunnel_list`
+### `forward_list`
 
 列出所有活跃的端口转发隧道。
 
@@ -1123,9 +1123,9 @@ tunnel_create host="tf01" local_port=8080 remote_host="api.internal" remote_port
 ```json
 {
   "ok": true,
-  "tunnels": [
+  "forwards": [
     {
-      "tunnel_id": "t_abc123",
+      "forward_id": "t_abc123",
       "local_addr": "127.0.0.1:15432",
       "local_port": 15432,
       "remote_host": "db-server",
@@ -1141,13 +1141,13 @@ tunnel_create host="tf01" local_port=8080 remote_host="api.internal" remote_port
 
 > `group` 字段仅当隧道由分组 API Key 创建时返回（标识隧道归属的分组），无分组时省略。
 
-### `tunnel_close`
+### `forward_close`
 
 关闭指定的端口转发隧道。
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
-| `tunnel_id` | string | ✅ | 隧道 ID（由 tunnel_create 返回） |
+| `forward_id` | string | ✅ | 隧道 ID（由 forward_create 返回） |
 
 **返回**
 

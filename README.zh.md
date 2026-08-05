@@ -72,7 +72,7 @@ graph LR
 ```
 
 - **clum-mcp（Central Server）** — 中央 MCP Server：HTTP :9788 面向 AI 客户端（MCP 协议）+ QUIC :9788 面向 Bridge 注册和 CLI 数据平面。提供 67 个工具、集中审计、API Key 认证、静态文件服务。
-- **clum-cli** — 命令行工具：PTY 透传（`connect`）、文件传输（`upload`/`download`，支持文件与目录、分块流式传输 + SHA-256 校验、目录 `--exclude` 过滤）、端口转发（`tunnel`，断网自动重连，`--give-up-after` 控制放弃时限）、会话列表（`list`）、录制回放（`replay`）。内置 AI 对话面板（Ctrl+G）。
+- **clum-cli** — 命令行工具：PTY 透传（`connect`）、文件传输（`upload`/`download`，支持文件与目录、分块流式传输 + SHA-256 校验、目录 `--exclude` 过滤）、端口转发（`forward`，断网自动重连，`--give-up-after` 控制放弃时限）、会话列表（`list`）、录制回放（`replay`）。内置 AI 对话面板（Ctrl+G）。
 - **rmux-bridge** — 部署在每台 Linux 主机的 Agent。主动连接 Central Server 注册，处理工具执行、文件 I/O、PTY 会话、录制推送。
 - **RMUX daemon** — 每台 Linux 主机上的终端多路复用器（基于 rmux）。
 
@@ -235,7 +235,7 @@ clum-mcp bridge join <hostname>   # 生成新 join token（离线恢复用）
 
 **内置安全防护**：
 - **路径穿越防护**：文件上传/下载拒绝包含 `..` 的路径
-- **隧道目标白名单**：`hosts.yaml` 中可选配置 `allowed_tunnel_targets` 限制端口转发目标（支持 glob 模式）
+- **隧道目标白名单**：`hosts.yaml` 中可选配置 `allowed_forward_targets` 限制端口转发目标（支持 glob 模式）
 - **exec 安全检查**：`exec` 在终端非 `ready` 状态时拒绝执行（防止命令注入到 vim/less/密码提示等）
 
 ## 审计查询
@@ -344,7 +344,7 @@ echo "$(cat)" >> knowledge.jsonl && git commit -am "新增排障经验条目"
 | 粘贴板 | `list_buffers`, `paste_buffer`, `delete_buffer` |
 | 文件传输 | `file_upload`, `file_download` |
 | 批量操作 | `batch_exec`, `batch_upload`, `batch_download` |
-| 端口转发 | `tunnel_create`, `tunnel_list`, `tunnel_close` |
+| 端口转发 | `forward_create`, `forward_list`, `forward_close` |
 | 部署升级 | `deploy_bridge` |
 | 审计录制 | `audit_query`, `query_bridge_audit`, `list_recordings`, `get_recording` |
 | 系统 | `clum_usage_rules` |

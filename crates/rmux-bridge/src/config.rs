@@ -26,7 +26,7 @@ pub struct BridgeConfig {
     pub auth_token: String,
 
     /// QUIC listen address (UDP). Used for terminal operations, file transfers,
-    /// tunnels, and interactive sessions.
+    /// forwards, and interactive sessions.
     #[arg(long, default_value = "0.0.0.0:9778", env = "QUIC_LISTEN_ADDR")]
     pub quic_listen_addr: String,
 

@@ -27,7 +27,7 @@ pub(crate) async fn forward_create(ctx: &ToolContext, args: Value) -> Result<Val
         .clone();
 
     let result = ctx
-        .tunnel_manager
+        .forward_manager
         .create(
             &host,
             local_addr,
@@ -44,7 +44,7 @@ pub(crate) async fn forward_create(ctx: &ToolContext, args: Value) -> Result<Val
         Ok(info) => {
             let detail = format!(
                 "{} {}:{} -> {}:{}",
-                info.tunnel_id, local_addr, local_port, remote_host, remote_port
+                info.forward_id, local_addr, local_port, remote_host, remote_port
             );
             super::audit(
                 ctx,
@@ -61,7 +61,7 @@ pub(crate) async fn forward_create(ctx: &ToolContext, args: Value) -> Result<Val
             .await;
             Ok(json!({
                 "ok": true,
-                "tunnel_id": info.tunnel_id,
+                "forward_id": info.forward_id,
                 "local_addr": info.local_addr,
                 "remote": format!("{}:{}", info.remote_host, info.remote_port),
             }))
@@ -90,14 +90,14 @@ pub(crate) async fn forward_create(ctx: &ToolContext, args: Value) -> Result<Val
 }
 
 pub(crate) async fn forward_list(ctx: &ToolContext) -> Result<Value> {
-    let mut tunnels = ctx.tunnel_manager.list().await;
+    let mut forwards = ctx.forward_manager.list().await;
     let caller_group = ctx
         .caller_group
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .clone();
     if let Some(cg) = caller_group {
-        tunnels.retain(|t| t.group.as_deref() == Some(cg.as_str()));
+        forwards.retain(|t| t.group.as_deref() == Some(cg.as_str()));
     }
     super::audit(
         ctx,
@@ -114,13 +114,13 @@ pub(crate) async fn forward_list(ctx: &ToolContext) -> Result<Value> {
     .await;
     Ok(json!({
         "ok": true,
-        "tunnels": tunnels,
-        "count": tunnels.len(),
+        "forwards": forwards,
+        "count": forwards.len(),
     }))
 }
 
 pub(crate) async fn forward_close(ctx: &ToolContext, args: Value) -> Result<Value> {
-    let tunnel_id = args["tunnel_id"].as_str().context("missing 'tunnel_id'")?;
+    let forward_id = args["forward_id"].as_str().context("missing 'forward_id'")?;
 
     let caller_group = ctx
         .caller_group
@@ -128,22 +128,22 @@ pub(crate) async fn forward_close(ctx: &ToolContext, args: Value) -> Result<Valu
         .unwrap_or_else(|e| e.into_inner())
         .clone();
     if let Some(ref cg) = caller_group {
-        let tunnels = ctx.tunnel_manager.list().await;
-        if let Some(t) = tunnels.iter().find(|t| t.tunnel_id == tunnel_id) {
+        let forwards = ctx.forward_manager.list().await;
+        if let Some(t) = forwards.iter().find(|t| t.forward_id == forward_id) {
             if t.group.as_deref() != Some(cg.as_str()) {
-                anyhow::bail!("tunnel '{tunnel_id}' is not in your group '{cg}'");
+                anyhow::bail!("forward '{forward_id}' is not in your group '{cg}'");
             }
         }
     }
 
-    let result = ctx.tunnel_manager.close(tunnel_id).await;
+    let result = ctx.forward_manager.close(forward_id).await;
     super::audit(
         ctx,
         AuditAction::ForwardClose,
         "",
         "",
         None,
-        tunnel_id,
+        forward_id,
         None,
         result.is_ok(),
         0,
@@ -152,7 +152,7 @@ pub(crate) async fn forward_close(ctx: &ToolContext, args: Value) -> Result<Valu
     .await;
 
     match result {
-        Ok(()) => Ok(json!({ "ok": true, "closed": tunnel_id })),
+        Ok(()) => Ok(json!({ "ok": true, "closed": forward_id })),
         Err(e) => Ok(json!({ "ok": false, "error": e.to_string() })),
     }
 }

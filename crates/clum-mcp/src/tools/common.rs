@@ -26,7 +26,7 @@ pub(crate) async fn resolve_host_config(
             group: String::new(),
             tags: Vec::new(),
             labels: std::collections::HashMap::new(),
-            allowed_tunnel_targets: None,
+            allowed_forward_targets: None,
         });
     }
     anyhow::bail!("host not found: {}", host_name)

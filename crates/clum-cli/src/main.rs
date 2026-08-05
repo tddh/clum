@@ -4,7 +4,7 @@ mod protocol;
 mod replay;
 mod transfer;
 mod tui;
-mod tunnel;
+mod forward;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
@@ -317,8 +317,8 @@ async fn main() -> anyhow::Result<()> {
                 .split_once(':')
                 .ok_or_else(|| anyhow::anyhow!("invalid --remote format, expected host:port"))?;
             let remote_port: u16 = remote_port.parse()?;
-            let give_up_after = tunnel::parse_duration(&give_up_after)?;
-            tunnel::run(
+            let give_up_after = forward::parse_duration(&give_up_after)?;
+            forward::run(
                 &server_addr,
                 ca_cert.as_deref().as_deref(),
                 &api_key,

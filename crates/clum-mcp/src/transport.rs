@@ -91,10 +91,10 @@ pub async fn connect_to_bridge_quic(
     Ok((conn, json_send, json_recv))
 }
 
-/// Establish QUIC connection to bridge for long-lived tunnels.
+/// Establish QUIC connection to bridge for long-lived forwards.
 /// Uses 1-hour idle timeout + 15s keepalive to prevent connection drops.
 /// Returns Connection + auth stream handles (caller must keep alive or finish).
-pub async fn connect_to_bridge_quic_tunnel(
+pub async fn connect_to_bridge_quic_forward(
     bridge_addr: &str,
     auth_token: &str,
     ca_cert_path: Option<&str>,
@@ -137,7 +137,7 @@ pub async fn connect_to_bridge_quic_tunnel(
         anyhow::bail!("bridge QUIC authentication failed");
     }
 
-    tracing::info!("QUIC tunnel connected and authenticated to {}", bridge_addr);
+    tracing::info!("QUIC forward connected and authenticated to {}", bridge_addr);
 
     Ok((conn, send, recv))
 }

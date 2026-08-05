@@ -67,7 +67,7 @@ pub fn classify_message(msg: &str) -> Classified {
             false,
         );
     }
-    if has("tunnel not found") {
+    if has("forward not found") {
         return c("FORWARD_NOT_FOUND", "forward_list 确认转发 ID", false);
     }
     if has("pane still active") {
@@ -87,7 +87,7 @@ pub fn classify_message(msg: &str) -> Classified {
     if has("not in allowed list") {
         return c(
             "TUNNEL_DENIED",
-            "隧道目标不在白名单：检查 hosts.yaml 的 allowed_tunnel_targets",
+            "隧道目标不在白名单：检查 hosts.yaml 的 allowed_forward_targets",
             false,
         );
     }
@@ -198,7 +198,7 @@ mod tests {
         let r = classify_message("session already exists: clum");
         assert_eq!(r.code, "SESSION_EXISTS");
 
-        let r = classify_message("tunnel not found: abc");
+        let r = classify_message("forward not found: abc");
         assert_eq!(r.code, "TUNNEL_NOT_FOUND");
 
         let r = classify_message("pane still active");
@@ -210,7 +210,7 @@ mod tests {
         let r = classify_message("path traversal rejected: ../../etc");
         assert_eq!(r.code, "PATH_TRAVERSAL");
 
-        let r = classify_message("tunnel target 10.0.0.1:22 not in allowed list for host 'tf001'");
+        let r = classify_message("forward target 10.0.0.1:22 not in allowed list for host 'tf001'");
         assert_eq!(r.code, "TUNNEL_DENIED");
 
         let r = classify_message("bridge QUIC authentication failed");

@@ -14,14 +14,14 @@ use uuid::Uuid;
 
 use clum_core::types::HostConfig;
 
-use crate::transport::connect_to_bridge_quic_tunnel;
+use crate::transport::connect_to_bridge_quic_forward;
 
 const STREAM_TUNNEL: u8 = 0x05;
 const TUNNEL_BUFFER_SIZE: usize = 65536;
 const MAX_HOST_LEN: usize = 253;
 
-fn check_tunnel_target(host: &HostConfig, remote_host: &str, remote_port: u16) -> Result<()> {
-    let targets = match &host.allowed_tunnel_targets {
+fn check_forward_target(host: &HostConfig, remote_host: &str, remote_port: u16) -> Result<()> {
+    let targets = match &host.allowed_forward_targets {
         Some(t) => t,
         None => return Ok(()),
     };
@@ -37,7 +37,7 @@ fn check_tunnel_target(host: &HostConfig, remote_host: &str, remote_port: u16) -
         Ok(())
     } else {
         anyhow::bail!(
-            "tunnel target {}:{} not in allowed list for host '{}' (allowed: {:?})",
+            "forward target {}:{} not in allowed list for host '{}' (allowed: {:?})",
             remote_host,
             remote_port,
             host.name,
@@ -47,8 +47,8 @@ fn check_tunnel_target(host: &HostConfig, remote_host: &str, remote_port: u16) -
 }
 
 #[derive(Debug, Serialize)]
-pub struct TunnelInfo {
-    pub tunnel_id: String,
+pub struct ForwardInfo {
+    pub forward_id: String,
     pub local_addr: String,
     pub local_port: u16,
     pub remote_host: String,
@@ -59,7 +59,7 @@ pub struct TunnelInfo {
     pub group: Option<String>,
 }
 
-struct Tunnel {
+struct Forward {
     pub id: String,
     pub local_addr: String,
     pub local_port: u16,
@@ -71,20 +71,20 @@ struct Tunnel {
     pub group: Option<String>,
 }
 
-impl Drop for Tunnel {
+impl Drop for Forward {
     fn drop(&mut self) {
         self.listener_task.abort();
     }
 }
 
 pub struct ForwardManager {
-    tunnels: Arc<Mutex<HashMap<String, Tunnel>>>,
+    forwards: Arc<Mutex<HashMap<String, Forward>>>,
 }
 
 impl ForwardManager {
     pub fn new() -> Self {
         Self {
-            tunnels: Arc::new(Mutex::new(HashMap::new())),
+            forwards: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -99,7 +99,7 @@ impl ForwardManager {
         ca_cert_path: Option<&str>,
         registry: &std::sync::Arc<crate::registry::BridgeRegistry>,
         group: Option<String>,
-    ) -> Result<TunnelInfo> {
+    ) -> Result<ForwardInfo> {
         if remote_host.len() > MAX_HOST_LEN {
             anyhow::bail!(
                 "remote host too long: {} (max {})",
@@ -108,7 +108,7 @@ impl ForwardManager {
             );
         }
 
-        check_tunnel_target(host, &remote_host, remote_port)?;
+        check_forward_target(host, &remote_host, remote_port)?;
 
         let bind_addr = format!("{}:{}", local_addr, local_port);
 
@@ -128,7 +128,7 @@ impl ForwardManager {
                 .as_deref()
                 .with_context(|| format!("host '{}': bridge_token not configured", host.name))?;
             let (conn, auth_send, auth_recv) =
-                connect_to_bridge_quic_tunnel(addr, token, ca_cert_path)
+                connect_to_bridge_quic_forward(addr, token, ca_cert_path)
                     .await
                     .with_context(|| "failed to connect to bridge")?;
             tokio::spawn(async move {
@@ -140,12 +140,12 @@ impl ForwardManager {
             conn
         };
 
-        let tunnel_id = format!("t_{}", Uuid::new_v4());
+        let forward_id = format!("t_{}", Uuid::new_v4());
         let active_connections = Arc::new(AtomicUsize::new(0));
         let created_at = Utc::now();
 
-        let tunnels = self.tunnels.clone();
-        let tunnel_id_clone = tunnel_id.clone();
+        let forwards = self.forwards.clone();
+        let forward_id_clone = forward_id.clone();
         let conn_clone = conn.clone();
         let remote_host_clone = remote_host.clone();
         let active_conn_clone = active_connections.clone();
@@ -155,8 +155,8 @@ impl ForwardManager {
                 match listener.accept().await {
                     Ok((tcp_stream, peer_addr)) => {
                         tracing::info!(
-                            "tunnel {} accepted connection from {}",
-                            tunnel_id_clone,
+                            "forward {} accepted connection from {}",
+                            forward_id_clone,
                             peer_addr
                         );
 
@@ -164,18 +164,18 @@ impl ForwardManager {
                         let remote_host = remote_host_clone.clone();
                         let remote_port = remote_port;
                         let active = active_conn_clone.clone();
-                        let tunnel_id_inner = tunnel_id_clone.clone();
+                        let forward_id_inner = forward_id_clone.clone();
 
                         active.fetch_add(1, Ordering::Relaxed);
 
                         tokio::spawn(async move {
                             if let Err(e) =
-                                handle_tunnel_connection(tcp_stream, conn, remote_host, remote_port)
+                                handle_forward_connection(tcp_stream, conn, remote_host, remote_port)
                                     .await
                             {
                                 tracing::warn!(
-                                    "tunnel {} connection error: {}",
-                                    tunnel_id_inner,
+                                    "forward {} connection error: {}",
+                                    forward_id_inner,
                                     e
                                 );
                             }
@@ -183,7 +183,7 @@ impl ForwardManager {
                         });
                     }
                     Err(e) => {
-                        tracing::warn!("tunnel {} accept error: {}", tunnel_id_clone, e);
+                        tracing::warn!("forward {} accept error: {}", forward_id_clone, e);
                         if e.kind() == std::io::ErrorKind::InvalidInput {
                             break;
                         }
@@ -192,11 +192,11 @@ impl ForwardManager {
                 }
             }
 
-            tunnels.lock().await.remove(&tunnel_id_clone);
+            forwards.lock().await.remove(&forward_id_clone);
         });
 
-        let info = TunnelInfo {
-            tunnel_id: tunnel_id.clone(),
+        let info = ForwardInfo {
+            forward_id: forward_id.clone(),
             local_addr: bind_addr,
             local_port,
             remote_host: remote_host.clone(),
@@ -206,8 +206,8 @@ impl ForwardManager {
             group: group.clone(),
         };
 
-        let tunnel = Tunnel {
-            id: tunnel_id,
+        let forward = Forward {
+            id: forward_id,
             local_addr: info.local_addr.clone(),
             local_port,
             remote_host,
@@ -218,20 +218,20 @@ impl ForwardManager {
             group,
         };
 
-        self.tunnels
+        self.forwards
             .lock()
             .await
-            .insert(info.tunnel_id.clone(), tunnel);
+            .insert(info.forward_id.clone(), forward);
 
         Ok(info)
     }
 
-    pub async fn list(&self) -> Vec<TunnelInfo> {
-        let tunnels = self.tunnels.lock().await;
-        tunnels
+    pub async fn list(&self) -> Vec<ForwardInfo> {
+        let forwards = self.forwards.lock().await;
+        forwards
             .values()
-            .map(|t| TunnelInfo {
-                tunnel_id: t.id.clone(),
+            .map(|t| ForwardInfo {
+                forward_id: t.id.clone(),
                 local_addr: t.local_addr.clone(),
                 local_port: t.local_port,
                 remote_host: t.remote_host.clone(),
@@ -243,18 +243,18 @@ impl ForwardManager {
             .collect()
     }
 
-    pub async fn close(&self, tunnel_id: &str) -> Result<()> {
-        let mut tunnels = self.tunnels.lock().await;
-        if let Some(tunnel) = tunnels.remove(tunnel_id) {
-            tunnel.listener_task.abort();
+    pub async fn close(&self, forward_id: &str) -> Result<()> {
+        let mut forwards = self.forwards.lock().await;
+        if let Some(forward) = forwards.remove(forward_id) {
+            forward.listener_task.abort();
             Ok(())
         } else {
-            anyhow::bail!("tunnel not found: {}", tunnel_id)
+            anyhow::bail!("forward not found: {}", forward_id)
         }
     }
 }
 
-async fn handle_tunnel_connection(
+async fn handle_forward_connection(
     tcp_stream: TcpStream,
     conn: Connection,
     remote_host: String,
@@ -333,37 +333,37 @@ mod tests {
             group: "test".to_string(),
             tags: vec![],
             labels: HashMap::new(),
-            allowed_tunnel_targets: targets,
+            allowed_forward_targets: targets,
         }
     }
 
     #[test]
     fn test_no_targets_allows_all() {
         let host = make_host(None);
-        assert!(check_tunnel_target(&host, "127.0.0.1", 22).is_ok());
-        assert!(check_tunnel_target(&host, "10.0.0.1", 3306).is_ok());
+        assert!(check_forward_target(&host, "127.0.0.1", 22).is_ok());
+        assert!(check_forward_target(&host, "10.0.0.1", 3306).is_ok());
     }
 
     #[test]
     fn test_exact_match() {
         let host = make_host(Some(vec!["127.0.0.1:5432".to_string()]));
-        assert!(check_tunnel_target(&host, "127.0.0.1", 5432).is_ok());
-        assert!(check_tunnel_target(&host, "127.0.0.1", 3306).is_err());
+        assert!(check_forward_target(&host, "127.0.0.1", 5432).is_ok());
+        assert!(check_forward_target(&host, "127.0.0.1", 3306).is_err());
     }
 
     #[test]
     fn test_glob_match() {
         let host = make_host(Some(vec!["10.0.1.*:*".to_string()]));
-        assert!(check_tunnel_target(&host, "10.0.1.20", 5432).is_ok());
-        assert!(check_tunnel_target(&host, "10.0.1.100", 80).is_ok());
-        assert!(check_tunnel_target(&host, "10.0.2.1", 80).is_err());
+        assert!(check_forward_target(&host, "10.0.1.20", 5432).is_ok());
+        assert!(check_forward_target(&host, "10.0.1.100", 80).is_ok());
+        assert!(check_forward_target(&host, "10.0.2.1", 80).is_err());
     }
 
     #[test]
     fn test_port_glob() {
         let host = make_host(Some(vec!["*:3306".to_string()]));
-        assert!(check_tunnel_target(&host, "10.0.1.20", 3306).is_ok());
-        assert!(check_tunnel_target(&host, "127.0.0.1", 3306).is_ok());
-        assert!(check_tunnel_target(&host, "127.0.0.1", 5432).is_err());
+        assert!(check_forward_target(&host, "10.0.1.20", 3306).is_ok());
+        assert!(check_forward_target(&host, "127.0.0.1", 3306).is_ok());
+        assert!(check_forward_target(&host, "127.0.0.1", 5432).is_err());
     }
 }

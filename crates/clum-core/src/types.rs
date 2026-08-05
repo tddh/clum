@@ -25,7 +25,7 @@ pub struct HostConfig {
     /// 可选：允许的隧道目标列表（glob 模式，如 "10.0.1.*:*"）。
     /// None = 全部允许（向后兼容，不配置则不限制）。
     #[serde(default)]
-    pub allowed_tunnel_targets: Option<Vec<String>>,
+    pub allowed_forward_targets: Option<Vec<String>>,
 }
 
 /// 主机注册表

@@ -317,13 +317,13 @@ wait_stable(host, session_name, pane_id)
 | `PANE_BUSY` | `pane still active` | spawn/shell_command 时 pane 非空闲 | `respawn_pane(kill=true)` 重启，或换用其他 pane（`close_pane` 需用户明确同意） |
 | `TIMEOUT`（执行类） | `timeout waiting for sentinel...` | 命令执行超时 | exec: 增大 `timeout_ms` 或检查命令是否卡住（⚠️ 超时后命令仍在运行！别重跑，用 capture_pane 补捞）。collect_until_exit: 超时后收集被取消（已收集字节丢失），但远端进程继续运行，用 capture_pane 或 wait_for_text 继续跟进。 |
 | `PATH_TRAVERSAL` | `path traversal rejected` | 路径包含 `..` | 使用不含 `..` 的绝对路径或相对路径 |
-| `TUNNEL_DENIED` | `tunnel target not in allowed list` | 隧道目标不在白名单中 | 检查 `hosts.yaml` 中的 `allowed_tunnel_targets` 配置 |
+| `FORWARD_DENIED` | `forward target not in allowed list` | 隧道目标不在白名单中 | 检查 `hosts.yaml` 中的 `allowed_forward_targets` 配置 |
 | `HOST_NOT_FOUND` | `host not found` | 主机名不在 registry 中 | `host_list` 检查可用主机 |
 | `REFUSED_STATE` | （exec 安全拒绝，附具体建议） | 终端非 ready 状态 | 按 `error` 中的建议恢复终端状态后重试 |
 | `INVALID_PARAMS` | `missing 'pane_id'` 等 | 缺少必填参数 | 对照该工具的 inputSchema.required 补全 |
 | `SESSION_EXISTS` | `session already exists` | 同名会话已存在 | 直接 `session_attach` 或换个名称 |
 | `WINDOW_NOT_FOUND` | `window not found` | 窗口不存在 | `window_info` / `select_window` 确认窗口 |
-| `TUNNEL_NOT_FOUND` | `tunnel not found` | 隧道 ID 不存在 | `tunnel_list` 确认隧道 ID |
+| `FORWARD_NOT_FOUND` | `forward not found` | 隧道 ID 不存在 | `forward_list` 确认隧道 ID |
 | `UNKNOWN` | （未分类错误） | 无法归类的失败 | 看 `error` 详情判断，不要盲目重试 |
 | — | 修改 `hosts.yaml` 后主机不生效 | 未重载配置 | 调用 `reload_config` 工具或 `kill -HUP <pid>` |
 
@@ -359,9 +359,9 @@ wait_stable(host, session_name, pane_id)
 └── 批量下载 → `batch_download`
 
 端口转发？
-├── 创建隧道 → `tunnel_create`
-├── 查看隧道 → `tunnel_list`
-└── 关闭隧道 → `tunnel_close`
+├── 创建隧道 → `forward_create`
+├── 查看隧道 → `forward_list`
+└── 关闭隧道 → `forward_close`
 
 Pane 管理？
 ├── 分屏 → `split_pane`

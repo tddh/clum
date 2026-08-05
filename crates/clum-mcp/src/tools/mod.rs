@@ -7,7 +7,7 @@ use crate::audit;
 use crate::recording_sync;
 use crate::router::HostRouter;
 use crate::stream::StreamManager;
-use crate::tunnel::ForwardManager;
+use crate::forward::ForwardManager;
 
 mod batch;
 mod bridge_audit;
@@ -20,7 +20,7 @@ mod file;
 mod output;
 mod pane;
 mod session;
-mod tunnel;
+mod forward;
 mod window;
 
 // Re-export audit for all sub-modules
@@ -35,7 +35,7 @@ pub struct ToolContext {
     // own API key, with no shared mutable state between requests.
     pub agent_name: Arc<std::sync::Mutex<String>>,
     pub caller_group: Arc<std::sync::Mutex<Option<String>>>,
-    pub tunnel_manager: Arc<ForwardManager>,
+    pub forward_manager: Arc<ForwardManager>,
     pub stream_manager: Arc<StreamManager>,
     pub recordings_dir: PathBuf,
     #[allow(dead_code)]
@@ -61,7 +61,7 @@ impl Clone for ToolContext {
                     .unwrap_or_else(|e| e.into_inner())
                     .clone(),
             )),
-            tunnel_manager: Arc::clone(&self.tunnel_manager),
+            forward_manager: Arc::clone(&self.forward_manager),
             stream_manager: Arc::clone(&self.stream_manager),
             recordings_dir: self.recordings_dir.clone(),
             bridge_registry: Arc::clone(&self.bridge_registry),
@@ -200,9 +200,9 @@ pub async fn execute_tool(
         "batch_exec" => batch::batch_exec(ctx, args, progress).await,
         "batch_upload" => batch::batch_upload(ctx, args, progress).await,
         "batch_download" => batch::batch_download(ctx, args, progress).await,
-            "forward_create" => tunnel::forward_create(ctx, args).await,
-            "forward_list" => tunnel::forward_list(ctx).await,
-            "forward_close" => tunnel::forward_close(ctx, args).await,
+            "forward_create" => forward::forward_create(ctx, args).await,
+            "forward_list" => forward::forward_list(ctx).await,
+            "forward_close" => forward::forward_close(ctx, args).await,
         "find_panes" => discovery::find_panes(ctx, args).await,
         "find_sessions" => discovery::find_sessions(ctx, args).await,
         "get_pane_title" => pane::get_pane_title(ctx, args).await,

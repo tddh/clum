@@ -62,7 +62,7 @@ AI (via MCP)
 ```mermaid
 graph LR
     A[AI Client<br/>opencode/Claude/Cursor] <-->|HTTP :9788<br/>MCP Streamable HTTP| S[Central MCP Server<br/>clum-mcp --mode http]
-    H[Human] <-->|QUIC :9788<br/>PTY / upload / tunnel| S
+    H[Human] <-->|QUIC :9788<br/>PTY / upload / forward| S
     S <-->|QUIC :9788<br/>reverse registration| C1[rmux-bridge<br/>host-1]
     S <-->|QUIC :9788| C2[rmux-bridge<br/>host-2]
     S <-->|QUIC :9788| C3[rmux-bridge<br/>host-N]
@@ -72,7 +72,7 @@ graph LR
 ```
 
 - **clum-mcp (Central Server)** — Central MCP Server: HTTP :9788 for AI clients (MCP protocol) + QUIC :9788 for Bridge registration and CLI data plane. Provides 67 tools, centralized audit, API Key auth, and static file serving.
-- **clum-cli** — CLI for humans: PTY passthrough (`connect`), file transfer (`upload`/`download` — files or directories, chunked streaming with SHA-256, `--exclude` globs for directories), port forwarding (`tunnel` — auto-reconnects on network loss, `--give-up-after`), session listing (`list`), recording playback (`replay`). Built-in AI chat panel (Ctrl+G).
+- **clum-cli** — CLI for humans: PTY passthrough (`connect`), file transfer (`upload`/`download` — files or directories, chunked streaming with SHA-256, `--exclude` globs for directories), port forwarding (`forward` — auto-reconnects on network loss, `--give-up-after`), session listing (`list`), recording playback (`replay`). Built-in AI chat panel (Ctrl+G).
 - **rmux-bridge** — Agent deployed on each Linux host. Reverse-connects to the Central Server, handles tool execution, file I/O, PTY sessions, and recording push.
 - **RMUX daemon** — Terminal multiplexer on each Linux host (rmux-based).
 
@@ -98,7 +98,7 @@ graph LR
 | **Command execution** | `exec` one-shot execution (sentinel detection + exit code, full scrollback capture for large outputs, auto-reconnect on connection drop), interactive programs via send_keys + capture_pane |
 | **Output waiting** | `wait_for_text` for terminal text, `wait_exit` for process exit |
 | **File transfer** | Upload/download over QUIC (`clum-cli` and MCP tools), recursive directory transfer with concurrency and `--exclude` globs, chunked streaming with SHA-256 verification |
-| **Port forwarding** | Local port forwarding tunnels through QUIC to access remote internal services |
+| **Port forwarding** | Local port forwarding forwards through QUIC to access remote internal services |
 | **Multi-host orchestration** | Host registry with group/tag/label filtering, broadcast_keys for multi-pane |
 | **Audit logging** | SQLite audit logs + bridge-side PTY recording (asciinema v2) + event log + MCP periodic sync + `clum-cli replay` playback |
 | **Terminal state awareness** | `capture_pane`, `exec`, `wait_for_text`, `wait_stable`, `pane_info` return `terminal_state` (ready/running/editor/pager/password/confirm/repl/unknown) and cursor position, so AI agents know what the terminal is currently doing |
@@ -235,7 +235,7 @@ clum-mcp bridge join <hostname>   # Generate a new join token (offline recovery)
 
 **Built-in protections**:
 - **Path traversal prevention**: File upload/download rejects paths containing `..`
-- **Tunnel target whitelist**: Optional `allowed_tunnel_targets` in `hosts.yaml` restricts port forwarding targets (glob patterns)
+- **Tunnel target whitelist**: Optional `allowed_forward_targets` in `hosts.yaml` restricts port forwarding targets (glob patterns)
 - **Exec safety check**: `exec` refuses execution when terminal is not in `ready` state (prevents command injection into vim/less/password prompts)
 
 ## Audit
@@ -345,7 +345,7 @@ This design keeps clum focused on operations while enabling teams to build their
 | Buffer | `list_buffers`, `paste_buffer`, `delete_buffer` |
 | File | `file_upload`, `file_download` |
 | Batch | `batch_exec`, `batch_upload`, `batch_download` |
-| Tunnel | `tunnel_create`, `tunnel_list`, `tunnel_close` |
+| Tunnel | `forward_create`, `forward_list`, `forward_close` |
 | Deploy | `deploy_bridge` |
 | Audit | `audit_query`, `query_bridge_audit`, `list_recordings`, `get_recording` |
 | System | `clum_usage_rules` |

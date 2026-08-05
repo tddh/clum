@@ -47,14 +47,14 @@ Both upload and download operations enforce path safety checks:
 
 ### Tunnel Target Whitelist (SSRF Protection)
 
-Hosts can optionally configure `allowed_tunnel_targets` in `hosts.yaml` to restrict which remote host:port combinations are allowed for port forwarding tunnels. If not configured, all targets are allowed (backward compatible).
+Hosts can optionally configure `allowed_forward_targets` in `hosts.yaml` to restrict which remote host:port combinations are allowed for port forwarding forwards. If not configured, all targets are allowed (backward compatible).
 
 ```yaml
 hosts:
   - name: prod-db-01
     bridge_addr: 10.0.1.20:9778
     bridge_token: "your-token"
-    allowed_tunnel_targets:
+    allowed_forward_targets:
       - "127.0.0.1:5432"    # exact match
       - "10.0.1.*:*"         # glob pattern
       - "*:3306"             # all hosts, MySQL only

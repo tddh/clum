@@ -8,7 +8,7 @@ use crate::transport::{connect_to_host_stream, recv_json_frame, send_json_frame}
 ///
 /// Opens a QUIC JSON protocol stream (0x01) to the target bridge and sends an
 /// `audit_query` command, which the bridge answers from its own BridgeAuditDb
-/// (auth events, attach/detach, file ops, tunnels, ...).
+/// (auth events, attach/detach, file ops, forwards, ...).
 pub(crate) async fn query_bridge_audit(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
     let host = super::common::resolve_host_config(ctx, host_name).await?;

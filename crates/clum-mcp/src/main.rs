@@ -18,7 +18,7 @@ mod stream;
 mod token_rotation;
 mod tools;
 mod transport;
-mod tunnel;
+mod forward;
 
 use clap::Parser;
 use std::path::PathBuf;
@@ -258,7 +258,7 @@ async fn main() -> anyhow::Result<()> {
         audit_db: audit_db.clone(),
         agent_name: Arc::new(std::sync::Mutex::new("unknown".to_string())),
         caller_group: Arc::new(std::sync::Mutex::new(None)),
-        tunnel_manager: Arc::new(tunnel::ForwardManager::new()),
+        forward_manager: Arc::new(forward::ForwardManager::new()),
         stream_manager: Arc::new(stream::StreamManager::new()),
         recordings_dir,
         bridge_registry: Arc::clone(&bridge_registry),

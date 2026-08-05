@@ -84,7 +84,7 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
         "type": "bridge_register",
         "token": token,
         "version": env!("CARGO_PKG_VERSION"),
-        "capabilities": ["exec", "file", "tunnel", "interactive"],
+        "capabilities": ["exec", "file", "forward", "interactive"],
         "machine_id": machine_id,
         "os_info": os_info,
     });

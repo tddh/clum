@@ -27,7 +27,7 @@ pub fn parse_duration(s: &str) -> Result<Duration> {
 
 const MAX_BACKOFF: Duration = Duration::from_secs(30);
 
-#[allow(clippy::too_many_arguments)] // mirrors get_connection's conn params + tunnel args
+#[allow(clippy::too_many_arguments)] // mirrors get_connection's conn params + forward args
 pub async fn run(
     server_addr: &Option<String>,
     ca_cert: Option<&str>,
@@ -40,10 +40,10 @@ pub async fn run(
     give_up_after: Duration, // Duration::ZERO = 永不放弃
 ) -> Result<()> {
     let mut conn =
-        crate::get_connection(server_addr, ca_cert, api_key, hosts_file, host, "tunnel").await?;
+        crate::get_connection(server_addr, ca_cert, api_key, hosts_file, host, "forward").await?;
     let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{local}")).await?;
     println!(
-        "tunnel: 127.0.0.1:{local} → {host}:{remote_host}:{remote_port} (Ctrl+C to stop{})",
+        "forward: 127.0.0.1:{local} → {host}:{remote_host}:{remote_port} (Ctrl+C to stop{})",
         if give_up_after == Duration::ZERO {
             String::new()
         } else {
@@ -59,7 +59,7 @@ pub async fn run(
             // 重连阶段
             if give_up_after != Duration::ZERO && since.elapsed() >= give_up_after {
                 bail!(
-                    "tunnel giving up: offline for over {}s without successful reconnect",
+                    "forward giving up: offline for over {}s without successful reconnect",
                     give_up_after.as_secs()
                 );
             }
@@ -70,21 +70,21 @@ pub async fn run(
                 wait
             };
             tokio::time::sleep(wait).await;
-            match crate::get_connection(server_addr, ca_cert, api_key, hosts_file, host, "tunnel")
+            match crate::get_connection(server_addr, ca_cert, api_key, hosts_file, host, "forward")
                 .await
             {
                 Ok(c) => {
                     conn = c;
                     down_since = None;
                     backoff = Duration::from_secs(1);
-                    eprintln!("tunnel: reconnected");
+                    eprintln!("forward: reconnected");
                 }
                 Err(e) => {
                     let msg = format!("{e:#}");
                     if msg.contains("rejected") || msg.contains("auth") {
-                        eprintln!("tunnel: reconnect failed (check credentials): {msg}");
+                        eprintln!("forward: reconnect failed (check credentials): {msg}");
                     } else {
-                        eprintln!("tunnel: reconnect failed: {msg}");
+                        eprintln!("forward: reconnect failed: {msg}");
                     }
                     backoff = (backoff * 2).min(MAX_BACKOFF);
                 }
@@ -103,7 +103,7 @@ pub async fn run(
             }
             reason = conn.closed() => {
                 down_since = Some(std::time::Instant::now());
-                eprintln!("tunnel: connection lost ({reason}), reconnecting...");
+                eprintln!("forward: connection lost ({reason}), reconnecting...");
             }
         }
     }
@@ -168,7 +168,7 @@ async fn relay_one(
         }
     };
     tokio::join!(t2q, q2t);
-    tracing::debug!("tunnel connection from {peer} closed");
+    tracing::debug!("forward connection from {peer} closed");
 }
 
 #[cfg(test)]

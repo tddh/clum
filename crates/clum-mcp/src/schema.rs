@@ -33,7 +33,7 @@ pub fn instructions() -> String {
 ## CLI Commands (via Bash tool)\n\
 - `clum-cli upload <host> <local> <remote>` — file upload through server relay\n\
 - `clum-cli download <host> <remote> <local>` — file download\n\
-- `clum-cli tunnel <host> --local <port> --remote <host:port>` — port forwarding\n\
+- `clum-cli forward <host> --local <port> --remote <host:port>` — port forwarding\n\
 - `clum-cli connect <host> [--session <name>]` — interactive PTY\n\
 - `clum-cli list <host>` — list sessions\n\
 - `clum-cli replay <host/file.cast>` — remote recording playback\n\
@@ -611,7 +611,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "forward_create",
-                "description": "Create a port forwarding tunnel through an encrypted QUIC channel. Central server mode: the TCP listener is created on the SERVER side, not the client machine. For client-side local port forwarding use clum-cli tunnel. Opens a TCP listener on the specified port that forwards all connections to a remote host:port via the bridge. The remote_host can be an internal address (e.g., 127.0.0.1, 10.x.x.x) not directly reachable from your machine. If the host has 'allowed_forward_targets' configured in hosts.yaml, only matching targets are allowed (glob patterns supported). Returns a forward_id that can be used with forward_close. Tunnels persist until explicitly closed or the MCP server restarts.",
+                "description": "Create a port forwarding through an encrypted QUIC channel. Central server mode: the TCP listener is created on the SERVER side, not the client machine. For client-side local port forwarding use clum-cli forward. Opens a TCP listener on the specified port that forwards all connections to a remote host:port via the bridge. The remote_host can be an internal address (e.g., 127.0.0.1, 10.x.x.x) not directly reachable from your machine. If the host has 'allowed_forward_targets' configured in hosts.yaml, only matching targets are allowed (glob patterns supported). Returns a forward_id that can be used with forward_close. Tunnels persist until explicitly closed or the MCP server restarts.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -626,7 +626,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "forward_list",
-                "description": "List all active port forwarding tunnels. Returns an array of tunnel objects with forward_id, local address/port, remote host/port, and status. Use this to discover existing tunnels before creating new ones, or to verify tunnel state. Tunnels persist until explicitly closed or the MCP server restarts.",
+                "description": "List all active port forwardings. Returns an array of forward objects with forward_id, local address/port, remote host/port, and status. Use this to discover existing forwards before creating new ones, or to verify forward state. Tunnels persist until explicitly closed or the MCP server restarts.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {},
@@ -635,7 +635,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "forward_close",
-                "description": "Close an active port forwarding tunnel by its ID. The tunnel stops accepting new connections and existing connections are terminated. Use forward_list to discover tunnel IDs. Once closed, the tunnel cannot be reopened — create a new tunnel with forward_create if needed.",
+                "description": "Close an active port forwarding by its ID. The forward stops accepting new connections and existing connections are terminated. Use forward_list to discover forward IDs. Once closed, the forward cannot be reopened — create a new forward with forward_create if needed.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -924,7 +924,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "query_bridge_audit",
-                "description": "Query the bridge-side connection event log on a target host (auth events, attach/detach, file operations, tunnel events, etc.). Returns events in reverse chronological order. Less useful in central server mode — prefer audit_query for centralized audit.",
+                "description": "Query the bridge-side connection event log on a target host (auth events, attach/detach, file operations, forward events, etc.). Returns events in reverse chronological order. Less useful in central server mode — prefer audit_query for centralized audit.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
