@@ -34,6 +34,7 @@ clum/
 ├── config/              # 配置文件
 ├── docs/                # 文档
 ├── deploy/              # 部署脚本（install.sh, deploy-bridge.sh, deploy-mcp.sh）
+├── scripts/             # 迁移与测试脚本（migrate-to-clum.sh, mcp_smoke.py）
 ├── .opencode/skills/    # AI 开发辅助 Skills (OpenCode)
 └── .qoder/skills/       # AI 开发辅助 Skills (Qoder)
 ```

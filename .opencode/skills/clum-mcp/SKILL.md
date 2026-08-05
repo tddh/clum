@@ -312,6 +312,7 @@ wait_stable(host, session_name, pane_id)
 | `BRIDGE_UNREACHABLE` | `connection refused` | bridge 未运行 | 检查 `systemctl status rmux-bridge` |
 | `TIMEOUT`（连接类） | `TCP connect timeout` | 主机离线或网络不通 | 确认主机在线、bridge 端口可达 |
 | `AUTH_FAILED` | `authentication failed` | token 不匹配 | 检查 `hosts.yaml` 中的 `bridge_token` |
+| `FORBIDDEN` | `host ... not in your group` | API Key 分组隔离：主机不在该 key 可访问的分组 | 联系管理员确认分组分配，不可重试 |
 | `CONNECTION_LOST` | `recv: connection lost` | bridge 重启或网络中断 | 等待后重试 |
 | `PANE_BUSY` | `pane still active` | spawn/shell_command 时 pane 非空闲 | `respawn_pane(kill=true)` 重启，或换用其他 pane（`close_pane` 需用户明确同意） |
 | `TIMEOUT`（执行类） | `timeout waiting for sentinel...` | 命令执行超时 | exec: 增大 `timeout_ms` 或检查命令是否卡住（⚠️ 超时后命令仍在运行！别重跑，用 capture_pane 补捞）。collect_until_exit: 超时后收集被取消（已收集字节丢失），但远端进程继续运行，用 capture_pane 或 wait_for_text 继续跟进。 |
@@ -323,6 +324,7 @@ wait_stable(host, session_name, pane_id)
 | `SESSION_EXISTS` | `session already exists` | 同名会话已存在 | 直接 `session_attach` 或换个名称 |
 | `WINDOW_NOT_FOUND` | `window not found` | 窗口不存在 | `window_info` / `select_window` 确认窗口 |
 | `TUNNEL_NOT_FOUND` | `tunnel not found` | 隧道 ID 不存在 | `tunnel_list` 确认隧道 ID |
+| `UNKNOWN` | （未分类错误） | 无法归类的失败 | 看 `error` 详情判断，不要盲目重试 |
 | — | 修改 `hosts.yaml` 后主机不生效 | 未重载配置 | 调用 `reload_config` 工具或 `kill -HUP <pid>` |
 
 ## 工具选择

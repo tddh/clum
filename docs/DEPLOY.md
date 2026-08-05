@@ -35,10 +35,6 @@
 ### 1. 部署 Server
 
 ```bash
-# 方式 1：使用部署脚本（推荐）
-just deploy-mcp host=root@<server-ip>
-
-# 或手动调用脚本
 bash deploy/deploy-mcp.sh ./target/x86_64-unknown-linux-musl/release/clum-mcp root@<server-ip>
 ```
 
@@ -139,7 +135,7 @@ bash deploy/deploy-bridge.sh root@<your-bridge-ip>
 部署脚本自动完成：
 - 上传 `rmux-bridge` 二进制到 `/usr/local/bin/rmux-bridge`
 - 下载 CA 证书到 `/etc/clum/ca.crt`
-- 写入配置到 `/etc/clum/bridge.env`（权限 600，含 BRIDGE_AUTH_TOKEN、CLUM_SERVER_ADDR、CLUM_CA_CERT）
+- 写入配置到 `/etc/clum/bridge.env`（权限 600）：`BRIDGE_AUTH_TOKEN`、`RMUX_SOCKET`（自动检测）、`RECORDING_ENABLED`、`RECORDING_DIR`、`BRIDGE_AUDIT_DB`、`CLUM_SERVER_ADDR`、`CLUM_CA_CERT`；direct 模式另含 `QUIC_LISTEN_ADDR`、`BRIDGE_TLS_CERT`、`BRIDGE_TLS_KEY`
 - 创建 `rmux-bridge.service`（`systemctl enable --now`）
 
 **其他 Justfile 命令：**
@@ -399,7 +395,7 @@ clum-mcp audit cleanup --older-than 30
 | `authentication failed` | 检查 `bridge.env` 中的 `BRIDGE_AUTH_TOKEN` 与 `hosts.yaml` 中 `bridge_token` 是否一致 |
 | TLS 握手失败 | `--ca-cert` 指向的证书是否与 bridge 端一致 |
 | `unknown request type` | bridge 版本过旧，重新交叉编译部署 |
-| RMUX socket 找不到 | `ls $HOME/.rmux/rmux-*/default`，确认 rmux daemon 在运行（socket 路径由 `RMUX_TMPDIR` 环境变量控制，项目 daemon service 配置为 `$HOME/.rmux`，部署脚本自动检测实际路径） |
+| RMUX socket 找不到 | `ls $HOME/.rmux/rmux-*/default`，确认 rmux daemon 在运行（socket 路径由 `RMUX_TMPDIR` 环境变量控制，项目 daemon service 配置为 `$HOME/.rmux`，部署脚本自动检测实际路径，未检测到时回退标准路径 `/root/.rmux/rmux-0/default`） |
 
 ## 安全
 
@@ -407,7 +403,7 @@ clum-mcp audit cleanup --older-than 30
 
 rmux daemon 的 socket 路径由 `RMUX_TMPDIR` 环境变量控制。项目定制的 `rmux-daemon.service` 设置 `RMUX_TMPDIR=%h/.rmux`（root 用户展开为 `/root/.rmux`），socket 位于 `$RMUX_TMPDIR/rmux-<UID>/default`。
 
-部署脚本自动检测实际 socket 路径，无需手动指定。Socket 权限为 `srw-------`（仅 owner 可读写），其他用户无法访问。
+部署脚本自动检测实际 socket 路径，无需手动指定（未检测到时回退标准路径 `/root/.rmux/rmux-0/default`，与项目 `rmux-daemon.service` 布局一致）。Socket 权限为 `srw-------`（仅 owner 可读写），其他用户无法访问。
 
 如果需要在自定义路径运行 rmux daemon，同步更新：
 - `rmux-daemon.service` 中的 `Environment=RMUX_TMPDIR=...`

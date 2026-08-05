@@ -10,7 +10,8 @@ Instead, email the maintainer directly. We will respond within 48 hours and work
 
 | Version | Supported          |
 |---------|--------------------|
-| 0.9.x   | ✅ Supported       |
+| 0.10.x  | ✅ Supported       |
+| 0.9.x   | ⚠️ Legacy (rename transition, compat shims only) |
 | < 0.8   | ❌ Not supported   |
 
 ## Security Model
@@ -25,8 +26,9 @@ clum consists of four components connected over TLS:
 Security assumptions:
 - AI clients authenticate via API Key (`yk_{name}_{32hex}`, SHA-256 hashed in SQLite)
 - Bridge authentication uses static tokens with constant-time comparison
-- All transport is TLS 1.3 encrypted (QUIC built-in + HTTPS)
-- CA certificate is mandatory — connections without CA verification are rejected
+- QUIC transport (Server↔Bridge, Server↔CLI) is TLS 1.3 encrypted (mandatory in the QUIC protocol)
+- The MCP HTTPS endpoint uses rustls (TLS 1.2+, negotiates 1.3 by default); without a server certificate configured, the endpoint falls back to plain HTTP — intended for local development only
+- CA certificate is mandatory for server→bridge connections — connections without CA verification are rejected. The former `--insecure` flag has been removed; skipping TLS verification is not supported
 
 For production deployments:
 - Use a self-managed CA to sign bridge certificates
@@ -61,3 +63,8 @@ hosts:
 ### Exec Safety Check
 
 The `exec` tool checks terminal state before executing commands. If the terminal is not in `ready` state (e.g., inside vim, less, password prompt), execution is refused to prevent command injection into non-shell contexts.
+
+### HTTP Endpoint Protection
+
+- **Static file serving**: The `/releases/` download endpoint rejects path components containing `..`, preventing traversal outside the release directory.
+- **Download tokens**: Bridge binaries and certificates are gated behind download tokens with a configurable TTL (`token_ttl_hours` in server-config.yaml, default 24 hours), in addition to API Key auth on the `/mcp` endpoint.

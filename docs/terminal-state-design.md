@@ -89,8 +89,16 @@ fn detect_terminal_state(text: &str, cursor_col: u16, cursor_visible: bool) -> T
     }
 
     // 取最后 12 行作为检测窗口（避免 scrollback 干扰）
-    let window_start = lines.len().saturating_sub(12);
-    let window = &lines[window_start..];
+    // 但跳过尾部空行，避免 prompt 在空行之前被漏掉
+    let mut effective_end = lines.len();
+    while effective_end > 0 && lines[effective_end - 1].trim().is_empty() {
+        effective_end -= 1;
+    }
+    if effective_end == 0 {
+        return TerminalState::Unknown;
+    }
+    let window_start = effective_end.saturating_sub(12);
+    let window = &lines[window_start..effective_end];
     let tail = window.last().map(|l| l.trim()).unwrap_or("");
 
     // ── 规则 0：光标不可见 → 先检查编辑器/分页器，否则 Running ──
@@ -138,12 +146,18 @@ fn detect_terminal_state(text: &str, cursor_col: u16, cursor_visible: bool) -> T
     let editor_markers = [
         "-- INSERT --", "-- VISUAL --", "-- NORMAL --", "-- REPLACE --",
         "-- COMMAND --", "[New File]", "[New DIRECTORY]",
+        "[New]",  // vim 新文件指示器（vim 打开新文件显示 [New] 而非 [New File]）
         "GNU nano", "Pico editor",
     ];
     for marker in &editor_markers {
         if text.contains(marker) {
             return TerminalState::Editor;
         }
+    }
+    // vim 空行标记：如果窗口中有 3+ 行仅为 "~"，大概率是 vim
+    let tilde_lines = window.iter().filter(|l| l.trim() == "~").count();
+    if tilde_lines >= 3 {
+        return TerminalState::Editor;
     }
 
     // ── 规则 4：分页器 ──
@@ -382,6 +396,26 @@ let cursor = resp.get("cursor");
 - **路径 B（+1 次 IPC）**：额外调用 `pane.snapshot()` 获取 cursor + 运行检测。成本是 1 次 IPC 往返（约 1-10ms），`pane_info` 是低频查询操作，可接受。
 
 **推荐路径 B**：不依赖 SDK 内部字段变更，实现更简单。
+
+### 4.6 exec 执行前安全检查（REFUSED_STATE）
+
+状态感知不仅用于返回值标注，还作为 `exec` 的执行前门禁（已实现）：
+
+1. `exec` 在发送命令前先做一次 `capture_pane` 获取 `terminal_state`（pre-check）。
+2. 若状态不是 `ready`（如 `editor`、`pager`、`password`、`repl`、`unknown`），**拒绝执行**，返回：
+   ```json
+   {
+     "ok": false,
+     "refused": true,
+     "error_code": "REFUSED_STATE",
+     "pre_terminal_state": "editor",
+     "error": "...（含具体恢复建议，如退出 vim 的按键序列）"
+   }
+   ```
+   > `error_code` 由统一错误增强层（`enrich_error`）追加；exec 直接返回的是 `refused: true` + `pre_terminal_state`。
+3. Agent 按 `error` 中的建议恢复终端状态（如 `send_keys("\x1b:q!\n")` 退出 vim）后重试。
+
+**设计动机**：防止命令被注入到非 shell 上下文（编辑器、分页器、密码提示、REPL），避免文件损坏或凭据泄露。门禁策略：状态明确为非 ready（包括 `unknown`）时拒绝执行——"宁可误拒、不可误注"；当检测本身失败（无法获取状态，如通信异常）时放行，保持向后兼容。`send_keys` 不设门禁（交互式操作本身就需要向非 ready 终端发送按键）。
 
 ---
 
@@ -648,7 +682,7 @@ mod tests {
 
 | # | 场景 | 命令/操作 | 预期状态 | 实际状态 | 结果 |
 |:-:|------|----------|---------|---------|:----:|
-| 1 | 部署 | `just release-linux` + `deploy_bridge` | bridge 重启成功 | `status: restarted` | ✅ |
+| 1 | 部署 | `just release-linux` + `deploy_bridge` | bridge 重启成功 | `status: restart_sent` | ✅ |
 | 2 | bash prompt | `capture_pane`（空闲 shell） | `ready` | `ready` | ✅ |
 | 3 | exec 返回 | \`exec echo "hello"\` | 含 \`pre_terminal_state\` + \`terminal_state\` | \`pre_terminal_state: "ready"\` | ✅ |
 | 4 | wait_stable | `echo "test" && sleep 1` → `wait_stable` | `ready` | `ready` | ✅ |

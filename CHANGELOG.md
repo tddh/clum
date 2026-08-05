@@ -1,5 +1,20 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- `http_server.rs`：结构体 `YunyingServer` → `ClumServer`（0.10.0 改名遗漏清理）。
+- `deploy/install.sh`：新增 rmux socket 自动检测（与 `deploy-bridge.sh` 逻辑一致，未检测到时回退 `/root/.rmux/rmux-0/default`），不再硬编码。
+- `deploy/deploy-bridge.sh`：bridge.env 补写 `RECORDING_DIR=/opt/clum/recordings`，与 `install.sh` 对齐（此前缺失导致录制落入二进制同目录的默认路径）。
+- download token TTL 接入 `server-config.yaml` 的 `token_ttl_hours`（默认 24h），不再硬编码 1 小时。
+- justfile：移除 `update-all-bridges`（硬编码 IP 清单，改用 `deploy_bridge` MCP 工具）与 `deploy-mcp`（直接用 `bash deploy/deploy-mcp.sh`）。
+
+### Removed
+- `scripts/migrate-to-yunying.sh`：agent-ops → yunying 时代的迁移脚本，已被 `scripts/migrate-to-clum.sh` 取代。
+
+### Docs
+- 全面对齐文档与 0.10.0 实现：TOOLS.md（deploy_bridge `restart_sent` 状态、`FORBIDDEN` 错误码、`resolved_pane_id`/`auto_resolved`、tunnel `group` 字段）、terminal-state-design.md（§3.3 伪代码同步、新增 §4.6 exec 安全门禁）、connect-design.md（§6.2.2 过时标注）、DEPLOY.md（bridge.env 变量清单、socket 检测表述）、SECURITY.md（TLS 表述、HTTP 端点防护）、SKILL.md（`FORBIDDEN`/`UNKNOWN` 错误码）。
+
 ## [0.10.0] — 2026-08-04
 
 **项目改名：yunying → clum**（沿革：agent-ops → yunying → clum）。这是一次破坏性改名，请仔细阅读以下迁移说明。

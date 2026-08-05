@@ -481,9 +481,9 @@ pub async fn handle_quic_stream(
 }
 ```
 
-#### 6.2.2 交互式终端处理器（`interactive.rs`）
+#### 6.2.2 交互式终端处理器（`interactive.rs`）【设计已过时】
 
-> **注**：实际实现与以下设计有重大差异。设计阶段使用 rmux SDK 的 `pane.output_stream()` + `pane.send_key()` 通过 Unix socket 直接转发，但实际实现改用 `libc::openpty()` 创建本地 PTY + spawn `rmux attach-session` 子进程方案。以下为设计参考，实际实现见 `crates/rmux-bridge/src/interactive.rs`。
+> **注**：实际实现与以下设计有重大差异。设计阶段使用 rmux SDK 的 `pane.output_stream()` + `pane.send_key()` 通过 Unix socket 直接转发，但实际实现改用 `libc::openpty()` 创建本地 PTY + spawn `rmux attach-session` 子进程方案（PTY 原样转发原始字节，天然支持鼠标事件和 TUI）。以下伪代码仅作设计参考保留，实际实现见 `crates/rmux-bridge/src/interactive.rs`。
 
 ```rust
 // crates/rmux-bridge/src/interactive.rs
@@ -1505,7 +1505,7 @@ AI 面板依赖 `opencode serve --port 14096` 作为后端：
 | 任务 | 说明 | 验收标准 |
 |------|------|---------|
 | 断线重连 | QUIC 连接迁移 + rmux session reattach | 网络切换后自动恢复 |
-| 只读模式 | `clum-cli connect --readonly` | 只能看不能输入 |
+| 只读模式 | ✅ 已实现：`clum-cli connect --readonly` | 只能看不能输入 |
 | 审计集成 | ✅ 已实现：bridge 端 PTY 录制 + 事件日志 + MCP 同步拉取 | `query_bridge_audit` / `list_recordings` |
 | 多人共享 | 多个客户端 attach 同一个 pane | 所有人看到相同输出 |
 

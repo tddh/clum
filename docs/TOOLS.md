@@ -6,7 +6,7 @@
 
 - `host` — 主机名，对应 `config/hosts.yaml` 中的 `name` 字段
 - `session_name` — 会话名（如 `s1`、`agent`）
-- `pane_id` — 窗格 ID（如 `%0`、`%4`）。大多数工具中可选，省略时自动探测 window 0 中编号最小的 pane。`close_pane`、`paste_buffer`、`respawn_pane` 必须显式指定。
+- `pane_id` — 窗格 ID（如 `%0`、`%4`）。大多数工具中可选，省略时自动探测 window 0 中编号最小的 pane。`close_pane`、`paste_buffer`、`respawn_pane` 必须显式指定。省略时响应会附带 `resolved_pane_id`（实际操作的 pane），自动探测时另有 `auto_resolved: true`。
 - `window_index` — 窗口索引，从 0 开始
 - `timeout_ms` — 超时毫秒数，默认 30000（`exec` / `batch_exec` 为 600000）
 - 返回值统一为 JSON：`{"ok": true/false, ...}`
@@ -42,6 +42,7 @@
 | `PATH_TRAVERSAL` | 路径含 `..` 被拒绝 |
 | `TUNNEL_DENIED` | 隧道目标不在 `allowed_tunnel_targets` 白名单 |
 | `AUTH_FAILED` | bridge token 不匹配 |
+| `FORBIDDEN` | API Key 分组隔离：主机不在该 key 可访问的分组内 |
 | `BRIDGE_UNREACHABLE` / `CONNECTION_LOST` | bridge 未运行 / 连接中断（可重试） |
 | `TIMEOUT` | 超时（exec 超时不杀进程，先 capture_pane 看进度再决定，勿盲目重跑） |
 | `REFUSED_STATE` | exec 安全检查拒绝（终端非 ready），`error` 含具体恢复建议 |
@@ -1130,12 +1131,15 @@ tunnel_create host="tf01" local_port=8080 remote_host="api.internal" remote_port
       "remote_host": "db-server",
       "remote_port": 5432,
       "created_at": "2026-07-03T12:34:56Z",
-      "active_connections": 3
+      "active_connections": 3,
+      "group": "tddh"
     }
   ],
   "count": 1
 }
 ```
+
+> `group` 字段仅当隧道由分组 API Key 创建时返回（标识隧道归属的分组），无分组时省略。
 
 ### `tunnel_close`
 
@@ -1183,14 +1187,14 @@ tunnel_create host="tf01" local_port=8080 remote_host="api.internal" remote_port
   "failed": 0,
   "total_duration_ms": 3899,
   "results": {
-    "tf001": { "ok": true, "status": "restarted", "output": "deployed", "exit_code": 0 }
+    "tf001": { "ok": true, "status": "restart_sent" }
   }
 }
 ```
 
 | status | 含义 |
 |--------|------|
-| `restarted` | ✅ 部署成功，服务已重启 |
+| `restart_sent` | ✅ 部署成功，重启命令已发送（fire-and-forget，不等待重连验证；用 `host_list` 的 `online` 字段确认恢复） |
 | `first_time_deploy` | systemd unit 不存在，走 SSH 首次部署 |
 | `host_not_found` | 主机不在 registry 中 |
 | `bridge_unreachable` | 无法连接目标主机 |
@@ -1198,8 +1202,6 @@ tunnel_create host="tf01" local_port=8080 remote_host="api.internal" remote_port
 | `path_mismatch` | 指定的路径与 systemd ExecStart 不一致 |
 | `upload_failed` | 文件传输失败 |
 | `replace_failed` | 替换二进制文件失败 |
-| `reconnect_failed` | 重启后无法重连 bridge |
-| `verify_failed` | 重启后验证 service 状态失败 |
 
 ---
 
