@@ -204,11 +204,37 @@ pub(crate) async fn host_set_meta(ctx: &ToolContext, args: Value) -> Result<Valu
         .await?;
 
     if !found {
+        super::audit(
+            ctx,
+            AuditAction::HostSetMeta,
+            hostname,
+            "",
+            None,
+            &format!("group={group:?} tags={tags:?} labels={labels:?}"),
+            None,
+            false,
+            0,
+            None,
+        )
+        .await;
         return Ok(
             json!({"ok": false, "error": format!("host '{}' not found in enrolled bridges", hostname)}),
         );
     }
 
+    super::audit(
+        ctx,
+        AuditAction::HostSetMeta,
+        hostname,
+        "",
+        None,
+        &format!("group={group:?} tags={tags:?} labels={labels:?}"),
+        None,
+        true,
+        0,
+        None,
+    )
+    .await;
     Ok(
         json!({"ok": true, "host": hostname, "updated": {"group": group, "tags": tags, "labels": labels}}),
     )

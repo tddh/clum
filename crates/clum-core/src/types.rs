@@ -90,6 +90,7 @@ pub enum AuditAction {
     SessionList,
     HostList,
     HostFilter,
+    HostSetMeta,
     Exec,
     ClosePane,
     CloseWindow,
