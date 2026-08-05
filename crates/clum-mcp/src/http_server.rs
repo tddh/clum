@@ -66,12 +66,12 @@ async fn authorize_download_path(
 }
 
 #[derive(Clone)]
-pub struct YunyingServer {
+pub struct ClumServer {
     ctx: Arc<ToolContext>,
     key_store: Arc<ApiKeyStore>,
 }
 
-impl ServerHandler for YunyingServer {
+impl ServerHandler for ClumServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_instructions(crate::schema::instructions())
@@ -234,6 +234,7 @@ fn build_download_routes(
     mut app: Router,
     static_dir: Option<std::path::PathBuf>,
     download_tokens: DownloadTokenMap,
+    token_ttl_hours: u64,
 ) -> Router {
     if let Some(dir) = static_dir {
         let dir = Arc::new(dir);
@@ -274,14 +275,16 @@ fn build_download_routes(
                 getrandom::getrandom(&mut bytes).expect("CSPRNG failed");
                 let token = format!("dl_{}", hex::encode(bytes));
                 let hash = hex::encode(Sha256::digest(token.as_bytes()));
-                let expires = std::time::Instant::now() + std::time::Duration::from_secs(3600);
+                let ttl_secs = token_ttl_hours * 3600;
+                let expires = std::time::Instant::now() + std::time::Duration::from_secs(ttl_secs);
                 tokens.write().await.insert(hash, expires);
-                axum::Json(serde_json::json!({"token": token, "expires_in_secs": 3600}))
+                axum::Json(serde_json::json!({"token": token, "expires_in_secs": ttl_secs}))
             }
         }),
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_http_server(
     ctx: Arc<ToolContext>,
     listen_addr: &str,
@@ -290,6 +293,7 @@ pub async fn run_http_server(
     static_dir: Option<std::path::PathBuf>,
     tls_cert: Option<String>,
     tls_key: Option<String>,
+    token_ttl_hours: u64,
 ) -> anyhow::Result<()> {
     let config = StreamableHttpServerConfig::default()
         .with_json_response(true)
@@ -298,7 +302,7 @@ pub async fn run_http_server(
     let key_store_for_auth = Arc::clone(&key_store);
     let service = StreamableHttpService::new(
         move || {
-            Ok(YunyingServer {
+            Ok(ClumServer {
                 ctx: Arc::clone(&ctx),
                 key_store: Arc::clone(&key_store),
             })
@@ -311,7 +315,7 @@ pub async fn run_http_server(
         Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
 
     let app = Router::new().nest_service("/mcp", service);
-    let app = build_download_routes(app, static_dir, Arc::clone(&download_tokens));
+    let app = build_download_routes(app, static_dir, Arc::clone(&download_tokens), token_ttl_hours);
 
     let auth_state = AuthState {
         store: key_store_for_auth,
@@ -447,6 +451,7 @@ mod tests {
             Router::new(),
             Some(static_dir),
             Arc::clone(&download_tokens),
+            1,
         );
         let auth_state = AuthState {
             store: key_store,

@@ -70,19 +70,6 @@ deploy-bridge host mode='hub':
 update-bridge host:
     bash deploy/update-bridge.sh ./target/x86_64-unknown-linux-musl/release/rmux-bridge {{host}}
 
-# 批量更新所有 bridge 二进制
-update-all-bridges: release-linux
-    #!/bin/bash
-    BRIDGE=./target/x86_64-unknown-linux-musl/release/rmux-bridge
-    for host in root@10.220.71.1 root@10.220.71.28 root@10.220.71.31 root@10.220.71.27 root@10.220.71.29 root@10.220.71.30 root@10.220.71.103 root@10.220.71.102 root@10.220.71.101; do
-        echo "=== Updating $host ==="
-        bash deploy/update-bridge.sh "$BRIDGE" "$host" || echo "FAILED: $host"
-    done
-
-# 部署/更新 MCP server
-deploy-mcp host='root@10.220.71.1':
-    bash deploy/deploy-mcp.sh ./target/x86_64-unknown-linux-musl/release/clum-mcp {{host}}
-
 # (deprecated) 旧部署脚本，使用 deploy-bridge 代替
 deploy host token='{{token}}':
     bash deploy/generate-certs.sh certs $(echo {{host}} | sed 's/.*@//' | cut -d: -f1)

@@ -61,6 +61,18 @@ echo ">>> Downloading CA certificate..."
 curl -fsSLk -H "Authorization: Bearer ${BRIDGE_TOKEN}" \
     "${BASE_URL}/releases/ca.crt" -o /etc/clum/ca.crt
 
+# Detect rmux socket (same logic as deploy-bridge.sh), fall back to standard path
+RMUX_SOCKET=""
+for d in /run/rmux "$HOME/.rmux" /tmp; do
+    s=$(ls "$d"/rmux-*/default 2>/dev/null | head -1)
+    if [ -n "$s" ]; then
+        RMUX_SOCKET="$s"
+        break
+    fi
+done
+RMUX_SOCKET="${RMUX_SOCKET:-/root/.rmux/rmux-0/default}"
+echo ">>> RMUX socket: ${RMUX_SOCKET}"
+
 # Write bridge.env
 cat > /etc/clum/bridge.env << EOF
 BRIDGE_AUTH_TOKEN=${BRIDGE_TOKEN}
@@ -69,7 +81,7 @@ CLUM_CA_CERT=/etc/clum/ca.crt
 RECORDING_ENABLED=true
 RECORDING_DIR=/opt/clum/recordings
 BRIDGE_AUDIT_DB=/opt/clum/bridge_events.db
-RMUX_SOCKET=/root/.rmux/rmux-0/default
+RMUX_SOCKET=${RMUX_SOCKET}
 EOF
 
 # Install rmux daemon if not present

@@ -83,6 +83,7 @@ RMUX_SOCKET=$RMUX_SOCK
 
 # Recording
 RECORDING_ENABLED=true
+RECORDING_DIR=/opt/clum/recordings
 BRIDGE_AUDIT_DB=/opt/clum/bridge_events.db
 "
 

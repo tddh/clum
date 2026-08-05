@@ -133,6 +133,7 @@ async fn main() -> anyhow::Result<()> {
     let file_recordings_dir = file_config.resolve_recordings_dir();
     let file_static_dir = file_config.resolve_static_dir();
     let file_bridge_tokens = file_config.bridge_token_map();
+    let token_ttl_hours = file_config.token_ttl_hours;
 
     let listen = cli.listen.or(Some(file_config.listen));
     let hosts_file = cli
@@ -341,6 +342,7 @@ async fn main() -> anyhow::Result<()> {
                 static_dir,
                 cert,
                 key,
+                token_ttl_hours,
             )
             .await
         }
