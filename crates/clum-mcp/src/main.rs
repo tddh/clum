@@ -258,7 +258,7 @@ async fn main() -> anyhow::Result<()> {
         audit_db: audit_db.clone(),
         agent_name: Arc::new(std::sync::Mutex::new("unknown".to_string())),
         caller_group: Arc::new(std::sync::Mutex::new(None)),
-        tunnel_manager: Arc::new(tunnel::TunnelManager::new()),
+        tunnel_manager: Arc::new(tunnel::ForwardManager::new()),
         stream_manager: Arc::new(stream::StreamManager::new()),
         recordings_dir,
         bridge_registry: Arc::clone(&bridge_registry),

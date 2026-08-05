@@ -85,7 +85,7 @@ enum Commands {
     },
 
     /// Create a local port forward to a remote service (auto-reconnects on network loss)
-    Tunnel {
+    Forward {
         host: String,
 
         /// Local port to listen on
@@ -307,7 +307,7 @@ async fn main() -> anyhow::Result<()> {
             conn.close(0u32.into(), b"done");
             result
         }
-        Commands::Tunnel {
+        Commands::Forward {
             host,
             local,
             remote,

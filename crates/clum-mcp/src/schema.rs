@@ -610,8 +610,8 @@ pub fn tools_definition() -> Value {
                 }
             },
             {
-                "name": "tunnel_create",
-                "description": "Create a port forwarding tunnel through an encrypted QUIC channel. Central server mode: the TCP listener is created on the SERVER side, not the client machine. For client-side local port forwarding use clum-cli tunnel. Opens a TCP listener on the specified port that forwards all connections to a remote host:port via the bridge. The remote_host can be an internal address (e.g., 127.0.0.1, 10.x.x.x) not directly reachable from your machine. If the host has 'allowed_tunnel_targets' configured in hosts.yaml, only matching targets are allowed (glob patterns supported). Returns a tunnel_id that can be used with tunnel_close. Tunnels persist until explicitly closed or the MCP server restarts.",
+                "name": "forward_create",
+                "description": "Create a port forwarding tunnel through an encrypted QUIC channel. Central server mode: the TCP listener is created on the SERVER side, not the client machine. For client-side local port forwarding use clum-cli tunnel. Opens a TCP listener on the specified port that forwards all connections to a remote host:port via the bridge. The remote_host can be an internal address (e.g., 127.0.0.1, 10.x.x.x) not directly reachable from your machine. If the host has 'allowed_forward_targets' configured in hosts.yaml, only matching targets are allowed (glob patterns supported). Returns a forward_id that can be used with forward_close. Tunnels persist until explicitly closed or the MCP server restarts.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -625,8 +625,8 @@ pub fn tools_definition() -> Value {
                 }
             },
             {
-                "name": "tunnel_list",
-                "description": "List all active port forwarding tunnels. Returns an array of tunnel objects with tunnel_id, local address/port, remote host/port, and status. Use this to discover existing tunnels before creating new ones, or to verify tunnel state. Tunnels persist until explicitly closed or the MCP server restarts.",
+                "name": "forward_list",
+                "description": "List all active port forwarding tunnels. Returns an array of tunnel objects with forward_id, local address/port, remote host/port, and status. Use this to discover existing tunnels before creating new ones, or to verify tunnel state. Tunnels persist until explicitly closed or the MCP server restarts.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {},
@@ -634,14 +634,14 @@ pub fn tools_definition() -> Value {
                 }
             },
             {
-                "name": "tunnel_close",
-                "description": "Close an active port forwarding tunnel by its ID. The tunnel stops accepting new connections and existing connections are terminated. Use tunnel_list to discover tunnel IDs. Once closed, the tunnel cannot be reopened — create a new tunnel with tunnel_create if needed.",
+                "name": "forward_close",
+                "description": "Close an active port forwarding tunnel by its ID. The tunnel stops accepting new connections and existing connections are terminated. Use forward_list to discover tunnel IDs. Once closed, the tunnel cannot be reopened — create a new tunnel with forward_create if needed.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "tunnel_id": { "type": "string", "description": "Tunnel ID returned by tunnel_create (e.g., 'tunnel_abc123')" }
+                        "forward_id": { "type": "string", "description": "Tunnel ID returned by forward_create (e.g., 'forward_abc123')" }
                     },
-                    "required": ["tunnel_id"]
+                    "required": ["forward_id"]
                 }
             },
             {

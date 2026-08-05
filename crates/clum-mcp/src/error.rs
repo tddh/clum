@@ -68,7 +68,7 @@ pub fn classify_message(msg: &str) -> Classified {
         );
     }
     if has("tunnel not found") {
-        return c("TUNNEL_NOT_FOUND", "tunnel_list 确认隧道 ID", false);
+        return c("FORWARD_NOT_FOUND", "forward_list 确认转发 ID", false);
     }
     if has("pane still active") {
         return c(

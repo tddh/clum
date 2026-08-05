@@ -7,7 +7,7 @@ use crate::audit;
 use crate::recording_sync;
 use crate::router::HostRouter;
 use crate::stream::StreamManager;
-use crate::tunnel::TunnelManager;
+use crate::tunnel::ForwardManager;
 
 mod batch;
 mod bridge_audit;
@@ -35,7 +35,7 @@ pub struct ToolContext {
     // own API key, with no shared mutable state between requests.
     pub agent_name: Arc<std::sync::Mutex<String>>,
     pub caller_group: Arc<std::sync::Mutex<Option<String>>>,
-    pub tunnel_manager: Arc<TunnelManager>,
+    pub tunnel_manager: Arc<ForwardManager>,
     pub stream_manager: Arc<StreamManager>,
     pub recordings_dir: PathBuf,
     #[allow(dead_code)]
@@ -200,9 +200,9 @@ pub async fn execute_tool(
         "batch_exec" => batch::batch_exec(ctx, args, progress).await,
         "batch_upload" => batch::batch_upload(ctx, args, progress).await,
         "batch_download" => batch::batch_download(ctx, args, progress).await,
-        "tunnel_create" => tunnel::tunnel_create(ctx, args).await,
-        "tunnel_list" => tunnel::tunnel_list(ctx).await,
-        "tunnel_close" => tunnel::tunnel_close(ctx, args).await,
+            "forward_create" => tunnel::forward_create(ctx, args).await,
+            "forward_list" => tunnel::forward_list(ctx).await,
+            "forward_close" => tunnel::forward_close(ctx, args).await,
         "find_panes" => discovery::find_panes(ctx, args).await,
         "find_sessions" => discovery::find_sessions(ctx, args).await,
         "get_pane_title" => pane::get_pane_title(ctx, args).await,

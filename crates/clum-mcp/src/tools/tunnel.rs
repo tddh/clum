@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 use super::ToolContext;
 use clum_core::types::AuditAction;
 
-pub(crate) async fn tunnel_create(ctx: &ToolContext, args: Value) -> Result<Value> {
+pub(crate) async fn forward_create(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
     let local_port = args["local_port"]
         .as_u64()
@@ -48,7 +48,7 @@ pub(crate) async fn tunnel_create(ctx: &ToolContext, args: Value) -> Result<Valu
             );
             super::audit(
                 ctx,
-                AuditAction::TunnelCreate,
+                AuditAction::ForwardCreate,
                 host_name,
                 "",
                 None,
@@ -73,7 +73,7 @@ pub(crate) async fn tunnel_create(ctx: &ToolContext, args: Value) -> Result<Valu
             );
             super::audit(
                 ctx,
-                AuditAction::TunnelCreate,
+                AuditAction::ForwardCreate,
                 host_name,
                 "",
                 None,
@@ -89,7 +89,7 @@ pub(crate) async fn tunnel_create(ctx: &ToolContext, args: Value) -> Result<Valu
     }
 }
 
-pub(crate) async fn tunnel_list(ctx: &ToolContext) -> Result<Value> {
+pub(crate) async fn forward_list(ctx: &ToolContext) -> Result<Value> {
     let mut tunnels = ctx.tunnel_manager.list().await;
     let caller_group = ctx
         .caller_group
@@ -101,7 +101,7 @@ pub(crate) async fn tunnel_list(ctx: &ToolContext) -> Result<Value> {
     }
     super::audit(
         ctx,
-        AuditAction::TunnelList,
+        AuditAction::ForwardList,
         "",
         "",
         None,
@@ -119,7 +119,7 @@ pub(crate) async fn tunnel_list(ctx: &ToolContext) -> Result<Value> {
     }))
 }
 
-pub(crate) async fn tunnel_close(ctx: &ToolContext, args: Value) -> Result<Value> {
+pub(crate) async fn forward_close(ctx: &ToolContext, args: Value) -> Result<Value> {
     let tunnel_id = args["tunnel_id"].as_str().context("missing 'tunnel_id'")?;
 
     let caller_group = ctx
@@ -139,7 +139,7 @@ pub(crate) async fn tunnel_close(ctx: &ToolContext, args: Value) -> Result<Value
     let result = ctx.tunnel_manager.close(tunnel_id).await;
     super::audit(
         ctx,
-        AuditAction::TunnelClose,
+        AuditAction::ForwardClose,
         "",
         "",
         None,

@@ -77,11 +77,11 @@ impl Drop for Tunnel {
     }
 }
 
-pub struct TunnelManager {
+pub struct ForwardManager {
     tunnels: Arc<Mutex<HashMap<String, Tunnel>>>,
 }
 
-impl TunnelManager {
+impl ForwardManager {
     pub fn new() -> Self {
         Self {
             tunnels: Arc::new(Mutex::new(HashMap::new())),
