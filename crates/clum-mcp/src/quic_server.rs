@@ -29,7 +29,7 @@ pub struct QuicServerConfig {
     pub api_key_store: Option<Arc<crate::api_keys::ApiKeyStore>>,
     pub db_path: std::path::PathBuf,
     pub router: Arc<crate::router::HostRouter>,
-    pub ca_cert_path: String,
+    pub ca_cert_path: Option<String>,
     pub audit_db: Arc<crate::audit::AuditDb>,
 }
 
@@ -143,7 +143,7 @@ async fn handle_connection(
     api_key_store: Option<Arc<crate::api_keys::ApiKeyStore>>,
     last_agents: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
     router: Arc<crate::router::HostRouter>,
-    ca_cert_path: String,
+    ca_cert_path: Option<String>,
     audit_db: Arc<crate::audit::AuditDb>,
     host_groups: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
 ) -> anyhow::Result<()> {
@@ -414,7 +414,7 @@ async fn handle_agent_connection(
     api_key_store: Option<Arc<crate::api_keys::ApiKeyStore>>,
     last_agents: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
     router: Arc<crate::router::HostRouter>,
-    ca_cert_path: String,
+    ca_cert_path: Option<String>,
     audit_db: Arc<crate::audit::AuditDb>,
     host_groups: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
 ) -> anyhow::Result<()> {
@@ -488,7 +488,7 @@ async fn handle_agent_connection(
             .as_deref()
             .with_context(|| format!("host '{host}': bridge_token not configured"))?;
         let (direct_conn, _auth_send, _auth_recv) =
-            crate::transport::connect_to_bridge_quic(addr, token, &ca_cert_path)
+            crate::transport::connect_to_bridge_quic(addr, token, ca_cert_path.as_deref())
                 .await
                 .with_context(|| format!("direct connect to {}:{} failed", host, addr))?;
         direct_conn

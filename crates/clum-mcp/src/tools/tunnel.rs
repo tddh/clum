@@ -34,7 +34,7 @@ pub(crate) async fn tunnel_create(ctx: &ToolContext, args: Value) -> Result<Valu
             local_port,
             remote_host.clone(),
             remote_port,
-            &ctx.ca_cert_path,
+            ctx.ca_cert_path.as_deref(),
             &ctx.bridge_registry,
             caller_group,
         )

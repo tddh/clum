@@ -19,19 +19,12 @@ fn build_transport_config() -> quinn::TransportConfig {
 
 pub async fn connect_via_server(
     server_addr: &str,
-    ca_cert_path: &str,
+    ca_cert_path: Option<&str>,
     host: &str,
     api_key: Option<&str>,
     purpose: &str,
 ) -> Result<quinn::Connection> {
-    let ca_pem = std::fs::read(ca_cert_path)
-        .with_context(|| format!("failed to read CA cert: {}", ca_cert_path))?;
-
-    let mut roots = rustls::RootCertStore::empty();
-    for cert in rustls_pemfile::certs(&mut ca_pem.as_slice()) {
-        let cert = cert?;
-        roots.add(cert)?;
-    }
+    let roots = clum_core::build_root_store(ca_cert_path)?;
 
     let mut tls_config = rustls::ClientConfig::builder()
         .with_root_certificates(roots)
@@ -90,18 +83,11 @@ pub async fn connect_via_server(
 pub async fn connect_to_bridge_quic(
     bridge_addr: &str,
     bridge_token: &str,
-    ca_cert_path: &str,
+    ca_cert_path: Option<&str>,
 ) -> Result<quinn::Connection> {
-    let ca_pem = std::fs::read(ca_cert_path)
-        .with_context(|| format!("failed to read CA cert: {}", ca_cert_path))?;
+    let roots = clum_core::build_root_store(ca_cert_path)?;
 
-    let mut roots = rustls::RootCertStore::empty();
-    for cert in rustls_pemfile::certs(&mut ca_pem.as_slice()) {
-        let cert = cert?;
-        roots.add(cert)?;
-    }
-
-    let tls_config = rustls::ClientConfig::builder()
+    let mut tls_config = rustls::ClientConfig::builder()
         .with_root_certificates(roots)
         .with_no_client_auth();
 
@@ -137,7 +123,7 @@ pub async fn connect_to_bridge_quic(
 
 pub async fn find_lowest_pane(
     config: &HostConfig,
-    ca_cert_path: &str,
+    ca_cert_path: Option<&str>,
     session_name: &str,
 ) -> Result<String> {
     let addr = config

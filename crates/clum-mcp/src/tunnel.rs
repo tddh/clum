@@ -96,7 +96,7 @@ impl TunnelManager {
         local_port: u16,
         remote_host: String,
         remote_port: u16,
-        ca_cert_path: &str,
+        ca_cert_path: Option<&str>,
         registry: &std::sync::Arc<crate::registry::BridgeRegistry>,
         group: Option<String>,
     ) -> Result<TunnelInfo> {

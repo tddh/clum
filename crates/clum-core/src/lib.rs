@@ -3,6 +3,8 @@
 //! This crate provides the foundational types used across the clum ecosystem,
 //! including host configuration, session/panel metadata, and audit event records.
 
+use anyhow::Context;
+
 pub mod types;
 
 pub use types::*;
@@ -19,6 +21,30 @@ pub fn inject_env_fallback(new_key: &str, legacy_key: &str) {
         if let Some(v) = std::env::var_os(legacy_key) {
             std::env::set_var(new_key, v);
             eprintln!("[warn] {legacy_key} is deprecated; use {new_key} instead");
+        }
+    }
+}
+
+/// Build a TLS root certificate store. When `ca_cert_path` is provided, load
+/// the custom CA file (self-signed / private PKI). When `None`, fall back to
+/// the system WebPKI roots so public-CA certificates (Let's Encrypt, etc.) are
+/// trusted without a local CA file.
+pub fn build_root_store(ca_cert_path: Option<&str>) -> anyhow::Result<rustls::RootCertStore> {
+    match ca_cert_path {
+        Some(path) => {
+            let pem =
+                std::fs::read(path).with_context(|| format!("failed to read CA cert: {path}"))?;
+            let certs: Vec<_> = rustls_pemfile::certs(&mut pem.as_slice())
+                .collect::<std::result::Result<Vec<_>, _>>()
+                .context("failed to parse CA cert PEM")?;
+            let mut store = rustls::RootCertStore::empty();
+            store.add_parsable_certificates(certs);
+            Ok(store)
+        }
+        None => {
+            let mut store = rustls::RootCertStore::empty();
+            store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+            Ok(store)
         }
     }
 }

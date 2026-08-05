@@ -18,8 +18,8 @@ struct Cli {
     #[arg(long, default_value = "~/.clum/hosts.yaml")]
     hosts_file: String,
 
-    #[arg(long, default_value = "~/.clum/ca.crt")]
-    ca_cert: String,
+    #[arg(long, env = "CLUM_CA_CERT")]
+    ca_cert: Option<String>,
 
     /// Central server address. If set, connect via server relay instead of direct to bridge.
     #[arg(long, env = "CLUM_SERVER_ADDR")]
@@ -126,7 +126,7 @@ fn load_host_config(hosts_file: &str, host_name: &str) -> anyhow::Result<clum_co
 
 async fn get_connection(
     server_addr: &Option<String>,
-    ca_cert: &str,
+    ca_cert: Option<&str>,
     api_key: &Option<String>,
     hosts_file: &str,
     host: &str,
@@ -159,7 +159,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
     let mut cli = Cli::parse();
     cli.hosts_file = expand_tilde(&cli.hosts_file);
-    cli.ca_cert = expand_tilde(&cli.ca_cert);
+    cli.ca_cert = cli.ca_cert.as_deref().map(expand_tilde);
 
     let server_addr = cli.server_addr.clone();
     let ca_cert = cli.ca_cert.clone();
@@ -178,7 +178,7 @@ async fn main() -> anyhow::Result<()> {
                 let pane = pane.unwrap_or_else(|| "%0".to_string());
                 crate::tui::run_connect_with_ai(
                     None,
-                    &cli.ca_cert,
+                    cli.ca_cert.as_deref(),
                     &session,
                     &pane,
                     readonly,
@@ -191,11 +191,11 @@ async fn main() -> anyhow::Result<()> {
                 let config = load_host_config(&cli.hosts_file, &host)?;
                 let pane = match pane {
                     Some(p) => p,
-                    None => connect::find_lowest_pane(&config, &cli.ca_cert, &session).await?,
+                    None => connect::find_lowest_pane(&config, cli.ca_cert.as_deref(), &session).await?,
                 };
                 crate::tui::run_connect_with_ai(
                     Some(&config),
-                    &cli.ca_cert,
+                    cli.ca_cert.as_deref(),
                     &session,
                     &pane,
                     readonly,
@@ -207,7 +207,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Commands::List { host } => {
-            let conn = get_connection(&server_addr, &ca_cert, &api_key, &hosts_file, &host, "list")
+            let conn = get_connection(&server_addr, ca_cert.as_deref(), &api_key, &hosts_file, &host, "list")
                 .await?;
             let (mut send, mut recv) = conn.open_bi().await?;
             send.write_all(&[0x01]).await?;
@@ -278,7 +278,7 @@ async fn main() -> anyhow::Result<()> {
         } => {
             let conn = get_connection(
                 &server_addr,
-                &ca_cert,
+                ca_cert.as_deref().as_deref(),
                 &api_key,
                 &hosts_file,
                 &host,
@@ -296,7 +296,7 @@ async fn main() -> anyhow::Result<()> {
         } => {
             let conn = get_connection(
                 &server_addr,
-                &ca_cert,
+                ca_cert.as_deref().as_deref(),
                 &api_key,
                 &hosts_file,
                 &host,
@@ -320,7 +320,7 @@ async fn main() -> anyhow::Result<()> {
             let give_up_after = tunnel::parse_duration(&give_up_after)?;
             tunnel::run(
                 &server_addr,
-                &ca_cert,
+                ca_cert.as_deref().as_deref(),
                 &api_key,
                 &hosts_file,
                 &host,

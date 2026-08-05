@@ -15,6 +15,7 @@ struct UnifiedHost {
     bridge_addr: Option<String>,
     online: bool,
     via: &'static str,
+    remote_addr: Option<String>,
 }
 
 async fn build_unified_hosts(ctx: &ToolContext) -> Vec<UnifiedHost> {
@@ -42,6 +43,7 @@ async fn build_unified_hosts(ctx: &ToolContext) -> Vec<UnifiedHost> {
             bridge_addr: None,
             online: info.online,
             via: "enrolled",
+            remote_addr: info.remote_addr.clone(),
         });
     }
 
@@ -62,6 +64,7 @@ async fn build_unified_hosts(ctx: &ToolContext) -> Vec<UnifiedHost> {
             bridge_addr: h.bridge_addr,
             online: false,
             via: "direct",
+            remote_addr: None,
         });
     }
 
@@ -78,6 +81,7 @@ async fn build_unified_hosts(ctx: &ToolContext) -> Vec<UnifiedHost> {
             bridge_addr: None,
             online: false,
             via: "enrolled",
+            remote_addr: None,
         });
     }
 
@@ -91,6 +95,7 @@ fn host_to_json(h: &UnifiedHost) -> Value {
         "tags": h.tags,
         "labels": h.labels,
         "bridge_addr": h.bridge_addr,
+        "remote_addr": h.remote_addr,
         "online": if h.online { json!(true) } else { Value::Null },
         "via": h.via,
     })

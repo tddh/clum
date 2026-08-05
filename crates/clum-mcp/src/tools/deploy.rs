@@ -99,7 +99,7 @@ pub(crate) async fn deploy_bridge(
                 })),
             };
 
-            let mut stream = match connect_via_registry(&registry, &host, &ca_cert).await {
+            let mut stream = match connect_via_registry(&registry, &host, ca_cert.as_deref()).await {
                 Ok(s) => s,
                 Err(e) => return (host_name.clone(), json!({
                     "ok": false, "status": "bridge_unreachable",
@@ -154,7 +154,7 @@ pub(crate) async fn deploy_bridge(
             let upload_new_path = format!("{}.new", remote_path);
             let upload_result = crate::files::upload_file(
                 &host, &binary_path, &upload_new_path,
-                &ca_cert,
+                ca_cert.as_deref(),
                 crate::files::OverwriteMode::Overwrite, &[],
                 &mut task_progress,
                 &registry,

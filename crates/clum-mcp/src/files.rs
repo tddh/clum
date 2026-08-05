@@ -43,7 +43,7 @@ pub struct FileResult {
 async fn get_conn(
     host: &HostConfig,
     registry: &Arc<BridgeRegistry>,
-    ca_cert_path: &str,
+    ca_cert_path: Option<&str>,
 ) -> Result<quinn::Connection> {
     if let Some(bridge) = registry.get(&host.name).await {
         if bridge.conn.close_reason().is_none() {
@@ -68,7 +68,7 @@ pub async fn upload_file(
     host: &HostConfig,
     local_path: &str,
     remote_path: &str,
-    ca_cert_path: &str,
+    ca_cert_path: Option<&str>,
     overwrite: OverwriteMode,
     exclude: &[String],
     progress: &mut crate::progress::ProgressReporter,
@@ -113,7 +113,7 @@ async fn upload_single(
     host: &HostConfig,
     local_path: &str,
     remote_path: &str,
-    ca_cert_path: &str,
+    ca_cert_path: Option<&str>,
     overwrite: OverwriteMode,
     progress: &mut crate::progress::ProgressReporter,
     registry: &Arc<BridgeRegistry>,
@@ -166,7 +166,7 @@ async fn upload_dir(
     host: &HostConfig,
     local_path: &str,
     remote_base: &str,
-    ca_cert_path: &str,
+    ca_cert_path: Option<&str>,
     overwrite: OverwriteMode,
     exclude: &[String],
     progress: &crate::progress::ProgressReporter,
@@ -256,7 +256,7 @@ pub async fn download_file(
     host: &HostConfig,
     remote_path: &str,
     local_path: &str,
-    ca_cert_path: &str,
+    ca_cert_path: Option<&str>,
     progress: &mut crate::progress::ProgressReporter,
     registry: &Arc<BridgeRegistry>,
 ) -> Result<Vec<FileResult>> {

@@ -315,7 +315,12 @@ pub async fn run_http_server(
         Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
 
     let app = Router::new().nest_service("/mcp", service);
-    let app = build_download_routes(app, static_dir, Arc::clone(&download_tokens), token_ttl_hours);
+    let app = build_download_routes(
+        app,
+        static_dir,
+        Arc::clone(&download_tokens),
+        token_ttl_hours,
+    );
 
     let auth_state = AuthState {
         store: key_store_for_auth,

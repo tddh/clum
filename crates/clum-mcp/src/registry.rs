@@ -31,7 +31,6 @@ impl BridgeConn {
     }
 }
 
-#[allow(dead_code)]
 pub struct BridgeInfo {
     pub hostname: String,
     pub tags: Vec<String>,
@@ -40,6 +39,7 @@ pub struct BridgeInfo {
     pub os_info: String,
     pub online: bool,
     pub registered_secs_ago: u64,
+    pub remote_addr: Option<String>,
 }
 
 pub struct BridgeRegistry {
@@ -93,6 +93,7 @@ impl BridgeRegistry {
                 os_info: c.os_info.clone(),
                 online: c.conn.close_reason().is_none() && hb_elapsed < heartbeat_timeout,
                 registered_secs_ago: c.registered_at.elapsed().as_secs(),
+                remote_addr: Some(c.conn.remote_address().to_string()),
             });
         }
         result

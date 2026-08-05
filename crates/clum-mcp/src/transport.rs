@@ -2,8 +2,6 @@
 //! instances. Requires CA-verified TLS handshakes and token-based authentication.
 
 use anyhow::{Context, Result};
-use rustls::pki_types::CertificateDer;
-use std::io::BufReader;
 use std::pin::Pin;
 use std::task::{Context as TaskContext, Poll};
 use std::time::Duration;
@@ -40,7 +38,7 @@ fn build_transport_config(
 pub async fn connect_to_bridge_quic(
     bridge_addr: &str,
     auth_token: &str,
-    ca_cert_path: &str,
+    ca_cert_path: Option<&str>,
 ) -> anyhow::Result<(quinn::Connection, quinn::SendStream, quinn::RecvStream)> {
     let addr: std::net::SocketAddr = bridge_addr
         .parse()
@@ -99,7 +97,7 @@ pub async fn connect_to_bridge_quic(
 pub async fn connect_to_bridge_quic_tunnel(
     bridge_addr: &str,
     auth_token: &str,
-    ca_cert_path: &str,
+    ca_cert_path: Option<&str>,
 ) -> anyhow::Result<(quinn::Connection, quinn::SendStream, quinn::RecvStream)> {
     let addr: std::net::SocketAddr = bridge_addr
         .parse()
@@ -144,22 +142,10 @@ pub async fn connect_to_bridge_quic_tunnel(
     Ok((conn, send, recv))
 }
 
-fn build_quic_client_config(ca_cert_path: &str) -> anyhow::Result<rustls::ClientConfig> {
-    let ca_bytes = std::fs::read(ca_cert_path)
-        .with_context(|| format!("failed to read CA cert: {}", ca_cert_path))?;
-    let mut reader = BufReader::new(ca_bytes.as_slice());
-    let certs: Vec<CertificateDer> = rustls_pemfile::certs(&mut reader)
-        .filter_map(|r| r.ok())
-        .collect();
-    if certs.is_empty() {
-        anyhow::bail!("no valid certificates found in {}", ca_cert_path);
-    }
-    let mut root_store = rustls::RootCertStore::empty();
-    for cert in certs {
-        root_store
-            .add(cert)
-            .with_context(|| format!("failed to add CA cert from {}", ca_cert_path))?;
-    }
+fn build_quic_client_config(
+    ca_cert_path: Option<&str>,
+) -> anyhow::Result<rustls::ClientConfig> {
+    let root_store = clum_core::build_root_store(ca_cert_path)?;
     Ok(rustls::ClientConfig::builder()
         .with_root_certificates(root_store)
         .with_no_client_auth())
@@ -238,7 +224,7 @@ impl AsyncWrite for BridgeStream {
 pub async fn connect_to_bridge_hybrid(
     bridge_addr: &str,
     auth_token: &str,
-    ca_cert_path: &str,
+    ca_cert_path: Option<&str>,
     max_retries: u32,
 ) -> Result<BridgeStream> {
     let mut attempt = 0;
@@ -298,7 +284,7 @@ pub async fn recv_json_frame<S: tokio::io::AsyncReadExt + Unpin>(
 pub async fn connect_to_bridge_quic_stream(
     bridge_addr: &str,
     auth_token: &str,
-    ca_cert_path: &str,
+    ca_cert_path: Option<&str>,
     idle_timeout_secs: u64,
     keepalive_secs: u64,
 ) -> anyhow::Result<(quinn::Connection, quinn::SendStream, quinn::RecvStream)> {
@@ -358,7 +344,7 @@ pub async fn connect_to_bridge_quic_stream(
 pub async fn connect_to_bridge_hybrid_stream(
     bridge_addr: &str,
     auth_token: &str,
-    ca_cert_path: &str,
+    ca_cert_path: Option<&str>,
     max_retries: u32,
     idle_timeout_secs: u64,
     keepalive_secs: u64,
@@ -403,7 +389,7 @@ pub async fn connect_to_host(
     ctx: &crate::tools::ToolContext,
     host: &clum_core::types::HostConfig,
 ) -> Result<BridgeStream> {
-    connect_via_registry(&ctx.bridge_registry, host, &ctx.ca_cert_path).await
+    connect_via_registry(&ctx.bridge_registry, host, ctx.ca_cert_path.as_deref()).await
 }
 
 pub async fn connect_to_host_stream(
@@ -434,7 +420,7 @@ pub async fn connect_to_host_stream(
             connect_to_bridge_hybrid_stream(
                 addr,
                 token,
-                &ctx.ca_cert_path,
+                ctx.ca_cert_path.as_deref(),
                 3,
                 idle_timeout_secs,
                 keepalive_secs,
@@ -452,7 +438,7 @@ pub async fn connect_to_host_stream(
 pub async fn connect_via_registry(
     registry: &std::sync::Arc<crate::registry::BridgeRegistry>,
     host: &clum_core::types::HostConfig,
-    ca_cert_path: &str,
+    ca_cert_path: Option<&str>,
 ) -> Result<BridgeStream> {
     if let Some(bridge) = registry.get(&host.name).await {
         if bridge.conn.close_reason().is_none() {

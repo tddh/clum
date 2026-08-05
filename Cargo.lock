@@ -474,9 +474,13 @@ dependencies = [
 name = "clum-core"
 version = "0.10.0"
 dependencies = [
+ "anyhow",
  "chrono",
+ "rustls",
+ "rustls-pemfile",
  "serde",
  "uuid",
+ "webpki-roots 1.0.9",
 ]
 
 [[package]]

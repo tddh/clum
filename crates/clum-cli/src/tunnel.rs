@@ -30,7 +30,7 @@ const MAX_BACKOFF: Duration = Duration::from_secs(30);
 #[allow(clippy::too_many_arguments)] // mirrors get_connection's conn params + tunnel args
 pub async fn run(
     server_addr: &Option<String>,
-    ca_cert: &str,
+    ca_cert: Option<&str>,
     api_key: &Option<String>,
     hosts_file: &str,
     host: &str,

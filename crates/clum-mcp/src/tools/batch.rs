@@ -80,7 +80,7 @@ pub(crate) async fn batch_exec(
                 }
             };
 
-            let mut stream = match connect_via_registry(&registry, &host, &ca_cert).await {
+            let mut stream = match connect_via_registry(&registry, &host, ca_cert.as_deref()).await {
                 Ok(s) => s,
                 Err(e) => {
                     let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
@@ -260,7 +260,7 @@ pub(crate) async fn batch_upload(
                 &host,
                 &local,
                 &remote,
-                &ca_cert,
+                ca_cert.as_deref(),
                 overwrite,
                 &exclude,
                 &mut task_progress,
@@ -381,7 +381,7 @@ pub(crate) async fn batch_download(
                 &host,
                 &remote,
                 &local_path,
-                &ca_cert,
+                ca_cert.as_deref(),
                 &mut task_progress,
                 &registry,
             )

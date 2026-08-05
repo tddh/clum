@@ -36,7 +36,7 @@ pub(crate) async fn file_upload(
         &host,
         local_path,
         remote_path,
-        &ctx.ca_cert_path,
+        ctx.ca_cert_path.as_deref(),
         overwrite,
         &exclude,
         progress,
@@ -88,7 +88,7 @@ pub(crate) async fn file_download(
         &host,
         remote_path,
         local_path,
-        &ctx.ca_cert_path,
+        ctx.ca_cert_path.as_deref(),
         progress,
         &ctx.bridge_registry,
     )

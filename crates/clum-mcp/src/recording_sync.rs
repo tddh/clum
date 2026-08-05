@@ -53,14 +53,14 @@ pub async fn run_sync_loop(
     config: RecordingSyncConfig,
     router: Arc<HostRouter>,
     registry: Arc<BridgeRegistry>,
-    ca_cert_path: String,
+    ca_cert_path: Option<String>,
 ) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(config.interval_secs));
     // The first tick fires immediately; we still want a pass right away so that
     // freshly started servers begin syncing without waiting a full interval.
     loop {
         interval.tick().await;
-        if let Err(e) = sync_all_hosts(&config, &router, &registry, &ca_cert_path).await {
+        if let Err(e) = sync_all_hosts(&config, &router, &registry, ca_cert_path.as_deref()).await {
             tracing::error!("recording sync failed: {e}");
         }
     }
@@ -70,7 +70,7 @@ async fn sync_all_hosts(
     config: &RecordingSyncConfig,
     router: &HostRouter,
     registry: &BridgeRegistry,
-    ca_cert_path: &str,
+    ca_cert_path: Option<&str>,
 ) -> anyhow::Result<()> {
     let hosts = router.list();
 
@@ -131,7 +131,7 @@ async fn sync_host(
     config: &RecordingSyncConfig,
     host: &HostConfig,
     registry: &BridgeRegistry,
-    ca_cert_path: &str,
+    ca_cert_path: Option<&str>,
 ) -> anyhow::Result<usize> {
     let mut stream = match open_registry_json_stream(registry, &host.name).await {
         Some(s) => s,
@@ -215,7 +215,7 @@ async fn sync_host(
 async fn download_recording(
     host: &HostConfig,
     registry: &BridgeRegistry,
-    ca_cert_path: &str,
+    ca_cert_path: Option<&str>,
     remote_path: &str,
 ) -> anyhow::Result<Vec<u8>> {
     let (mut send, mut recv) = match registry.get(&host.name).await {
@@ -278,7 +278,7 @@ async fn download_recording(
 async fn mark_synced_on_bridge(
     host: &HostConfig,
     registry: &BridgeRegistry,
-    ca_cert_path: &str,
+    ca_cert_path: Option<&str>,
     file_name: &str,
     date: &str,
 ) -> anyhow::Result<()> {

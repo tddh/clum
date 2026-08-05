@@ -41,7 +41,7 @@ struct Cli {
     #[arg(long)]
     hosts_file: Option<PathBuf>,
 
-    #[arg(long)]
+    #[arg(long, env = "CLUM_CA_CERT")]
     ca_cert: Option<String>,
 
     #[arg(long)]
@@ -142,8 +142,7 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or_else(|| PathBuf::from("config/hosts.yaml"));
     let ca_cert = cli
         .ca_cert
-        .or(file_config.ca_cert)
-        .unwrap_or_else(|| String::from(""));
+        .or(file_config.ca_cert);
     let audit_retention_days = cli
         .audit_retention_days
         .unwrap_or(file_config.audit_retention_days);

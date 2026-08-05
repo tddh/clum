@@ -146,20 +146,6 @@ where
             continue;
         }
 
-        // file_upload: DEPRECATED — use QUIC file transfer instead
-        if req_type == "file_upload" {
-            let err = json!({"ok": false, "error": "TCP file upload is deprecated, use QUIC file transfer instead"});
-            send_response(&writer, &err).await?;
-            continue;
-        }
-
-        // file_download: DEPRECATED — use QUIC file transfer instead
-        if req_type == "file_download" {
-            let err = json!({"ok": false, "error": "TCP file download is deprecated, use QUIC file transfer instead"});
-            send_response(&writer, &err).await?;
-            continue;
-        }
-
         if req_type == "stream_subscribe" {
             tracing::info!("stream_subscribe: received request");
             let sn = request["session_name"].as_str().unwrap_or("");

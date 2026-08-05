@@ -70,7 +70,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "host_list",
-                "description": "List all registered remote hosts from the host registry (hosts.yaml). Returns {\"hosts\": [...], \"count\": N} where each host object includes name, group, tags, labels, bridge_addr, online (true for enrolled bridges, null for hosts.yaml-only), and via (\"enrolled\" or \"direct\"). Use this to discover available hosts before performing operations. This is typically the first tool called in any workflow.",
+                "description": "List all registered remote hosts from the host registry (hosts.yaml). Returns {\"hosts\": [...], \"count\": N} where each host object includes name, group, tags, labels, bridge_addr, remote_addr (IP:port for enrolled bridges), online (true for enrolled bridges, null for hosts.yaml-only), and via (\"enrolled\" or \"direct\"). Use this to discover available hosts before performing operations. This is typically the first tool called in any workflow.",
                 "inputSchema": { "type": "object", "properties": {}, "required": [] }
             },
             {

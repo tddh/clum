@@ -28,7 +28,7 @@ pub(crate) use deploy::audit;
 
 pub struct ToolContext {
     pub router: Arc<HostRouter>,
-    pub ca_cert_path: String,
+    pub ca_cert_path: Option<String>,
     pub audit_db: Arc<audit::AuditDb>,
     // Identity fields are Arc-wrapped so a cloned ToolContext gets its own
     // isolated copy — each HTTP request carries the identity derived from its

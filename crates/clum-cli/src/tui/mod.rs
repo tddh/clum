@@ -295,7 +295,7 @@ async fn ai_loop(
 #[allow(clippy::too_many_arguments)]
 pub async fn run_connect_with_ai(
     config: Option<&HostConfig>,
-    ca_cert_path: &str,
+    ca_cert_path: Option<&str>,
     session_name: &str,
     pane_id: &str,
     readonly: bool,
