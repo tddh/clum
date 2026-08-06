@@ -1,25 +1,6 @@
 # Changelog
 
-## [0.10.1] - 2026-08-06
-
-### Changed
-- **CLI**：`connect` 子命令重命名为 `term`，`--readonly` 改为 `--watch`。
-- **replay**：基于 `avt` 虚拟终端的交互式回放，支持 seek（←→ ±30s）、调速（↑↓）、暂停（Space）。
-- **replay**：默认 `idle_limit=0.5s`，自动跳过空闲段；状态栏显示 `HH:MM:SS` 格式时间和录制真实时间戳。
-- **replay**：远程录制临时文件退出时自动清理。
-- **term**：Ctrl+C 在普通模式下转发到远端（中断命令），`--watch` 模式下断开连接。
-- **list_recordings**：增强返回字段，新增 `user`、`session`、`pane`、`started_at`、`duration_secs`。
-
-### Fixed
-- **connect.rs** → `term.rs`：文件名和模块引用重命名。
-- `cargo fmt --all` + clippy 清理。
-- `--watch` 逻辑反转修复。
-- 测试断言 `TUNNEL_NOT_FOUND` → `FORWARD_NOT_FOUND`。
-
-### Removed
-- `docs/connect-design.md`（功能已内化到各文件）。
-
-## [Unreleased]
+## [0.10.2] — 2026-08-06
 
 ### Added
 - **term**：断线检测（`conn.closed()`）与自动重连（1s→30s 指数退避），重连后回放 attach scrollback 恢复屏幕；AI 面板状态跨重连保留。
@@ -38,8 +19,12 @@
 - `deploy/deploy-bridge.sh`：bridge.env 补写 `RECORDING_DIR=/opt/clum/recordings`，与 `install.sh` 对齐（此前缺失导致录制落入二进制同目录的默认路径）。
 - download token TTL 接入 `server-config.yaml` 的 `token_ttl_hours`（默认 24h），不再硬编码 1 小时。
 - justfile：移除 `update-all-bridges`（硬编码 IP 清单，改用 `deploy_bridge` MCP 工具）与 `deploy-mcp`（直接用 `bash deploy/deploy-mcp.sh`）。
+- CLI 日志默认过滤 `quinn_udp=error`（UDP 背压 WARN 属正常重传，不再打断进度条），`RUST_LOG` 仍可覆盖。
 
 ### Fixed
+- **bridge_store**：`list`/`token_map`/`get_all_host_meta` 去除 SQLite unwrap，异常时记日志并降级为空集（此前会导致 MCP server panic 或 token 刷新任务静默死亡）。
+- **bridge 文件下载**：目录遍历改用 `symlink_metadata` 跳过符号链接，防止链接指向范围外的文件被带出。
+- **deploy/install.sh**：`bridge.env` 创建后 `chmod 600`（此前全新安装为默认 umask 权限，token 可被本地任意用户读取）。
 - README/README.zh：`connect` → `term` 重命名遗漏。
 - docs/TOOLS.md：`list_recordings` 示例补齐 0.10.1 新增字段。
 - `.qoder/skills/clum-mcp/SKILL.md`：`TUNNEL_DENIED`/`TUNNEL_NOT_FOUND` 更新为 `FORWARD_*`。
@@ -50,6 +35,25 @@
 ### Docs
 - AGENTS.md：新增开发/测试隔离规则（测试必须用独立会话，严禁破坏默认 `clum` 会话）。
 - 全面对齐文档与 0.10.0 实现：TOOLS.md（deploy_bridge `restart_sent` 状态、`FORBIDDEN` 错误码、`resolved_pane_id`/`auto_resolved`、tunnel `group` 字段）、terminal-state-design.md（§3.3 伪代码同步、新增 §4.6 exec 安全门禁）、connect-design.md（§6.2.2 过时标注）、DEPLOY.md（bridge.env 变量清单、socket 检测表述）、SECURITY.md（TLS 表述、HTTP 端点防护）、SKILL.md（`FORBIDDEN`/`UNKNOWN` 错误码）。
+
+## [0.10.1] - 2026-08-06
+
+### Changed
+- **CLI**：`connect` 子命令重命名为 `term`，`--readonly` 改为 `--watch`。
+- **replay**：基于 `avt` 虚拟终端的交互式回放，支持 seek（←→ ±30s）、调速（↑↓）、暂停（Space）。
+- **replay**：默认 `idle_limit=0.5s`，自动跳过空闲段；状态栏显示 `HH:MM:SS` 格式时间和录制真实时间戳。
+- **replay**：远程录制临时文件退出时自动清理。
+- **term**：Ctrl+C 在普通模式下转发到远端（中断命令），`--watch` 模式下断开连接。
+- **list_recordings**：增强返回字段，新增 `user`、`session`、`pane`、`started_at`、`duration_secs`。
+
+### Fixed
+- **connect.rs** → `term.rs`：文件名和模块引用重命名。
+- `cargo fmt --all` + clippy 清理。
+- `--watch` 逻辑反转修复。
+- 测试断言 `TUNNEL_NOT_FOUND` → `FORWARD_NOT_FOUND`。
+
+### Removed
+- `docs/connect-design.md`（功能已内化到各文件）。
 
 ## [0.10.0] — 2026-08-04
 

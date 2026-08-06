@@ -454,7 +454,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "clum-cli"
-version = "0.10.1"
+version = "0.10.2"
 dependencies = [
  "anyhow",
  "avt",
@@ -484,7 +484,7 @@ dependencies = [
 
 [[package]]
 name = "clum-core"
-version = "0.10.1"
+version = "0.10.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -499,7 +499,7 @@ dependencies = [
 
 [[package]]
 name = "clum-mcp"
-version = "0.10.1"
+version = "0.10.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -2431,7 +2431,7 @@ dependencies = [
 
 [[package]]
 name = "rmux-bridge"
-version = "0.10.1"
+version = "0.10.2"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
