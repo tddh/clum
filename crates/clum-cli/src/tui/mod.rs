@@ -298,7 +298,7 @@ pub async fn run_connect_with_ai(
     ca_cert_path: Option<&str>,
     session_name: &str,
     pane_id: &str,
-    readonly: bool,
+    watch: bool,
     opencode_dir: &str,
     server: Option<(String, String)>,
     api_key: Option<&str>,
@@ -471,7 +471,7 @@ pub async fn run_connect_with_ai(
                             handle_clear(&ai).await;
                         }
                         _ => {
-                            if !readonly {
+                            if !watch {
                                 forward.push(b);
                             }
                         }
