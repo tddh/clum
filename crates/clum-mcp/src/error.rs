@@ -199,7 +199,7 @@ mod tests {
         assert_eq!(r.code, "SESSION_EXISTS");
 
         let r = classify_message("forward not found: abc");
-        assert_eq!(r.code, "TUNNEL_NOT_FOUND");
+        assert_eq!(r.code, "FORWARD_NOT_FOUND");
 
         let r = classify_message("pane still active");
         assert_eq!(r.code, "PANE_BUSY");
