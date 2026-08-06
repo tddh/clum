@@ -61,8 +61,8 @@ enum Commands {
         #[arg(long, default_value = "1.0")]
         speed: f64,
 
-        /// Cap idle time between events (seconds)
-        #[arg(long)]
+        /// Cap idle time between events (seconds). Default 0.5s skips long pauses.
+        #[arg(long, default_value = "0.5")]
         idle: Option<f64>,
     },
 
@@ -260,7 +260,18 @@ async fn main() -> anyhow::Result<()> {
                 if !resp.success() {
                     anyhow::bail!("failed to download recording from {url}");
                 }
-                tmp_path
+                // Drop guard: always clean up temp file, even on panic.
+                struct TempGuard(String);
+                impl Drop for TempGuard {
+                    fn drop(&mut self) {
+                        let _ = std::fs::remove_file(&self.0);
+                    }
+                }
+                let _guard = TempGuard(tmp_path.clone());
+                return replay::replay(
+                    std::path::Path::new(&tmp_path),
+                    &replay::ReplayOptions { speed, idle_limit: idle },
+                );
             } else {
                 anyhow::bail!("file not found: {expanded} (use --server-addr for remote replay)");
             };
