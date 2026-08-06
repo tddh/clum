@@ -393,7 +393,6 @@ just build       # cargo build --workspace
 
 - [Tool Reference](docs/TOOLS.md) — 67 MCP tools with parameters and return values
 - [Deployment Guide](docs/DEPLOY.md) — Architecture, build, deploy, operations, security
-- [Connect Design](docs/connect-design.md) — CLI PTY passthrough + AI chat panel design
 - [Terminal State Design](docs/terminal-state-design.md) — Terminal state awareness heuristic engine
 - [Contributing](CONTRIBUTING.md)
 - [Security Policy](SECURITY.md)

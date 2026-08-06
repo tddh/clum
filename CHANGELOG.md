@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.10.1] - 2026-08-06
+
+### Changed
+- **CLI**：`connect` 子命令重命名为 `term`，`--readonly` 改为 `--watch`。
+- **replay**：基于 `avt` 虚拟终端的交互式回放，支持 seek（←→ ±30s）、调速（↑↓）、暂停（Space）。
+- **replay**：默认 `idle_limit=0.5s`，自动跳过空闲段；状态栏显示 `HH:MM:SS` 格式时间和录制真实时间戳。
+- **replay**：远程录制临时文件退出时自动清理。
+- **term**：Ctrl+C 在普通模式下转发到远端（中断命令），`--watch` 模式下断开连接。
+- **list_recordings**：增强返回字段，新增 `user`、`session`、`pane`、`started_at`、`duration_secs`。
+
+### Fixed
+- **connect.rs** → `term.rs`：文件名和模块引用重命名。
+- `cargo fmt --all` + clippy 清理。
+- `--watch` 逻辑反转修复。
+- 测试断言 `TUNNEL_NOT_FOUND` → `FORWARD_NOT_FOUND`。
+
+### Removed
+- `docs/connect-design.md`（功能已内化到各文件）。
+
 ## [Unreleased]
 
 ### Changed
