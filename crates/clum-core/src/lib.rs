@@ -5,6 +5,7 @@
 
 use anyhow::Context;
 
+pub mod quic;
 pub mod types;
 
 pub use types::*;

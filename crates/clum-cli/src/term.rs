@@ -1,21 +1,10 @@
-use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
 use clum_core::HostConfig;
 
-const QUIC_WINDOW_SIZE: u32 = 16 * 1024 * 1024;
-
-fn build_transport_config() -> quinn::TransportConfig {
-    let mut transport = quinn::TransportConfig::default();
-    transport.max_idle_timeout(Some(Duration::from_secs(60).try_into().unwrap()));
-    transport.keep_alive_interval(Some(Duration::from_secs(15)));
-    transport.stream_receive_window(quinn::VarInt::from_u32(QUIC_WINDOW_SIZE));
-    transport.send_window(QUIC_WINDOW_SIZE as u64);
-    transport.receive_window(quinn::VarInt::from_u32(QUIC_WINDOW_SIZE));
-    transport.congestion_controller_factory(Arc::new(quinn::congestion::BbrConfig::default()));
-    transport
-}
+/// 交互式终端连接的 idle timeout：断线检测靠 keepalive，60s 足够。
+const TERM_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub async fn connect_via_server(
     server_addr: &str,
@@ -24,20 +13,12 @@ pub async fn connect_via_server(
     api_key: Option<&str>,
     purpose: &str,
 ) -> Result<quinn::Connection> {
-    let roots = clum_core::build_root_store(ca_cert_path)?;
-
-    let mut tls_config = rustls::ClientConfig::builder()
-        .with_root_certificates(roots)
-        .with_no_client_auth();
-    tls_config.alpn_protocols = vec![b"clum".to_vec()];
-
-    let quic_tls = quinn::crypto::rustls::QuicClientConfig::try_from(tls_config)
-        .map_err(|e| anyhow::anyhow!("QUIC TLS config error: {}", e))?;
-
-    let mut endpoint = quinn::Endpoint::client("0.0.0.0:0".parse()?)?;
-    let mut client_config = quinn::ClientConfig::new(Arc::new(quic_tls));
-    client_config.transport_config(Arc::new(build_transport_config()));
-    endpoint.set_default_client_config(client_config);
+    let endpoint = clum_core::quic::client_endpoint(
+        ca_cert_path,
+        &[b"clum"],
+        TERM_IDLE_TIMEOUT,
+        clum_core::quic::DEFAULT_KEEPALIVE,
+    )?;
 
     let addr: std::net::SocketAddr = server_addr
         .parse()
@@ -85,40 +66,14 @@ pub async fn connect_to_bridge_quic(
     bridge_token: &str,
     ca_cert_path: Option<&str>,
 ) -> Result<quinn::Connection> {
-    let roots = clum_core::build_root_store(ca_cert_path)?;
-
-    let tls_config = rustls::ClientConfig::builder()
-        .with_root_certificates(roots)
-        .with_no_client_auth();
-
-    let quic_tls = quinn::crypto::rustls::QuicClientConfig::try_from(tls_config)
-        .map_err(|e| anyhow::anyhow!("QUIC TLS config error: {}", e))?;
-
-    let transport = build_transport_config();
-
-    let mut endpoint = quinn::Endpoint::client("0.0.0.0:0".parse()?)?;
-    let mut client_config = quinn::ClientConfig::new(Arc::new(quic_tls));
-    client_config.transport_config(Arc::new(transport));
-    endpoint.set_default_client_config(client_config);
-
-    let server_name = bridge_addr.split(':').next().unwrap_or(bridge_addr);
-    let conn = endpoint.connect(bridge_addr.parse()?, server_name)?.await?;
-
-    let (mut auth_send, mut auth_recv) = conn.open_bi().await?;
-    auth_send.write_all(b"AUTH").await?;
-    auth_send
-        .write_all(&(bridge_token.len() as u32).to_le_bytes())
-        .await?;
-    auth_send.write_all(bridge_token.as_bytes()).await?;
-    auth_send.finish()?;
-
-    let mut response = [0u8; 32];
-    let n = auth_recv.read(&mut response).await?.unwrap_or(0);
-    if n < 2 || &response[..n] != b"OK\n" {
-        anyhow::bail!("bridge auth failed");
-    }
-
-    Ok(conn)
+    clum_core::quic::connect_bridge(
+        bridge_addr,
+        bridge_token,
+        ca_cert_path,
+        TERM_IDLE_TIMEOUT,
+        Duration::from_secs(10),
+    )
+    .await
 }
 
 pub async fn find_lowest_pane(

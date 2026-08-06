@@ -72,7 +72,7 @@ graph LR
 ```
 
 - **clum-mcp (Central Server)** — Central MCP Server: HTTP :9788 for AI clients (MCP protocol) + QUIC :9788 for Bridge registration and CLI data plane. Provides 67 tools, centralized audit, API Key auth, and static file serving.
-- **clum-cli** — CLI for humans: PTY passthrough (`connect`), file transfer (`upload`/`download` — files or directories, chunked streaming with SHA-256, `--exclude` globs for directories), port forwarding (`forward` — auto-reconnects on network loss, `--give-up-after`), session listing (`list`), recording playback (`replay`). Built-in AI chat panel (Ctrl+G).
+- **clum-cli** — CLI for humans: PTY passthrough (`term`), file transfer (`upload`/`download` — files or directories, chunked streaming with SHA-256, `--exclude` globs for directories), port forwarding (`forward` — auto-reconnects on network loss, `--give-up-after`), session listing (`list`), recording playback (`replay`). Built-in AI chat panel (Ctrl+G).
 - **rmux-bridge** — Agent deployed on each Linux host. Reverse-connects to the Central Server, handles tool execution, file I/O, PTY sessions, and recording push.
 - **RMUX daemon** — Terminal multiplexer on each Linux host (rmux-based).
 
@@ -289,7 +289,7 @@ After an AI-driven troubleshooting session:
 ```
 
 #### 1. Collection (built-in)
-The existing **audit system** records every MCP tool invocation and CLI operation — `exec`, `capture_pane`, `session_create`, `connect`, etc. — with timestamps, host, success/failure, and error messages. No changes needed.
+The existing **audit system** records every MCP tool invocation and CLI operation — `exec`, `capture_pane`, `session_create`, `term`, etc. — with timestamps, host, success/failure, and error messages. No changes needed.
 
 #### 2. Extraction (AI-driven)
 When the user explicitly triggers "save this session as knowledge," the AI reviews the full conversation history plus the audit trail for that session. It extracts:

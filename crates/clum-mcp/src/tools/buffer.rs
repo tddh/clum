@@ -29,9 +29,7 @@ pub(crate) async fn list_buffers(ctx: &ToolContext, args: Value) -> Result<Value
 
 pub(crate) async fn paste_buffer(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
     let buffer_name = args["buffer_name"].as_str().unwrap_or("");
     let host = super::common::resolve_host_config(ctx, host_name).await?;

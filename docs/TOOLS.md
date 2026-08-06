@@ -135,7 +135,7 @@
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | `host` | string | ✅ |
-| `session_name` | string | ✅ |
+| `session_name` | string | | default `clum` |
 
 > **注意**：当前仅检查存在性，不执行真正的 attach。
 
@@ -146,7 +146,7 @@
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | `host` | string | ✅ |
-| `session_name` | string | ✅ |
+| `session_name` | string | | default `clum` |
 
 > **注意**：当前仅检查存在性，不执行真正的 detach。
 
@@ -161,7 +161,7 @@
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | `host` | string | ✅ |
-| `session_name` | string | ✅ |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | | 可选，省略时自动探测 |
 | `keys` | string | ✅ |
 
@@ -172,7 +172,7 @@
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | `host` | string | ✅ |
-| `session_name` | string | ✅ |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | | 可选，省略时自动探测 |
 | `text` | string | ✅ |
 
@@ -187,7 +187,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | |
-| `session_name` | string | ✅ | |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | | 可选，省略时自动探测 |
 | `max_lines` | integer | | 默认 200，0=不限制 |
 | `ansi` | boolean | | 保留 ANSI 转义码（默认 false），true 时 text 为 base64 |
@@ -209,7 +209,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | |
-| `session_name` | string | ✅ | |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | | 可选，省略时自动探测 |
 | `text` | string | ✅ | 等待出现的文本 |
 | `timeout_ms` | number | | 等待超时毫秒数，默认 30000 |
@@ -225,7 +225,7 @@
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | `host` | string | ✅ |
-| `session_name` | string | ✅ |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | | 可选，省略时自动探测 |
 | `timeout_ms` | number | ❌ (默认 10000) |
 
@@ -238,7 +238,7 @@
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | `host` | string | ✅ |
-| `session_name` | string | ✅ |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | | 可选，省略时自动探测 |
 | `pattern` | string | ✅ |
 
@@ -253,7 +253,7 @@
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | `host` | string | ✅ |
-| `session_name` | string | ✅ |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | | 可选，省略时自动探测 |
 | `pattern` | string | ✅ |
 
@@ -268,7 +268,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | |
-| `session_name` | string | ✅ | |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | | 可选，省略时自动探测 |
 | `bytes` | string | ✅ | base64 编码的目标字节串 |
 | `only_new` | boolean | | 仅匹配新数据（跳过历史），默认 false |
@@ -320,7 +320,7 @@
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | `host` | string | ✅ |
-| `session_name` | string | ✅ |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | | 可选，省略时自动探测 |
 
 **返回** `{"ok": true, "pane_id": "%0", "title": "nginx-log"}` — 无标题时 `"title": null`
@@ -354,7 +354,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | |
-| `session_name` | string | ✅ | |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | | 可选，省略时自动探测 |
 | `row` | integer | | 起始行（0-based） |
 | `col` | integer | | 起始列（0-based） |
@@ -379,7 +379,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | 主机名称 |
-| `session_name` | string | ✅ | 会话名称 |
+| `session_name` | string | | 会话名称，默认 `clum` |
 | `pane_id` | string | | 可选，省略时自动探测 |
 | `command` | string | ✅ | shell 命令 |
 | `timeout_ms` | number | | 兜底超时毫秒数，默认 600000（10 分钟）。正常命令（含编译、apt/yum 安装、docker pull）无需设置——等待命令执行完毕是默认行为 |
@@ -419,7 +419,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | |
-| `session_name` | string | ✅ | |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | | 可选，省略时自动探测 |
 | `timeout_ms` | number | | 超时毫秒数，默认 30000 |
 
@@ -434,7 +434,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | |
-| `session_name` | string | ✅ | |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | | 可选，省略时自动探测 |
 | `max_bytes` | integer | | 最大收集字节数，默认 1048576 (1MB) |
 | `timeout_ms` | number | | 超时毫秒数，默认 60000 |
@@ -453,7 +453,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | |
-| `session_name` | string | ✅ | |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | | 可选，省略时自动探测 |
 | `stable_ms` | number | | 稳定持续毫秒数，默认 500 |
 | `timeout_ms` | number | | 最大等待毫秒数，默认 30000 |
@@ -473,7 +473,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | |
-| `session_name` | string | ✅ | |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | | 可选，省略时自动探测 |
 | `direction` | string | | `vertical`（左右分屏）或 `horizontal`（上下分屏），默认 `horizontal` |
 
@@ -486,7 +486,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | |
-| `session_name` | string | ✅ | |
+| `session_name` | string | | default `clum` |
 | `direction` | string | | `horizontal` 或 `vertical`（当前无效，仅兼容保留） |
 
 > **注意**：`split_window` 创建全新空 window，不含额外 pane。如需 pane 级别的左右/上下分屏，请用 `split_pane`。
@@ -498,7 +498,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | |
-| `session_name` | string | ✅ | |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | | 可选，省略时自动探测 | |
 | `direction` | string | ✅ | `horizontal` 或 `vertical` |
 | `command` | string | ✅ | 在新 pane 中运行的命令 |
@@ -518,7 +518,7 @@
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |------|------|:---:|:---:|------|
 | `host` | string | ✅ | | |
-| `session_name` | string | ✅ | | |
+| `session_name` | string | | default `clum` | |
 | `pane_id` | string | | 可选，省略时自动探测 |
 | `cols` | integer | | 80 | 列数（宽度） |
 | `rows` | integer | | 24 | 行数（高度） |
@@ -530,7 +530,7 @@
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | `host` | string | ✅ |
-| `session_name` | string | ✅ |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | | 可选，省略时自动探测 |
 | `title` | string | ✅ |
 
@@ -541,7 +541,7 @@
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | `host` | string | ✅ |
-| `session_name` | string | ✅ |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | | 可选，省略时自动探测 |
 
 ### `close_pane`
@@ -551,7 +551,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | |
-| `session_name` | string | ✅ | |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | ✅ | 窗格 ID，如 `%4` |
 
 **返回** `{"ok": true, "closed": true}`
@@ -563,7 +563,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | |
-| `session_name` | string | ✅ | |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | | 源 pane（省略则使用当前活跃 pane） |
 | `destination_window` | integer | | 目标窗口索引（省略则创建新窗口） |
 | `detached` | boolean | | 不切换焦点到新窗口（默认 false） |
@@ -575,7 +575,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | |
-| `session_name` | string | ✅ | |
+| `session_name` | string | | default `clum` |
 | `source_pane_id` | string | ✅ | 要移动的 pane |
 | `target_pane_id` | string | ✅ | 目标 pane（源 pane 将放到它旁边） |
 | `direction` | string | | `horizontal`（上下）或 `vertical`（左右），默认 vertical |
@@ -588,7 +588,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | |
-| `session_name` | string | ✅ | |
+| `session_name` | string | | default `clum` |
 | `source_pane_id` | string | ✅ | |
 | `target_pane_id` | string | ✅ | |
 | `detached` | boolean | | 不改变焦点（默认 false） |
@@ -604,7 +604,7 @@
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | `host` | string | ✅ |
-| `session_name` | string | ✅ |
+| `session_name` | string | | default `clum` |
 | `window_index` | integer | ✅ |
 
 **返回** `{"ok": true, "closed": true}`
@@ -616,7 +616,7 @@
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | `host` | string | ✅ |
-| `session_name` | string | ✅ |
+| `session_name` | string | | default `clum` |
 | `window_index` | integer | ✅ |
 | `name` | string | ✅ |
 
@@ -627,7 +627,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | |
-| `session_name` | string | ✅ | |
+| `session_name` | string | | default `clum` |
 | `window_index` | integer | ✅ | |
 | `width` | integer | | 宽度（可选） |
 | `height` | integer | | 高度（可选） |
@@ -639,7 +639,7 @@
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | `host` | string | ✅ |
-| `session_name` | string | ✅ |
+| `session_name` | string | | default `clum` |
 | `window_index` | integer | ✅ |
 
 ### `select_layout`
@@ -649,7 +649,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | |
-| `session_name` | string | ✅ | |
+| `session_name` | string | | default `clum` |
 | `window_index` | integer | ✅ | |
 | `layout` | string | ✅ | `even-horizontal` / `even-vertical` / `main-horizontal` / `main-vertical` / `tiled` |
 
@@ -664,7 +664,7 @@
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | `host` | string | ✅ |
-| `session_name` | string | ✅ |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | | 可选，省略时自动探测 |
 
 **返回** `{"ok": true, "exists": true}`
@@ -676,7 +676,7 @@
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | `host` | string | ✅ |
-| `session_name` | string | ✅ |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | | 可选，省略时自动探测 |
 
 **返回** `{"ok": true, "info": {"pane_id": "%0", "window_id": "@0", "session_id": "$0", "index": 0, "size_cols": 170, "size_rows": 39, "command": null, "working_directory": "/root", "tags": []}, "terminal_state": "ready", "cursor": {"row": 0, "col": 14, "visible": true}}`
@@ -690,7 +690,7 @@
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | `host` | string | ✅ |
-| `session_name` | string | ✅ |
+| `session_name` | string | | default `clum` |
 | `window_index` | integer | ✅ |
 
 **返回** `{"ok": true, "info": {"window_id": "@0", "name": "ops", "size_cols": 170, "size_rows": 40, "index": 0}}`
@@ -702,7 +702,7 @@
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | `host` | string | ✅ |
-| `session_name` | string | ✅ |
+| `session_name` | string | | default `clum` |
 | `window_index` | integer | ✅ |
 
 **返回** `{"ok": true, "panes": [{"pane_id": "%0", "active": true}]}`
@@ -718,7 +718,7 @@
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | `host` | string | ✅ |
-| `session_name` | string | ✅ |
+| `session_name` | string | | default `clum` |
 
 **返回** `{"ok": true, "killed": true}`
 
@@ -733,7 +733,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | |
-| `session_name` | string | ✅ | |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | | 可选，省略时自动探测 |
 | `command` | string | ✅ | 要执行的 shell 命令 |
 
@@ -744,7 +744,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | |
-| `session_name` | string | ✅ | |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | ✅ | |
 | `command` | string | | 替换默认 shell（可选） |
 | `args` | string[] | | 命令参数（`shell=false` 时使用） |
@@ -765,7 +765,7 @@
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | `host` | string | ✅ |
-| `session_name` | string | ✅ |
+| `session_name` | string | | default `clum` |
 | `pane_ids` | string[] | | 目标 pane ID 列表（省略则广播到所有 pane） |
 | `keys` | string | ✅ |
 
@@ -803,7 +803,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | |
-| `session_name` | string | ✅ | |
+| `session_name` | string | | default `clum` |
 | `pane_id` | string | ✅ | |
 | `buffer_name` | string | | buffer 名称（省略则粘贴最近一个） |
 
@@ -1280,12 +1280,19 @@ forward_create host="tf01" local_port=8080 remote_host="api.internal" remote_por
       "date": "2026-07-22",
       "file": "clum__0_1784733267_4899.cast",
       "size_bytes": 199466,
-      "path": "/Users/xxx/.clum/recordings/tf001/2026-07-22/clum__0_1784733267_4899.cast"
+      "path": "/Users/xxx/.clum/recordings/tf001/2026-07-22/clum__0_1784733267_4899.cast",
+      "user": "clum",
+      "session": "",
+      "pane": "0",
+      "duration_secs": 372.5,
+      "started_at": "2026-07-22T10:34:27+00:00"
     }
   ],
   "count": 1
 }
 ```
+
+> `duration_secs` / `started_at` 在缺少 `.meta` 元数据时为 `null`（`started_at` 会尽量从文件名时间戳回退推算）。
 
 ---
 

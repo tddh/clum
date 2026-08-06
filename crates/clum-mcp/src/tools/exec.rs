@@ -43,9 +43,7 @@ pub(crate) fn unescape_keys(raw: &str) -> String {
 
 pub(crate) async fn shell_command(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id_arg = args["pane_id"].as_str();
     let command = args["command"].as_str().context("missing 'command'")?;
     let host = super::common::resolve_host_config(ctx, host_name).await?;
@@ -73,9 +71,7 @@ pub(crate) async fn shell_command(ctx: &ToolContext, args: Value) -> Result<Valu
 
 pub(crate) async fn broadcast_keys(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_ids = args["pane_ids"].as_array().cloned().unwrap_or_default();
     let keys = args["keys"].as_str().context("missing 'keys'")?;
     let keys = unescape_keys(keys);
@@ -652,9 +648,7 @@ pub(crate) async fn exec(
     progress: &mut crate::progress::ProgressReporter,
 ) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id_arg = args["pane_id"].as_str();
     let command = args["command"].as_str().context("missing 'command'")?;
     let timeout_ms = args["timeout_ms"].as_u64().unwrap_or(600000);
@@ -764,9 +758,7 @@ pub(crate) async fn exec(
 
 pub(crate) async fn collect_until_exit(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id_arg = args["pane_id"].as_str();
     let max_bytes = args["max_bytes"].as_u64().unwrap_or(1048576);
     let timeout_ms = args["timeout_ms"].as_u64().unwrap_or(60000);

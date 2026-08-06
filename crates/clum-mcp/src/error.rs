@@ -86,8 +86,8 @@ pub fn classify_message(msg: &str) -> Classified {
     }
     if has("not in allowed list") {
         return c(
-            "TUNNEL_DENIED",
-            "隧道目标不在白名单：检查 hosts.yaml 的 allowed_forward_targets",
+            "FORWARD_DENIED",
+            "转发目标不在白名单：检查 hosts.yaml 的 allowed_forward_targets",
             false,
         );
     }
@@ -211,7 +211,7 @@ mod tests {
         assert_eq!(r.code, "PATH_TRAVERSAL");
 
         let r = classify_message("forward target 10.0.0.1:22 not in allowed list for host 'tf001'");
-        assert_eq!(r.code, "TUNNEL_DENIED");
+        assert_eq!(r.code, "FORWARD_DENIED");
 
         let r = classify_message("bridge QUIC authentication failed");
         assert_eq!(r.code, "AUTH_FAILED");

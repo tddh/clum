@@ -136,7 +136,7 @@ pub fn tools_definition() -> Value {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name to check, e.g. 'clum'" }
                     },
-                    "required": ["host", "session_name"]
+                    "required": ["host"]
                 }
             },
             {
@@ -148,7 +148,7 @@ pub fn tools_definition() -> Value {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name to check, e.g. 'clum'" }
                     },
-                    "required": ["host", "session_name"]
+                    "required": ["host"]
                 }
             },
             {
@@ -158,11 +158,11 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "keys": { "type": "string", "description": "Key sequence, e.g. \\n=Enter, \\x03=Ctrl-C" }
                     },
-                    "required": ["host", "session_name", "keys"]
+                    "required": ["host", "keys"]
                 }
             },
             {
@@ -172,7 +172,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "max_lines": { "type": "integer", "description": "Default 200, 0=unlimited" },
                         "ansi": { "type": "boolean", "description": "Preserve ANSI escape codes (default: false). When true, text is base64-encoded." },
@@ -183,7 +183,7 @@ pub fn tools_definition() -> Value {
                         "alternate": { "type": "boolean", "description": "Capture alternate screen (e.g. vim/less). Default: false." },
                         "buffer_name": { "type": "string", "description": "Write capture to a named buffer instead of returning text directly. Other params (max_lines, start_line, etc.) still apply to limit the captured content." }
                     },
-                    "required": ["host", "session_name"]
+                    "required": ["host"]
                 }
             },
             {
@@ -193,12 +193,12 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "text": { "type": "string", "description": "Text pattern to wait for (exact match, not regex)" },
                         "timeout_ms": { "type": "number", "description": "Maximum wait time in milliseconds (default: 30000)" }
                     },
-                    "required": ["host", "session_name", "text"]
+                    "required": ["host", "text"]
                 }
             },
             {
@@ -208,11 +208,11 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "command": { "type": "string", "description": "Shell command to execute (e.g., 'ls -la | grep foo > /tmp/out')" }
                     },
-                    "required": ["host", "session_name", "command"]
+                    "required": ["host", "command"]
                 }
             },
             {
@@ -222,7 +222,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
                         "command": { "type": "string", "description": "Replace default shell with this command (optional)" },
                         "args": { "type": "array", "items": { "type": "string" }, "description": "Command arguments (used when shell=false)" },
@@ -232,7 +232,7 @@ pub fn tools_definition() -> Value {
                         "kill": { "type": "boolean", "description": "Force kill running process before respawn (default: false)" },
                         "keep_alive_on_exit": { "type": "boolean", "description": "Keep pane open after process exits (default: false)" }
                     },
-                    "required": ["host", "session_name", "pane_id"]
+                    "required": ["host", "pane_id"]
                 }
             },
             {
@@ -242,11 +242,11 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "timeout_ms": { "type": "number", "description": "Maximum wait time in milliseconds (default: 30000)" }
                     },
-                    "required": ["host", "session_name"]
+                    "required": ["host"]
                 }
             },
             {
@@ -256,10 +256,10 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "direction": { "type": "string", "description": "horizontal or vertical (currently ignored, reserved for future use)" }
                     },
-                    "required": ["host", "session_name"]
+                    "required": ["host"]
                 }
             },
             {
@@ -269,11 +269,11 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "timeout_ms": { "type": "number", "description": "Blocking timeout in ms (default: 10000)" }
                     },
-                    "required": ["host", "session_name"]
+                    "required": ["host"]
                 }
             },
             {
@@ -311,14 +311,14 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "command": { "type": "string", "description": "Shell command, e.g. ls -la" },
                         "timeout_ms": { "type": "number", "description": "Safety-net timeout in ms (default: 600000 = 10min). Normal commands don't need to set this — waiting for command completion is the default behavior." },
                         "max_lines": { "type": "integer", "description": "Keep only the LAST N lines of output (default: 200, 0 = unlimited). Full output is always captured from scrollback regardless of this setting." },
                         "clear_screen": { "type": "boolean", "description": "Clear pane before running" }
                     },
-                    "required": ["host", "session_name", "command"]
+                    "required": ["host", "command"]
                 }
             },
             {
@@ -328,11 +328,11 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID to split, e.g. %0 (optional, auto-detects if omitted)" },
                         "direction": { "type": "string", "description": "horizontal (top/bottom) or vertical (left/right). Default: horizontal" }
                     },
-                    "required": ["host", "session_name"]
+                    "required": ["host"]
                 }
             },
             {
@@ -342,12 +342,12 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "cols": { "type": "integer", "description": "Width in columns (default: 80)" },
                         "rows": { "type": "integer", "description": "Height in rows (default: 24)" }
                     },
-                    "required": ["host", "session_name"]
+                    "required": ["host"]
                 }
             },
             {
@@ -357,11 +357,11 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "text": { "type": "string", "description": "Plain text to send (no escape interpretation)" }
                     },
-                    "required": ["host", "session_name", "text"]
+                    "required": ["host", "text"]
                 }
             },
             {
@@ -371,11 +371,11 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "title": { "type": "string", "description": "Title to set (e.g., 'web-server', 'db-monitor')" }
                     },
-                    "required": ["host", "session_name", "title"]
+                    "required": ["host", "title"]
                 }
             },
             {
@@ -385,11 +385,11 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "pattern": { "type": "string", "description": "Text pattern to search for (exact match, not regex)" }
                     },
-                    "required": ["host", "session_name", "pattern"]
+                    "required": ["host", "pattern"]
                 }
             },
             {
@@ -399,11 +399,11 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_ids": { "type": "array", "items": { "type": "string" }, "description": "Target pane IDs (e.g., ['%0', '%1']). If omitted, broadcasts to all panes in the window." },
                         "keys": { "type": "string", "description": "Key sequence to send (supports \\n, \\t, \\x03, \\xNN, etc.)" }
                     },
-                    "required": ["host", "session_name", "keys"]
+                    "required": ["host", "keys"]
                 }
             },
             {
@@ -425,10 +425,10 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID to close, e.g. %0" }
                     },
-                    "required": ["host", "session_name", "pane_id"]
+                    "required": ["host", "pane_id"]
                 }
             },
             {
@@ -438,11 +438,11 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "window_index": { "type": "integer", "description": "Window index (0-based). Use window_info or list_window_panes to find the index." },
                         "name": { "type": "string", "description": "New window name (e.g., 'web-server', 'database')" }
                     },
-                    "required": ["host", "session_name", "window_index", "name"]
+                    "required": ["host", "window_index", "name"]
                 }
             },
             {
@@ -452,10 +452,10 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "window_index": { "type": "integer", "description": "Window index (0-based)" }
                     },
-                    "required": ["host", "session_name", "window_index"]
+                    "required": ["host", "window_index"]
                 }
             },
             {
@@ -465,12 +465,12 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "window_index": { "type": "integer", "description": "Window index (0-based)" },
                         "width": { "type": "integer", "description": "Window width in columns (optional)" },
                         "height": { "type": "integer", "description": "Window height in rows (optional)" }
                     },
-                    "required": ["host", "session_name", "window_index"]
+                    "required": ["host", "window_index"]
                 }
             },
             {
@@ -480,10 +480,10 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "window_index": { "type": "integer", "description": "Window index to activate (0-based)" }
                     },
-                    "required": ["host", "session_name", "window_index"]
+                    "required": ["host", "window_index"]
                 }
             },
             {
@@ -493,11 +493,11 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "window_index": { "type": "integer", "description": "Window index (0-based)" },
                         "layout": { "type": "string", "enum": ["even-horizontal", "even-vertical", "main-horizontal", "main-vertical", "tiled"], "description": "Layout name: even-horizontal, even-vertical, main-horizontal, main-vertical, or tiled" }
                     },
-                    "required": ["host", "session_name", "window_index", "layout"]
+                    "required": ["host", "window_index", "layout"]
                 }
             },
             {
@@ -507,10 +507,10 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "window_index": { "type": "integer", "description": "Window index to close (0-based). Use window_info or list_window_panes to find the index." }
                     },
-                    "required": ["host", "session_name", "window_index"]
+                    "required": ["host", "window_index"]
                 }
             },
             {
@@ -522,7 +522,7 @@ pub fn tools_definition() -> Value {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name to destroy (e.g., 'clum')" }
                     },
-                    "required": ["host", "session_name"]
+                    "required": ["host"]
                 }
             },
             {
@@ -532,10 +532,10 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" }
                     },
-                    "required": ["host", "session_name"]
+                    "required": ["host"]
                 }
             },
             {
@@ -545,10 +545,10 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "window_index": { "type": "integer", "description": "Window index (0-based)" }
                     },
-                    "required": ["host", "session_name", "window_index"]
+                    "required": ["host", "window_index"]
                 }
             },
             {
@@ -558,10 +558,10 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID to check, e.g. %0. If omitted, auto-detects the lowest-numbered pane in window 0 and checks that (useful for verifying a session has any usable pane)." }
                     },
-                    "required": ["host", "session_name"]
+                    "required": ["host"]
                 }
             },
             {
@@ -682,10 +682,10 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" }
                     },
-                    "required": ["host", "session_name"]
+                    "required": ["host"]
                 }
             },
             {
@@ -695,11 +695,11 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "pattern": { "type": "string", "description": "Text pattern to search for (exact match, not regex)" }
                     },
-                    "required": ["host", "session_name", "pattern"]
+                    "required": ["host", "pattern"]
                 }
             },
             {
@@ -709,10 +709,10 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" }
                     },
-                    "required": ["host", "session_name"]
+                    "required": ["host"]
                 }
             },
             {
@@ -733,11 +733,11 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
                         "buffer_name": { "type": "string", "description": "Buffer name to paste (optional, pastes top buffer if omitted)" }
                     },
-                    "required": ["host", "session_name", "pane_id"]
+                    "required": ["host", "pane_id"]
                 }
             },
             {
@@ -759,7 +759,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Source pane ID to split, e.g. %0 (optional, auto-detects if omitted)" },
                         "direction": { "type": "string", "description": "Split direction: horizontal (top/bottom) or vertical (left/right)" },
                         "command": { "type": "string", "description": "Command to run in the new pane (e.g., 'tail -f /var/log/syslog')" },
@@ -770,7 +770,7 @@ pub fn tools_definition() -> Value {
                         "title": { "type": "string", "description": "Title for the new pane (useful for identification)" },
                         "keep_alive_on_exit": { "type": "boolean", "description": "Keep pane open after process exits (default: false)" }
                     },
-                    "required": ["host", "session_name", "direction", "command"]
+                    "required": ["host", "direction", "command"]
                 }
             },
             {
@@ -792,13 +792,13 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "max_bytes": { "type": "integer", "description": "Maximum bytes to collect (default: 1048576 = 1MB)" },
                         "timeout_ms": { "type": "number", "description": "Timeout in milliseconds (default: 60000)" },
                         "starting_at": { "type": "string", "enum": ["now", "oldest"], "description": "Where to start collecting: 'now' (default) or 'oldest' (includes scrollback)" }
                     },
-                    "required": ["host", "session_name"]
+                    "required": ["host"]
                 }
             },
             {
@@ -808,12 +808,12 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID to break out (optional, breaks current pane if omitted)" },
                         "destination_window": { "type": "integer", "description": "Target window index (optional, creates new window if omitted)" },
                         "detached": { "type": "boolean", "description": "Detach the pane (default: false)" }
                     },
-                    "required": ["host", "session_name"]
+                    "required": ["host"]
                 }
             },
             {
@@ -823,13 +823,13 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "source_pane_id": { "type": "string", "description": "Pane ID to move (e.g., %1)" },
                         "target_pane_id": { "type": "string", "description": "Pane ID to join with in the target window (e.g., %0)" },
                         "direction": { "type": "string", "description": "Split direction: horizontal or vertical (optional)" },
                         "size": { "type": "integer", "description": "Pane size in cells (optional)" }
                     },
-                    "required": ["host", "session_name", "source_pane_id", "target_pane_id"]
+                    "required": ["host", "source_pane_id", "target_pane_id"]
                 }
             },
             {
@@ -839,12 +839,12 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "source_pane_id": { "type": "string", "description": "First pane ID (e.g., %0)" },
                         "target_pane_id": { "type": "string", "description": "Second pane ID to swap with (e.g., %1)" },
                         "detached": { "type": "boolean", "description": "Detach source pane after swap (default: false)" }
                     },
-                    "required": ["host", "session_name", "source_pane_id", "target_pane_id"]
+                    "required": ["host", "source_pane_id", "target_pane_id"]
                 }
             },
             {
@@ -866,7 +866,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "row": { "type": "integer", "description": "Top row of region (0-based). Omit all coords for full pane capture." },
                         "col": { "type": "integer", "description": "Left column of region (0-based)" },
@@ -874,7 +874,7 @@ pub fn tools_definition() -> Value {
                         "cols": { "type": "integer", "description": "Width of region in columns" },
                         "styled": { "type": "boolean", "description": "Preserve style/color markup (default: false, plain text only)" }
                     },
-                    "required": ["host", "session_name"]
+                    "required": ["host"]
                 }
             },
             {
@@ -884,13 +884,13 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "bytes": { "type": "string", "description": "Raw bytes to wait for, encoded as base64" },
                         "only_new": { "type": "boolean", "description": "Only match data appearing after this call (skip existing buffer, default: false)" },
                         "timeout_ms": { "type": "number", "description": "⚠️ Currently NOT enforced at the bridge level — the wait is effectively unbounded. Do not rely on this timeout." }
                     },
-                    "required": ["host", "session_name", "bytes"]
+                    "required": ["host", "bytes"]
                 }
             },
             {
@@ -900,12 +900,12 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "stable_ms": { "type": "number", "description": "Duration of stability required in milliseconds (default: 500)" },
                         "timeout_ms": { "type": "number", "description": "Maximum total wait time in milliseconds (default: 30000)" }
                     },
-                    "required": ["host", "session_name"]
+                    "required": ["host"]
                 }
             },
             {

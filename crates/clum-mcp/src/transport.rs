@@ -1,163 +1,106 @@
 //! QUIC transport layer for connecting the MCP server to remote rmux-bridge
 //! instances. Requires CA-verified TLS handshakes and token-based authentication.
+//!
+//! Endpoint/transport configuration and the AUTH handshake live in
+//! `clum_core::quic`; this module adds MCP-specific concerns (JSON protocol
+//! stream, retry, registry-aware routing).
 
 use anyhow::{Context, Result};
+use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context as TaskContext, Poll};
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::time::sleep;
 
-// ══════════════════════════════════════════════════════════════════
-// QUIC connection (file transfers)
-// ══════════════════════════════════════════════════════════════════
+/// 文件传输/长连接使用的 idle timeout（1 小时）。
+const FILE_IDLE_TIMEOUT: Duration = Duration::from_secs(3600);
+/// QUIC 握手超时。
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// 16 MB 流控窗口：quinn 默认初始拥塞窗口 ~12 KB，内网千兆链路下
-/// 慢启动要 ~20 个 RTT 才能打满带宽；调大窗口大幅缩短爬坡时间。
-const QUIC_WINDOW_SIZE: u32 = 16 * 1024 * 1024;
-
-fn build_transport_config(
-    idle_timeout: Duration,
-    keepalive: Duration,
-) -> anyhow::Result<quinn::TransportConfig> {
-    let mut transport = quinn::TransportConfig::default();
-    transport.max_idle_timeout(Some(idle_timeout.try_into()?));
-    transport.keep_alive_interval(Some(keepalive));
-    transport.stream_receive_window(quinn::VarInt::from_u32(QUIC_WINDOW_SIZE));
-    transport.send_window(QUIC_WINDOW_SIZE as u64);
-    transport.receive_window(quinn::VarInt::from_u32(QUIC_WINDOW_SIZE));
-    transport.congestion_controller_factory(std::sync::Arc::new(
-        quinn::congestion::BbrConfig::default(),
-    ));
-    Ok(transport)
-}
-
-/// Establish QUIC connection to bridge for file transfers.
-/// Returns authenticated Connection + first stream's send/recv handles.
+/// Establish QUIC connection to bridge and open the JSON protocol stream.
+/// Returns authenticated Connection + json stream's send/recv handles.
 /// Use `host.bridge_addr` directly — TCP and UDP share port 9778 safely.
 pub async fn connect_to_bridge_quic(
     bridge_addr: &str,
     auth_token: &str,
     ca_cert_path: Option<&str>,
 ) -> anyhow::Result<(quinn::Connection, quinn::SendStream, quinn::RecvStream)> {
-    let addr: std::net::SocketAddr = bridge_addr
-        .parse()
-        .with_context(|| format!("invalid bridge address: {}", bridge_addr))?;
-
-    let mut endpoint = quinn::Endpoint::client("[::]:0".parse()?)?;
-
-    let tls_config = build_quic_client_config(ca_cert_path)?;
-    let mut client_config = quinn::ClientConfig::new(std::sync::Arc::new(
-        quinn::crypto::rustls::QuicClientConfig::try_from(std::sync::Arc::new(tls_config))
-            .map_err(|e| anyhow::anyhow!("QUIC TLS config error: {e}"))?,
-    ));
-    let transport = build_transport_config(Duration::from_secs(3600), Duration::from_secs(15))?;
-    client_config.transport_config(std::sync::Arc::new(transport));
-    endpoint.set_default_client_config(client_config);
-
-    let server_name = bridge_addr.split(':').next().unwrap_or("localhost");
-    let conn = tokio::time::timeout(
-        Duration::from_secs(10),
-        endpoint.connect(addr, server_name)?,
+    let conn = clum_core::quic::connect_bridge(
+        bridge_addr,
+        auth_token,
+        ca_cert_path,
+        FILE_IDLE_TIMEOUT,
+        CONNECT_TIMEOUT,
     )
-    .await
-    .context("QUIC connect timeout")?
-    .context("QUIC connection failed")?;
-
-    let (mut send, mut recv) = conn
-        .open_bi()
-        .await
-        .context("failed to open QUIC auth stream")?;
-
-    send_auth_frame_quic(&mut send, auth_token).await?;
-
-    let mut response = [0u8; 3];
-    tokio::io::AsyncReadExt::read_exact(&mut recv, &mut response).await?;
-    if &response != b"OK\n" {
-        conn.close(1u32.into(), b"auth failed");
-        anyhow::bail!("bridge QUIC authentication failed");
-    }
-
+    .await?;
     tracing::info!("QUIC connected and authenticated to {}", bridge_addr);
-
-    let (mut json_send, json_recv) = conn
-        .open_bi()
-        .await
-        .context("failed to open QUIC json stream")?;
-
-    // Write 0x01 magic byte to distinguish JSON protocol from file transfer streams
-    json_send.write_all(&[0x01]).await?;
-
-    Ok((conn, json_send, json_recv))
+    let (send, recv) = open_json_bi(&conn).await?;
+    Ok((conn, send, recv))
 }
 
 /// Establish QUIC connection to bridge for long-lived forwards.
 /// Uses 1-hour idle timeout + 15s keepalive to prevent connection drops.
-/// Returns Connection + auth stream handles (caller must keep alive or finish).
+/// Returns the authenticated Connection (auth stream already finished).
 pub async fn connect_to_bridge_quic_forward(
     bridge_addr: &str,
     auth_token: &str,
     ca_cert_path: Option<&str>,
-) -> anyhow::Result<(quinn::Connection, quinn::SendStream, quinn::RecvStream)> {
-    let addr: std::net::SocketAddr = bridge_addr
-        .parse()
-        .with_context(|| format!("invalid bridge address: {}", bridge_addr))?;
-
-    let mut endpoint = quinn::Endpoint::client("[::]:0".parse()?)?;
-
-    let tls_config = build_quic_client_config(ca_cert_path)?;
-    let mut client_config = quinn::ClientConfig::new(std::sync::Arc::new(
-        quinn::crypto::rustls::QuicClientConfig::try_from(std::sync::Arc::new(tls_config))
-            .map_err(|e| anyhow::anyhow!("QUIC TLS config error: {e}"))?,
-    ));
-    let transport = build_transport_config(Duration::from_secs(3600), Duration::from_secs(15))?;
-    client_config.transport_config(std::sync::Arc::new(transport));
-    endpoint.set_default_client_config(client_config);
-
-    let server_name = bridge_addr.split(':').next().unwrap_or("localhost");
-    let conn = tokio::time::timeout(
-        Duration::from_secs(10),
-        endpoint.connect(addr, server_name)?,
+) -> anyhow::Result<quinn::Connection> {
+    let conn = clum_core::quic::connect_bridge(
+        bridge_addr,
+        auth_token,
+        ca_cert_path,
+        FILE_IDLE_TIMEOUT,
+        CONNECT_TIMEOUT,
     )
-    .await
-    .context("QUIC connect timeout")?
-    .context("QUIC connection failed")?;
-
-    let (mut send, mut recv) = conn
-        .open_bi()
-        .await
-        .context("failed to open QUIC auth stream")?;
-
-    send_auth_frame_quic(&mut send, auth_token).await?;
-
-    let mut response = [0u8; 3];
-    tokio::io::AsyncReadExt::read_exact(&mut recv, &mut response).await?;
-    if &response != b"OK\n" {
-        conn.close(1u32.into(), b"auth failed");
-        anyhow::bail!("bridge QUIC authentication failed");
-    }
-
+    .await?;
     tracing::info!(
         "QUIC forward connected and authenticated to {}",
         bridge_addr
     );
+    Ok(conn)
+}
 
+/// Like [`connect_to_bridge_quic`] with caller-chosen idle/keepalive tuning
+/// (used by stream_pane and recording sync).
+pub async fn connect_to_bridge_quic_stream(
+    bridge_addr: &str,
+    auth_token: &str,
+    ca_cert_path: Option<&str>,
+    idle_timeout_secs: u64,
+    keepalive_secs: u64,
+) -> anyhow::Result<(quinn::Connection, quinn::SendStream, quinn::RecvStream)> {
+    let addr: std::net::SocketAddr = bridge_addr
+        .parse()
+        .with_context(|| format!("invalid bridge address: {bridge_addr}"))?;
+    let endpoint = clum_core::quic::client_endpoint(
+        ca_cert_path,
+        &[],
+        Duration::from_secs(idle_timeout_secs),
+        Duration::from_secs(keepalive_secs),
+    )?;
+    let server_name = bridge_addr.split(':').next().unwrap_or("localhost");
+    let conn = tokio::time::timeout(CONNECT_TIMEOUT, endpoint.connect(addr, server_name)?)
+        .await
+        .context("QUIC connect timeout")?
+        .context("QUIC connection failed")?;
+    clum_core::quic::authenticate_bridge(&conn, auth_token).await?;
+    tracing::info!("QUIC stream connected and authenticated to {}", bridge_addr);
+    let (send, recv) = open_json_bi(&conn).await?;
     Ok((conn, send, recv))
 }
 
-fn build_quic_client_config(ca_cert_path: Option<&str>) -> anyhow::Result<rustls::ClientConfig> {
-    let root_store = clum_core::build_root_store(ca_cert_path)?;
-    Ok(rustls::ClientConfig::builder()
-        .with_root_certificates(root_store)
-        .with_no_client_auth())
-}
-
-async fn send_auth_frame_quic(send: &mut quinn::SendStream, token: &str) -> anyhow::Result<()> {
-    let token_bytes = token.as_bytes();
-    tokio::io::AsyncWriteExt::write_all(send, b"AUTH").await?;
-    tokio::io::AsyncWriteExt::write_all(send, &(token_bytes.len() as u32).to_le_bytes()).await?;
-    tokio::io::AsyncWriteExt::write_all(send, token_bytes).await?;
-    Ok(())
+/// Open a bidi stream and mark it as JSON protocol (0x01 magic byte).
+async fn open_json_bi(
+    conn: &quinn::Connection,
+) -> anyhow::Result<(quinn::SendStream, quinn::RecvStream)> {
+    let (mut send, recv) = conn
+        .open_bi()
+        .await
+        .context("failed to open QUIC json stream")?;
+    send.write_all(&[0x01]).await?;
+    Ok((send, recv))
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -221,6 +164,29 @@ impl AsyncWrite for BridgeStream {
     }
 }
 
+/// Exponential-backoff retry wrapper (500ms base, doubling).
+async fn with_retry<T, F, Fut>(label: &str, max_retries: u32, mut connect: F) -> Result<T>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = anyhow::Result<T>>,
+{
+    let mut attempt = 0;
+    loop {
+        match connect().await {
+            Ok(v) => return Ok(v),
+            Err(e) if attempt < max_retries => {
+                attempt += 1;
+                let delay = Duration::from_millis(500 * 2u64.pow(attempt));
+                tracing::warn!(
+                    "{label} connect failed (attempt {attempt}/{max_retries}), retrying in {delay:?}: {e}"
+                );
+                sleep(delay).await;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
 /// QUIC connection with retry.
 pub async fn connect_to_bridge_hybrid(
     bridge_addr: &str,
@@ -228,28 +194,13 @@ pub async fn connect_to_bridge_hybrid(
     ca_cert_path: Option<&str>,
     max_retries: u32,
 ) -> Result<BridgeStream> {
-    let mut attempt = 0;
-    loop {
-        match connect_to_bridge_quic(bridge_addr, auth_token, ca_cert_path).await {
-            Ok((conn, send, recv)) => {
-                tracing::info!("connected via QUIC to {}", bridge_addr);
-                return Ok(BridgeStream::Quic { conn, send, recv });
-            }
-            Err(e) if attempt < max_retries => {
-                attempt += 1;
-                let delay = Duration::from_millis(500 * 2u64.pow(attempt));
-                tracing::warn!(
-                    "QUIC connect failed (attempt {}/{}), retrying in {:?}: {}",
-                    attempt,
-                    max_retries,
-                    delay,
-                    e
-                );
-                sleep(delay).await;
-            }
-            Err(e) => return Err(e),
-        }
-    }
+    with_retry("QUIC", max_retries, || async {
+        let (conn, send, recv) =
+            connect_to_bridge_quic(bridge_addr, auth_token, ca_cert_path).await?;
+        tracing::info!("connected via QUIC to {}", bridge_addr);
+        Ok(BridgeStream::Quic { conn, send, recv })
+    })
+    .await
 }
 
 pub async fn send_json_frame<S: tokio::io::AsyncWriteExt + Unpin>(
@@ -282,66 +233,6 @@ pub async fn recv_json_frame<S: tokio::io::AsyncReadExt + Unpin>(
     Ok(serde_json::from_slice(&buf)?)
 }
 
-pub async fn connect_to_bridge_quic_stream(
-    bridge_addr: &str,
-    auth_token: &str,
-    ca_cert_path: Option<&str>,
-    idle_timeout_secs: u64,
-    keepalive_secs: u64,
-) -> anyhow::Result<(quinn::Connection, quinn::SendStream, quinn::RecvStream)> {
-    let addr: std::net::SocketAddr = bridge_addr
-        .parse()
-        .with_context(|| format!("invalid bridge address: {}", bridge_addr))?;
-
-    let mut endpoint = quinn::Endpoint::client("[::]:0".parse()?)?;
-
-    let tls_config = build_quic_client_config(ca_cert_path)?;
-    let mut client_config = quinn::ClientConfig::new(std::sync::Arc::new(
-        quinn::crypto::rustls::QuicClientConfig::try_from(std::sync::Arc::new(tls_config))
-            .map_err(|e| anyhow::anyhow!("QUIC TLS config error: {e}"))?,
-    ));
-    let transport = build_transport_config(
-        Duration::from_secs(idle_timeout_secs),
-        Duration::from_secs(keepalive_secs),
-    )?;
-    client_config.transport_config(std::sync::Arc::new(transport));
-    endpoint.set_default_client_config(client_config);
-
-    let server_name = bridge_addr.split(':').next().unwrap_or("localhost");
-    let conn = tokio::time::timeout(
-        Duration::from_secs(10),
-        endpoint.connect(addr, server_name)?,
-    )
-    .await
-    .context("QUIC connect timeout")?
-    .context("QUIC connection failed")?;
-
-    let (mut send, mut recv) = conn
-        .open_bi()
-        .await
-        .context("failed to open QUIC auth stream")?;
-
-    send_auth_frame_quic(&mut send, auth_token).await?;
-
-    let mut response = [0u8; 3];
-    tokio::io::AsyncReadExt::read_exact(&mut recv, &mut response).await?;
-    if &response != b"OK\n" {
-        conn.close(1u32.into(), b"auth failed");
-        anyhow::bail!("bridge QUIC authentication failed");
-    }
-
-    tracing::info!("QUIC stream connected and authenticated to {}", bridge_addr);
-
-    let (mut json_send, json_recv) = conn
-        .open_bi()
-        .await
-        .context("failed to open QUIC json stream")?;
-
-    json_send.write_all(&[0x01]).await?;
-
-    Ok((conn, json_send, json_recv))
-}
-
 pub async fn connect_to_bridge_hybrid_stream(
     bridge_addr: &str,
     auth_token: &str,
@@ -350,36 +241,19 @@ pub async fn connect_to_bridge_hybrid_stream(
     idle_timeout_secs: u64,
     keepalive_secs: u64,
 ) -> Result<BridgeStream> {
-    let mut attempt = 0;
-    loop {
-        match connect_to_bridge_quic_stream(
+    with_retry("QUIC stream", max_retries, || async {
+        let (conn, send, recv) = connect_to_bridge_quic_stream(
             bridge_addr,
             auth_token,
             ca_cert_path,
             idle_timeout_secs,
             keepalive_secs,
         )
-        .await
-        {
-            Ok((conn, send, recv)) => {
-                tracing::info!("connected via QUIC stream to {}", bridge_addr);
-                return Ok(BridgeStream::Quic { conn, send, recv });
-            }
-            Err(e) if attempt < max_retries => {
-                attempt += 1;
-                let delay = Duration::from_millis(500 * 2u64.pow(attempt));
-                tracing::warn!(
-                    "QUIC stream connect failed (attempt {}/{}), retrying in {:?}: {}",
-                    attempt,
-                    max_retries,
-                    delay,
-                    e
-                );
-                sleep(delay).await;
-            }
-            Err(e) => return Err(e),
-        }
-    }
+        .await?;
+        tracing::info!("connected via QUIC stream to {}", bridge_addr);
+        Ok(BridgeStream::Quic { conn, send, recv })
+    })
+    .await
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -399,22 +273,8 @@ pub async fn connect_to_host_stream(
     idle_timeout_secs: u64,
     keepalive_secs: u64,
 ) -> Result<BridgeStream> {
-    if let Some(bridge) = ctx.bridge_registry.get(&host.name).await {
-        if bridge.conn.close_reason().is_none() {
-            match open_json_stream(&bridge.conn).await {
-                Ok(stream) => {
-                    tracing::debug!("routed via registry (stream) to {}", host.name);
-                    return Ok(stream);
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        "registry stream to {} failed, falling back: {}",
-                        host.name,
-                        e
-                    );
-                }
-            }
-        }
+    if let Some(stream) = try_registry_stream(&ctx.bridge_registry, &host.name).await {
+        return Ok(stream);
     }
     match (&host.bridge_addr, &host.bridge_token) {
         (Some(addr), Some(token)) => {
@@ -441,22 +301,8 @@ pub async fn connect_via_registry(
     host: &clum_core::types::HostConfig,
     ca_cert_path: Option<&str>,
 ) -> Result<BridgeStream> {
-    if let Some(bridge) = registry.get(&host.name).await {
-        if bridge.conn.close_reason().is_none() {
-            match open_json_stream(&bridge.conn).await {
-                Ok(stream) => {
-                    tracing::debug!("routed via registry to {}", host.name);
-                    return Ok(stream);
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        "registry stream to {} failed, falling back: {}",
-                        host.name,
-                        e
-                    );
-                }
-            }
-        }
+    if let Some(stream) = try_registry_stream(registry, &host.name).await {
+        return Ok(stream);
     }
     match (&host.bridge_addr, &host.bridge_token) {
         (Some(addr), Some(token)) => connect_to_bridge_hybrid(addr, token, ca_cert_path, 3).await,
@@ -468,9 +314,36 @@ pub async fn connect_via_registry(
     }
 }
 
+/// Try routing through a reverse-registered bridge connection; None means
+/// fall back to direct connection.
+async fn try_registry_stream(
+    registry: &std::sync::Arc<crate::registry::BridgeRegistry>,
+    host_name: &str,
+) -> Option<BridgeStream> {
+    let bridge = registry.get(host_name).await?;
+    if bridge.conn.close_reason().is_some() {
+        return None;
+    }
+    match open_json_stream(&bridge.conn).await {
+        Ok(stream) => {
+            tracing::debug!("routed via registry to {}", host_name);
+            Some(stream)
+        }
+        Err(e) => {
+            tracing::warn!(
+                "registry stream to {} failed, falling back: {}",
+                host_name,
+                e
+            );
+            None
+        }
+    }
+}
+
 async fn open_json_stream(conn: &quinn::Connection) -> Result<BridgeStream> {
-    let (mut send, recv) = conn.open_bi().await.context("open_bi on registered conn")?;
-    tokio::io::AsyncWriteExt::write_all(&mut send, &[0x01]).await?;
+    let (send, recv) = open_json_bi(conn)
+        .await
+        .context("open_bi on registered conn")?;
     Ok(BridgeStream::Quic {
         conn: conn.clone(),
         send,

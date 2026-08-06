@@ -488,9 +488,11 @@ version = "0.10.1"
 dependencies = [
  "anyhow",
  "chrono",
+ "quinn",
  "rustls",
  "rustls-pemfile",
  "serde",
+ "tokio",
  "uuid",
  "webpki-roots 1.0.9",
 ]

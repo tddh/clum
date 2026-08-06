@@ -44,24 +44,12 @@ pub async fn run_registration_loop(config: RegisterConfig) {
 }
 
 async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
-    let tls_config = build_client_tls(config.ca_cert.as_deref())?;
-
-    let crypto = Arc::new(
-        quinn::crypto::rustls::QuicClientConfig::try_from(Arc::new(tls_config))
-            .map_err(|e| anyhow::anyhow!("QUIC client crypto: {e}"))?,
-    );
-    let mut client_config = quinn::ClientConfig::new(crypto);
-    let mut transport = quinn::TransportConfig::default();
-    transport.max_idle_timeout(Some(Duration::from_secs(120).try_into().unwrap()));
-    transport.keep_alive_interval(Some(Duration::from_secs(15)));
-    transport.stream_receive_window(quinn::VarInt::from_u32(16 * 1024 * 1024));
-    transport.send_window(16 * 1024 * 1024);
-    transport.receive_window(quinn::VarInt::from_u32(16 * 1024 * 1024));
-    transport.congestion_controller_factory(Arc::new(quinn::congestion::BbrConfig::default()));
-    client_config.transport_config(Arc::new(transport));
-
-    let mut endpoint = quinn::Endpoint::client("[::]:0".parse()?)?;
-    endpoint.set_default_client_config(client_config);
+    let endpoint = clum_core::quic::client_endpoint(
+        config.ca_cert.as_deref(),
+        &[b"clum"],
+        Duration::from_secs(120),
+        clum_core::quic::DEFAULT_KEEPALIVE,
+    )?;
 
     let server_addr = resolve_addr(&config.server_addr).await?;
     let server_name = extract_server_name(&config.server_addr);
@@ -260,31 +248,6 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
 
     tracing::info!("connection closed, will reconnect");
     Ok(())
-}
-
-fn build_client_tls(ca_cert_path: Option<&str>) -> anyhow::Result<rustls::ClientConfig> {
-    let root_store = match ca_cert_path {
-        Some(path) => {
-            let pem = std::fs::read(path).with_context(|| format!("read CA cert: {path}"))?;
-            let certs: Vec<_> = rustls_pemfile::certs(&mut &pem[..])
-                .collect::<Result<Vec<_>, _>>()
-                .context("parse CA PEM")?;
-            let mut store = rustls::RootCertStore::empty();
-            store.add_parsable_certificates(certs);
-            store
-        }
-        None => {
-            let mut store = rustls::RootCertStore::empty();
-            store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-            store
-        }
-    };
-
-    let mut config = rustls::ClientConfig::builder()
-        .with_root_certificates(root_store)
-        .with_no_client_auth();
-    config.alpn_protocols = vec![b"clum".to_vec()];
-    Ok(config)
 }
 
 async fn resolve_addr(addr: &str) -> anyhow::Result<std::net::SocketAddr> {

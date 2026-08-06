@@ -72,7 +72,7 @@ graph LR
 ```
 
 - **clum-mcp（Central Server）** — 中央 MCP Server：HTTP :9788 面向 AI 客户端（MCP 协议）+ QUIC :9788 面向 Bridge 注册和 CLI 数据平面。提供 67 个工具、集中审计、API Key 认证、静态文件服务。
-- **clum-cli** — 命令行工具：PTY 透传（`connect`）、文件传输（`upload`/`download`，支持文件与目录、分块流式传输 + SHA-256 校验、目录 `--exclude` 过滤）、端口转发（`forward`，断网自动重连，`--give-up-after` 控制放弃时限）、会话列表（`list`）、录制回放（`replay`）。内置 AI 对话面板（Ctrl+G）。
+- **clum-cli** — 命令行工具：PTY 透传（`term`）、文件传输（`upload`/`download`，支持文件与目录、分块流式传输 + SHA-256 校验、目录 `--exclude` 过滤）、端口转发（`forward`，断网自动重连，`--give-up-after` 控制放弃时限）、会话列表（`list`）、录制回放（`replay`）。内置 AI 对话面板（Ctrl+G）。
 - **rmux-bridge** — 部署在每台 Linux 主机的 Agent。主动连接 Central Server 注册，处理工具执行、文件 I/O、PTY 会话、录制推送。
 - **RMUX daemon** — 每台 Linux 主机上的终端多路复用器（基于 rmux）。
 
@@ -288,7 +288,7 @@ AI 辅助完成一次问题排查后：
 ```
 
 #### 1. 采集层（已内置）
-现有的**审计系统**自动记录每次 MCP 工具调用和 CLI 操作 —— `exec`、`capture_pane`、`session_create`、`connect` 等 —— 包含时间戳、目标主机、成功/失败状态、错误信息。无需额外改动。
+现有的**审计系统**自动记录每次 MCP 工具调用和 CLI 操作 —— `exec`、`capture_pane`、`session_create`、`term` 等 —— 包含时间戳、目标主机、成功/失败状态、错误信息。无需额外改动。
 
 #### 2. 提取层（AI 驱动）
 当用户主动触发「把这个排查沉淀成知识」时，AI 回顾本次会话的完整对话历史 + 对应审计记录，提取：

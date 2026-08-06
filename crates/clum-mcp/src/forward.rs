@@ -127,16 +127,9 @@ impl ForwardManager {
                 .bridge_token
                 .as_deref()
                 .with_context(|| format!("host '{}': bridge_token not configured", host.name))?;
-            let (conn, auth_send, auth_recv) =
-                connect_to_bridge_quic_forward(addr, token, ca_cert_path)
-                    .await
-                    .with_context(|| "failed to connect to bridge")?;
-            tokio::spawn(async move {
-                let mut auth_send = auth_send;
-                let mut auth_recv = auth_recv;
-                auth_send.finish().ok();
-                let _ = auth_recv.read_to_end(0).await;
-            });
+            let conn = connect_to_bridge_quic_forward(addr, token, ca_cert_path)
+                .await
+                .with_context(|| "failed to connect to bridge")?;
             conn
         };
 

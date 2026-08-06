@@ -292,6 +292,34 @@ async fn ai_loop(
 
 // ── PTY Mode (Main Screen — raw passthrough) ──
 
+/// 断线重连的退避上限（与 forward 一致）。
+const MAX_RECONNECT_BACKOFF: Duration = Duration::from_secs(30);
+
+enum SessionOutcome {
+    /// 用户主动退出（detach / EOF / Ctrl+C）。
+    Exit,
+    /// 连接丢失，可以重连。
+    Lost(quinn::ConnectionError),
+    /// 远端 rmux 子进程退出（用户在远端 Ctrl+B D 卸载、pane 进程结束等），
+    /// 不应重连；退出码可能缺失（ctrl 流被干净关闭但没收到 0x83）。
+    RemoteExited(Option<i32>),
+}
+
+/// 读取 attach 之后 ctrl 流（0x06）上的控制消息：bridge 只会在 rmux 子进程
+/// 退出时发送 0x83 process_exited(exit_code)。EOF 或解析失败返回 None。
+async fn read_ctrl_exit(ctrl_recv: &mut quinn::RecvStream) -> Option<i32> {
+    let mut type_buf = [0u8; 1];
+    ctrl_recv.read_exact(&mut type_buf).await.ok()?;
+    if type_buf[0] != 0x83 {
+        return None;
+    }
+    let mut len_buf = [0u8; 2];
+    ctrl_recv.read_exact(&mut len_buf).await.ok()?;
+    let mut code_buf = [0u8; 4];
+    ctrl_recv.read_exact(&mut code_buf).await.ok()?;
+    Some(i32::from_le_bytes(code_buf))
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn run_connect_with_ai(
     config: Option<&HostConfig>,
@@ -304,7 +332,80 @@ pub async fn run_connect_with_ai(
     api_key: Option<&str>,
 ) -> Result<()> {
     crate::ai::init_opencode_dir(opencode_dir);
-    let conn = if let Some((server_addr, host)) = &server {
+
+    // AI panel (persists across reconnects)
+    let ai = AiPanel::new();
+    ai.add_message(Message {
+        role: Role::System,
+        content: "Ctrl+G AI | @analyze | @clear | Esc back".to_string(),
+        code_blocks: vec![],
+    })
+    .await;
+    let is_ai_mode = Arc::new(AtomicBool::new(false));
+    let pty_buffer: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+
+    let mut backoff = Duration::from_secs(1);
+    let mut first_attempt = true;
+    loop {
+        let outcome = run_session(
+            config,
+            ca_cert_path,
+            session_name,
+            pane_id,
+            watch,
+            &server,
+            api_key,
+            &ai,
+            &is_ai_mode,
+            &pty_buffer,
+        )
+        .await;
+
+        match outcome {
+            Ok(SessionOutcome::Exit) => return Ok(()),
+            Ok(SessionOutcome::RemoteExited(code)) => {
+                match code {
+                    Some(c) => println!("term: detached (exit code {c})"),
+                    None => println!("term: detached"),
+                }
+                return Ok(());
+            }
+            Ok(SessionOutcome::Lost(reason)) => {
+                println!("\nterm: connection lost ({reason})");
+                backoff = Duration::from_secs(1);
+            }
+            Err(e) => {
+                if first_attempt {
+                    return Err(e);
+                }
+                eprintln!("term: reconnect failed: {e:#}");
+            }
+        }
+
+        println!(
+            "term: reconnecting in {}s... (Ctrl+C to abort)",
+            backoff.as_secs()
+        );
+        tokio::time::sleep(backoff).await;
+        backoff = (backoff * 2).min(MAX_RECONNECT_BACKOFF);
+        first_attempt = false;
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn run_session(
+    config: Option<&HostConfig>,
+    ca_cert_path: Option<&str>,
+    session_name: &str,
+    pane_id: &str,
+    watch: bool,
+    server: &Option<(String, String)>,
+    api_key: Option<&str>,
+    ai: &AiPanel,
+    is_ai_mode: &Arc<AtomicBool>,
+    pty_buffer: &Arc<Mutex<Vec<String>>>,
+) -> Result<SessionOutcome> {
+    let conn = if let Some((server_addr, host)) = server {
         crate::term::connect_via_server(server_addr, ca_cert_path, host, api_key, "term").await?
     } else {
         let config = config.context("either config or server must be provided")?;
@@ -330,8 +431,14 @@ pub async fn run_connect_with_ai(
     let (mut ctrl_send, mut ctrl_recv) = conn.open_bi().await?;
     ctrl_send.write_all(&[0x06]).await?;
     write_attach_request(&mut ctrl_send, session_name, pane_id, cols, rows).await?;
-    let _scrollback = read_attached_response(&mut ctrl_recv).await?;
+    let scrollback = read_attached_response(&mut ctrl_recv).await?;
     let ctrl_send = Arc::new(Mutex::new(ctrl_send));
+
+    // 恢复当前屏幕内容（首次进入与断线重连都适用）
+    if !scrollback.is_empty() {
+        tokio::io::stdout().write_all(&scrollback).await?;
+        tokio::io::stdout().flush().await?;
+    }
 
     enable_raw_mode()?;
 
@@ -340,18 +447,9 @@ pub async fn run_connect_with_ai(
     pty_send_raw.write_all(&[0x07]).await?;
     let pty_send = Arc::new(Mutex::new(pty_send_raw));
 
-    // AI panel (shared between modes)
-    let ai = AiPanel::new();
-    ai.add_message(Message {
-        role: Role::System,
-        content: "Ctrl+G AI | @analyze | @clear | Esc back".to_string(),
-        code_blocks: vec![],
-    })
-    .await;
-
     // Shared state between PTY mode and AI mode
-    let is_ai_mode = Arc::new(AtomicBool::new(false));
-    let pty_buffer: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let is_ai_mode = is_ai_mode.clone();
+    let pty_buffer = pty_buffer.clone();
 
     // PTY reader task: reads PTY output continuously
     // In PTY mode: writes to stdout (raw passthrough) + updates buffer
@@ -405,16 +503,18 @@ pub async fn run_connect_with_ai(
         Bytes(usize),
         Resize,
         Eof,
+        ConnLost(quinn::ConnectionError),
+        CtrlEnded(Option<i32>),
     }
 
-    loop {
+    let outcome = loop {
         if is_ai_mode.load(Ordering::Relaxed) {
             // AI 模式——备用屏（ai_loop 期间由它自己的 crossterm 接管 stdin）
             tokio::io::stdout().flush().await.ok();
-            let result = ai_loop(&json_send, &json_recv, &pty_buffer, &ai, session_name).await;
+            let result = ai_loop(&json_send, &json_recv, &pty_buffer, ai, session_name).await;
             is_ai_mode.store(false, Ordering::Relaxed);
             if result.is_err() {
-                break;
+                break SessionOutcome::Exit;
             }
             continue;
         }
@@ -429,18 +529,35 @@ pub async fn run_connect_with_ai(
                         Err(_) => Input::Eof,
                     },
                     _ = sigwinch.recv() => Input::Resize,
+                    reason = conn.closed() => Input::ConnLost(reason),
+                    code = read_ctrl_exit(&mut ctrl_recv) => Input::CtrlEnded(code),
                 }
             }
             #[cfg(not(unix))]
-            match stdin.read(&mut inbuf).await {
-                Ok(0) => Input::Eof,
-                Ok(n) => Input::Bytes(n),
-                Err(_) => Input::Eof,
+            tokio::select! {
+                r = stdin.read(&mut inbuf) => match r {
+                    Ok(0) => Input::Eof,
+                    Ok(n) => Input::Bytes(n),
+                    Err(_) => Input::Eof,
+                },
+                reason = conn.closed() => Input::ConnLost(reason),
+                code = read_ctrl_exit(&mut ctrl_recv) => Input::CtrlEnded(code),
             }
         };
 
         match input {
-            Input::Eof => break,
+            Input::Eof => break SessionOutcome::Exit,
+            Input::ConnLost(reason) => break SessionOutcome::Lost(reason),
+            Input::CtrlEnded(code) => {
+                if code.is_some() {
+                    break SessionOutcome::RemoteExited(code);
+                }
+                // ctrl 流结束但没有退出消息：连接已死按断线处理，否则算远端正常退出
+                if let Some(reason) = conn.close_reason() {
+                    break SessionOutcome::Lost(reason);
+                }
+                break SessionOutcome::RemoteExited(None);
+            }
             Input::Resize => {
                 if let Ok((cols, rows)) = crossterm::terminal::size() {
                     let mut cs = ctrl_send.lock().await;
@@ -471,7 +588,7 @@ pub async fn run_connect_with_ai(
                         }
                         0x0c => {
                             // Ctrl+L → 清空 AI 历史
-                            handle_clear(&ai).await;
+                            handle_clear(ai).await;
                         }
                         _ => {
                             if !watch {
@@ -483,20 +600,23 @@ pub async fn run_connect_with_ai(
                 if !forward.is_empty() {
                     let mut s = pty_send.lock().await;
                     if s.write_all(&forward).await.is_err() {
-                        break;
+                        // 写失败几乎必然是连接已死：拿到关闭原因再退出
+                        break SessionOutcome::Lost(conn.closed().await);
                     }
                 }
                 if detach {
-                    break;
+                    break SessionOutcome::Exit;
                 }
             }
         }
-    }
+    };
 
     // Cleanup
     let _ = write_mouse(MOUSE_OFF);
     disable_raw_mode()?;
     pty_reader.abort();
-    write_detach(&mut *ctrl_send.lock().await).await.ok();
-    Ok(())
+    if matches!(outcome, SessionOutcome::Exit) {
+        write_detach(&mut *ctrl_send.lock().await).await.ok();
+    }
+    Ok(outcome)
 }

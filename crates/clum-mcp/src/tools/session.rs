@@ -102,9 +102,7 @@ pub(crate) async fn session_list(ctx: &ToolContext, args: Value) -> Result<Value
 
 pub(crate) async fn session_attach(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
 
@@ -132,9 +130,7 @@ pub(crate) async fn session_attach(ctx: &ToolContext, args: Value) -> Result<Val
 
 pub(crate) async fn session_detach(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
 
@@ -162,9 +158,7 @@ pub(crate) async fn session_detach(ctx: &ToolContext, args: Value) -> Result<Val
 
 pub(crate) async fn kill_session(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     send_json_frame(
@@ -191,9 +185,7 @@ pub(crate) async fn kill_session(ctx: &ToolContext, args: Value) -> Result<Value
 
 pub(crate) async fn respawn_pane(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
     let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;

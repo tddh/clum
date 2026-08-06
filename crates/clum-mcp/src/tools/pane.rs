@@ -8,9 +8,7 @@ use clum_core::types::AuditAction;
 
 pub(crate) async fn send_keys(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id_arg = args["pane_id"].as_str();
     let raw_keys = args["keys"].as_str().context("missing 'keys'")?;
     let keys = unescape_keys(raw_keys);
@@ -40,9 +38,7 @@ pub(crate) async fn send_keys(ctx: &ToolContext, args: Value) -> Result<Value> {
 
 pub(crate) async fn capture_pane(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id_arg = args["pane_id"].as_str();
     let max_lines = args["max_lines"]
         .as_u64()
@@ -106,9 +102,7 @@ pub(crate) async fn capture_pane(ctx: &ToolContext, args: Value) -> Result<Value
 
 pub(crate) async fn resize_pane(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id_arg = args["pane_id"].as_str();
     let cols = args["cols"].as_u64().unwrap_or(80);
     let rows = args["rows"].as_u64().unwrap_or(24);
@@ -137,9 +131,7 @@ pub(crate) async fn resize_pane(ctx: &ToolContext, args: Value) -> Result<Value>
 
 pub(crate) async fn send_text(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id_arg = args["pane_id"].as_str();
     let text = args["text"].as_str().context("missing 'text'")?;
     let host = super::common::resolve_host_config(ctx, host_name).await?;
@@ -167,9 +159,7 @@ pub(crate) async fn send_text(ctx: &ToolContext, args: Value) -> Result<Value> {
 
 pub(crate) async fn set_pane_title(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id_arg = args["pane_id"].as_str();
     let title = args["title"].as_str().context("missing 'title'")?;
     let host = super::common::resolve_host_config(ctx, host_name).await?;
@@ -197,9 +187,7 @@ pub(crate) async fn set_pane_title(ctx: &ToolContext, args: Value) -> Result<Val
 
 pub(crate) async fn find_pane_text(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id_arg = args["pane_id"].as_str();
     let pattern = args["pattern"].as_str().context("missing 'pattern'")?;
     let host = super::common::resolve_host_config(ctx, host_name).await?;
@@ -227,9 +215,7 @@ pub(crate) async fn find_pane_text(ctx: &ToolContext, args: Value) -> Result<Val
 
 pub(crate) async fn split_pane(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id_arg = args["pane_id"].as_str();
     let direction = args["direction"].as_str().unwrap_or("horizontal");
     let host = super::common::resolve_host_config(ctx, host_name).await?;
@@ -257,9 +243,7 @@ pub(crate) async fn split_pane(ctx: &ToolContext, args: Value) -> Result<Value> 
 
 pub(crate) async fn close_pane(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id = args["pane_id"].as_str().context("missing 'pane_id'")?;
     let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
@@ -287,9 +271,7 @@ pub(crate) async fn close_pane(ctx: &ToolContext, args: Value) -> Result<Value> 
 
 pub(crate) async fn clear_history(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id_arg = args["pane_id"].as_str();
     let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
@@ -320,9 +302,7 @@ pub(crate) async fn clear_history(ctx: &ToolContext, args: Value) -> Result<Valu
 
 pub(crate) async fn split_pane_with(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id_arg = args["pane_id"].as_str();
     let direction = args["direction"].as_str().context("missing 'direction'")?;
     let command = args["command"].as_str().context("missing 'command'")?;
@@ -376,9 +356,7 @@ pub(crate) async fn split_pane_with(ctx: &ToolContext, args: Value) -> Result<Va
 
 pub(crate) async fn get_pane_title(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id_arg = args["pane_id"].as_str();
     let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
@@ -441,9 +419,7 @@ pub(crate) async fn get_pane_by_title(ctx: &ToolContext, args: Value) -> Result<
 
 pub(crate) async fn break_pane(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id = args["pane_id"].as_str().unwrap_or("");
     let destination_window = args["destination_window"].as_u64();
     let detached = args["detached"].as_bool().unwrap_or(false);
@@ -478,9 +454,7 @@ pub(crate) async fn break_pane(ctx: &ToolContext, args: Value) -> Result<Value> 
 
 pub(crate) async fn join_pane(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let source_pane_id = args["source_pane_id"]
         .as_str()
         .context("missing 'source_pane_id'")?;
@@ -524,9 +498,7 @@ pub(crate) async fn join_pane(ctx: &ToolContext, args: Value) -> Result<Value> {
 
 pub(crate) async fn swap_pane(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let source_pane_id = args["source_pane_id"]
         .as_str()
         .context("missing 'source_pane_id'")?;
@@ -567,9 +539,7 @@ pub(crate) async fn swap_pane(ctx: &ToolContext, args: Value) -> Result<Value> {
 
 pub(crate) async fn capture_region(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"]
-        .as_str()
-        .context("missing 'session_name'")?;
+    let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id_arg = args["pane_id"].as_str();
     let styled = args["styled"].as_bool().unwrap_or(false);
     let host = super::common::resolve_host_config(ctx, host_name).await?;

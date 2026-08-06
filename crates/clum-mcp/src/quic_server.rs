@@ -67,17 +67,12 @@ pub async fn run_quic_server(
     let tls_config = load_server_tls(&config.cert_path, &config.key_path)?;
 
     let mut server_config = quinn::ServerConfig::with_crypto(Arc::new(tls_config));
-    let transport =
-        Arc::get_mut(&mut server_config.transport).context("transport Arc is shared")?;
+    let mut transport = clum_core::quic::build_transport_config(
+        std::time::Duration::from_secs(120),
+        clum_core::quic::DEFAULT_KEEPALIVE,
+    );
     transport.max_concurrent_bidi_streams(256u32.into());
-    transport.stream_receive_window(quinn::VarInt::from_u32(16 * 1024 * 1024));
-    transport.send_window(16 * 1024 * 1024);
-    transport.receive_window(quinn::VarInt::from_u32(16 * 1024 * 1024));
-    transport.congestion_controller_factory(Arc::new(quinn::congestion::BbrConfig::default()));
-    transport.keep_alive_interval(Some(std::time::Duration::from_secs(15)));
-    transport.max_idle_timeout(Some(
-        std::time::Duration::from_secs(120).try_into().unwrap(),
-    ));
+    *Arc::get_mut(&mut server_config.transport).context("transport Arc is shared")? = transport;
 
     let addr: SocketAddr = config
         .listen_addr
