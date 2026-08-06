@@ -463,8 +463,12 @@ pub async fn run_connect_with_ai(
                         detach = true;
                     }
                     0x03 => {
-                        // Ctrl+C → detach
-                        detach = true;
+                        // Ctrl+C → detach in watch mode, forward otherwise
+                        if watch {
+                            detach = true;
+                        } else {
+                            forward.push(b);
+                        }
                     }
                         0x0c => {
                             // Ctrl+L → 清空 AI 历史
