@@ -455,12 +455,20 @@ pub async fn list_local_recordings(
                 let file_meta = file_entry.metadata().await?;
                 let size_bytes = file_meta.len();
 
-                // Parse session info from filename: {user}_{session}__{pane_id}_{ts}_{random}.cast
-                let (user, sess_name, pane_id) = parse_cast_filename(&fname);
+                // Parse session info from filename.
+                let (user, sess_name, pane_id, epoch) = parse_cast_filename(&fname);
 
                 // Read .meta sidecar for duration and timestamp.
                 let meta_path = file_entry.path().with_extension("meta");
-                let (duration_secs, started_at) = read_meta_sidecar(&meta_path).await;
+                let (duration_secs, mut started_at) = read_meta_sidecar(&meta_path).await;
+
+                // Fallback: compute started_at from filename epoch if .meta unavailable.
+                if started_at.is_none() {
+                    if let Some(ts) = epoch {
+                        started_at = chrono::DateTime::from_timestamp(ts, 0)
+                            .map(|dt| dt.format("%Y-%m-%dT%H:%M:%S%:z").to_string());
+                    }
+                }
 
                 results.push(json!({
                     "host": host_name,
@@ -492,19 +500,18 @@ pub async fn list_local_recordings(
     Ok(results)
 }
 
-/// Parse cast filename into (user, session, pane).
-/// Format: {user}_{session}__{pane_id}_{timestamp}_{random}.cast
-fn parse_cast_filename(fname: &str) -> (String, String, String) {
+/// Parse cast filename into (user, session, pane, epoch).
+/// Format: {user}_{session}__{pane}_{epoch}_{random}.cast
+fn parse_cast_filename(fname: &str) -> (String, String, String, Option<i64>) {
     let stem = fname.strip_suffix(".cast").unwrap_or(fname);
-    // Split at "__" to get {user}_{session} and {pane}_{ts}_{random}
-    if let Some((prefix, _rest)) = stem.split_once("__") {
-        let pane = prefix.rsplit('_').next().unwrap_or("").to_string();
-        let user_session = &prefix[..prefix.len().saturating_sub(pane.len() + 1)];
-        if let Some((user, sess)) = user_session.split_once('_') {
-            return (user.to_string(), sess.to_string(), pane);
-        }
+    if let Some((prefix, rest)) = stem.split_once("__") {
+        let mut parts = rest.splitn(3, '_');
+        let pane = parts.next().unwrap_or("").to_string();
+        let epoch = parts.next().and_then(|s| s.parse::<i64>().ok());
+        let (user, session) = prefix.split_once('_').unwrap_or((prefix, ""));
+        return (user.to_string(), session.to_string(), pane, epoch);
     }
-    (String::new(), String::new(), String::new())
+    (String::new(), String::new(), String::new(), None)
 }
 
 async fn read_meta_sidecar(meta_path: &std::path::Path) -> (Option<f64>, Option<String>) {

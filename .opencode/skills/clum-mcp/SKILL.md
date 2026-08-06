@@ -419,6 +419,41 @@ TUI 弹窗（debconf、needrestart、whiptail 等），导致 exec 超时或终�
 batch_exec(hosts=["k8s-n1","k8s-n2","k8s-n3"], command="DEBIAN_FRONTEND=noninteractive apt-get install -y nginx")
 ```
 
+## 录制回放
+
+### 查看录制列表
+
+`list_recordings` 返回所有已同步到 Server 的录制，可按 host/date/session 过滤。返回字段：
+
+| 字段 | 说明 |
+|------|------|
+| `file` | 文件名，含 user、session、pane、timestamp |
+| `host` | 录制所在主机 |
+| `date` | 日期目录 YYYY-MM-DD |
+| `user` | 操作用户 |
+| `session` | session 名称 |
+| `pane` | pane ID |
+| `size_bytes` | 文件大小 |
+| `started_at` | 录制开始时间 RFC3339 |
+| `duration_secs` | 录制时长（秒，新版录制才有） |
+| `path` | 完整文件路径 |
+
+### 回放录制
+
+CLI 命令格式：
+```
+clum-cli replay <host>/<date>/<file>
+```
+
+示例：
+```bash
+clum-cli replay tf001/2026-08-06/tddh_clum__0_1785987395_e79d.cast
+```
+
+路径中的 `<date>` 必须与 `list_recordings` 返回的 `date` 字段一致（`YYYY-MM-DD` 格式）。
+
+播放控制：←→ seek ±30s、↑↓ 调速、Space 暂停、q 退出。
+
 ## 违反后果
 
 违反以上规则 = BUG，必须立即修正。
