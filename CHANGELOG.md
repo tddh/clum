@@ -25,6 +25,7 @@
 - **term**：断线检测（`conn.closed()`）与自动重连（1s→30s 指数退避），重连后回放 attach scrollback 恢复屏幕；AI 面板状态跨重连保留。
 - **term**：读取 ctrl 流 `0x83 process_exited`，远端卸载（Ctrl+B D）或 pane 进程退出时干净退出并提示 `term: detached (exit code N)`，不再卡死。
 - **clum-core::quic**：新增共享 QUIC 传输层（`build_transport_config`/`client_endpoint`/`connect_bridge`/`authenticate_bridge`），clum-mcp、clum-cli、rmux-bridge 统一复用，消除 6 处重复建连代码与参数漂移（窗口/BBR/keepalive 归一）。
+- **CLI upload/download**：进度条（stderr 单行 10Hz 刷新，非终端静默）。单文件显示 `↑/↓ 文件名 [bar] % 已传/总量 速度`；目录上传为聚合进度条 + `(N/M files)` 完成计数；目录下载逐文件进度条 + `(N/M)` 计数。结束摘要升级为可读单位 + 耗时 + 速度。
 
 ### Changed
 - **MCP 工具**：`session_name` 全部工具缺省默认 `"clum"`（原为必填报错），schema 移出 required，TOOLS.md 同步。

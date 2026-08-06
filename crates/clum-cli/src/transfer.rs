@@ -11,6 +11,163 @@ const CHUNK_SIZE: usize = 1024 * 1024;
 const MAX_UPLOAD_CONCURRENCY: usize = 16;
 const MAX_DIR_DEPTH: u32 = 64;
 
+fn human_bytes(n: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
+    let mut v = n as f64;
+    let mut i = 0;
+    while v >= 1024.0 && i < UNITS.len() - 1 {
+        v /= 1024.0;
+        i += 1;
+    }
+    if i == 0 {
+        format!("{n} B")
+    } else {
+        format!("{v:.1} {}", UNITS[i])
+    }
+}
+
+/// stderr 单行进度条：10Hz 节流刷新，非终端环境静默。
+struct ProgressBar {
+    label: String,
+    note: String,
+    total: u64,
+    done: u64,
+    start: std::time::Instant,
+    last_draw: std::time::Instant,
+    enabled: bool,
+}
+
+impl ProgressBar {
+    fn new(label: &str, total: u64) -> Self {
+        let now = std::time::Instant::now();
+        Self {
+            label: label.to_string(),
+            note: String::new(),
+            total,
+            done: 0,
+            start: now,
+            last_draw: now
+                .checked_sub(std::time::Duration::from_millis(200))
+                .unwrap_or(now),
+            enabled: std::io::IsTerminal::is_terminal(&std::io::stderr()),
+        }
+    }
+
+    fn advance(&mut self, n: u64) {
+        self.done += n;
+        if !self.enabled {
+            return;
+        }
+        let now = std::time::Instant::now();
+        if now.duration_since(self.last_draw) < std::time::Duration::from_millis(100)
+            && self.done < self.total
+        {
+            return;
+        }
+        self.last_draw = now;
+        self.draw();
+    }
+
+    fn set_note(&mut self, note: String) {
+        self.note = note;
+    }
+
+    fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    fn draw(&self) {
+        let frac = if self.total > 0 {
+            (self.done as f64 / self.total as f64).min(1.0)
+        } else {
+            1.0
+        };
+        let width = 24usize;
+        let filled = (frac * width as f64) as usize;
+        let bar: String = std::iter::repeat_n('█', filled)
+            .chain(std::iter::repeat_n('░', width - filled))
+            .collect();
+        let secs = self.start.elapsed().as_secs_f64().max(0.001);
+        let speed = self.done as f64 / secs;
+        eprint!(
+            "\r{} [{}] {:>3}% {}/{} {}/s{}   ",
+            self.label,
+            bar,
+            (frac * 100.0) as u32,
+            human_bytes(self.done),
+            human_bytes(self.total),
+            human_bytes(speed as u64),
+            if self.note.is_empty() {
+                String::new()
+            } else {
+                format!(" {}", self.note)
+            },
+        );
+    }
+
+    fn clear(&self) {
+        if self.enabled {
+            eprint!("\r{}\r", " ".repeat(120));
+        }
+    }
+
+    fn elapsed_secs(&self) -> f64 {
+        self.start.elapsed().as_secs_f64()
+    }
+}
+
+/// 字节进度接收端：单文件用 ProgressBar，目录并发上传用 SharedBar。
+trait ByteProgress: Send {
+    fn advance(&mut self, n: u64);
+}
+
+impl ByteProgress for ProgressBar {
+    fn advance(&mut self, n: u64) {
+        ProgressBar::advance(self, n);
+    }
+}
+
+struct SharedBar(std::sync::Arc<std::sync::Mutex<ProgressBar>>);
+
+impl ByteProgress for SharedBar {
+    fn advance(&mut self, n: u64) {
+        if let Ok(mut b) = self.0.lock() {
+            b.advance(n);
+        }
+    }
+}
+
+/// 标签用短文件名（超过 20 字符截断）。
+fn short_name(path: &str) -> String {
+    let name = std::path::Path::new(path)
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.to_string());
+    let chars: Vec<char> = name.chars().collect();
+    if chars.len() > 20 {
+        let mut s: String = chars[..19].iter().collect();
+        s.push('…');
+        s
+    } else {
+        name
+    }
+}
+
+/// 传输完成摘要：可读单位 + 耗时 + 速度。
+fn summary(bytes: u64, secs: f64) -> String {
+    let speed = if secs > 0.001 {
+        bytes as f64 / secs
+    } else {
+        0.0
+    };
+    format!(
+        "{}, {:.1}s, {}/s",
+        human_bytes(bytes),
+        secs,
+        human_bytes(speed as u64)
+    )
+}
+
 async fn collect_files(
     base: &Path,
     dir: &Path,
@@ -70,6 +227,7 @@ async fn upload_one(
     conn: &quinn::Connection,
     local: &Path,
     remote: &str,
+    mut progress: Option<&mut dyn ByteProgress>,
 ) -> Result<(u8, u64, [u8; 32])> {
     let meta = tokio::fs::metadata(local)
         .await
@@ -95,6 +253,9 @@ async fn upload_one(
             break;
         }
         send.write_all(&buf[..n]).await?;
+        if let Some(p) = progress.as_deref_mut() {
+            p.advance(n as u64);
+        }
     }
     send.finish()?;
 
@@ -135,9 +296,13 @@ pub async fn upload(
         .with_context(|| format!("stat {local_path}"))?;
 
     if !meta.is_dir() {
-        let (_, written, hash) = upload_one(conn, local, remote_path).await?;
+        let mut bar = ProgressBar::new(&format!("↑ {}", short_name(local_path)), meta.len());
+        let (_, written, hash) = upload_one(conn, local, remote_path, Some(&mut bar)).await?;
+        let secs = bar.elapsed_secs();
+        bar.clear();
         println!(
-            "uploaded {local_path} → {remote_path} ({written} bytes, sha256:{})",
+            "uploaded {local_path} → {remote_path} ({}, sha256:{})",
+            summary(written, secs),
             hex::encode(hash)
         );
         return Ok(());
@@ -154,14 +319,39 @@ pub async fn upload(
         files.len()
     );
 
+    let total_files = files.len();
+    let mut total_bytes = 0u64;
+    for (p, _) in &files {
+        total_bytes += tokio::fs::metadata(p).await.map(|m| m.len()).unwrap_or(0);
+    }
+    let bar = std::sync::Arc::new(std::sync::Mutex::new(ProgressBar::new(
+        &format!("↑ {}", short_name(local_path)),
+        total_bytes,
+    )));
+    if let Ok(mut b) = bar.lock() {
+        b.set_note(format!("(0/{total_files} files)"));
+    }
+    let bar_enabled = bar.lock().map(|b| b.is_enabled()).unwrap_or(false);
+
     let sem = std::sync::Arc::new(tokio::sync::Semaphore::new(MAX_UPLOAD_CONCURRENCY));
     let mut set = tokio::task::JoinSet::new();
+    let done_count = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
     for (local_file, remote) in files {
         let permit = sem.clone().acquire_owned().await.expect("semaphore closed");
         let conn = conn.clone();
+        let bar = bar.clone();
+        let done_count = done_count.clone();
         set.spawn(async move {
             let _permit = permit;
-            let res = upload_one(&conn, &local_file, &remote).await;
+            let mut shared = SharedBar(bar.clone());
+            let res = upload_one(&conn, &local_file, &remote, Some(&mut shared)).await;
+            // 主循环的 join 要等 spawn 阶段结束才消费，计数必须在任务内即时更新
+            let n_done = done_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+            if bar_enabled {
+                if let Ok(mut b) = bar.lock() {
+                    b.set_note(format!("({n_done}/{total_files} files)"));
+                }
+            }
             (local_file, remote, res)
         });
     }
@@ -174,20 +364,36 @@ pub async fn upload(
             Ok((0x00, n, hash)) => {
                 ok += 1;
                 bytes += n;
-                println!("  ok   {remote} ({n} bytes, sha256:{})", hex::encode(hash));
+                if !bar_enabled {
+                    println!("  ok   {remote} ({n} bytes, sha256:{})", hex::encode(hash));
+                }
             }
             Ok((0x01, _, _)) => {
                 skipped += 1;
+                if let Ok(b) = bar.lock() {
+                    b.clear();
+                }
                 println!("  skip {remote} (already exists)");
             }
             Err(e) => {
                 failed += 1;
+                if let Ok(b) = bar.lock() {
+                    b.clear();
+                }
                 eprintln!("  FAIL {remote}: {e}");
             }
             _ => unreachable!("upload_one only returns status 0x00/0x01 or Err"),
         }
     }
-    println!("upload done: {ok} ok ({bytes} bytes), {skipped} skipped, {failed} failed");
+    let secs = bar.lock().map(|b| b.elapsed_secs()).unwrap_or(0.0);
+    if let Ok(b) = bar.lock() {
+        b.clear();
+    }
+    println!(
+        "upload done: {ok} ok ({}) + {skipped} skipped, {failed} failed, {:.1}s",
+        human_bytes(bytes),
+        secs
+    );
     if failed > 0 {
         bail!("{failed} file(s) failed to upload");
     }
@@ -195,7 +401,12 @@ pub async fn upload(
 }
 
 /// 从 recv 流精确读取 size 字节写入 path，返回 sha256。
-async fn recv_to_file(recv: &mut quinn::RecvStream, path: &Path, size: u64) -> Result<[u8; 32]> {
+async fn recv_to_file(
+    recv: &mut quinn::RecvStream,
+    path: &Path,
+    size: u64,
+    mut progress: Option<&mut dyn ByteProgress>,
+) -> Result<[u8; 32]> {
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
             tokio::fs::create_dir_all(parent)
@@ -221,6 +432,9 @@ async fn recv_to_file(recv: &mut quinn::RecvStream, path: &Path, size: u64) -> R
         hasher.update(&buf[..n]);
         file.write_all(&buf[..n]).await?;
         remaining -= n as u64;
+        if let Some(p) = progress.as_deref_mut() {
+            p.advance(n as u64);
+        }
     }
     file.flush().await?;
     Ok(hasher.finalize().into())
@@ -243,9 +457,13 @@ pub async fn download(conn: &quinn::Connection, remote_path: &str, local_path: &
             let mut size_buf = [0u8; 8];
             recv.read_exact(&mut size_buf).await?;
             let size = u64::from_le_bytes(size_buf);
-            let hash = recv_to_file(&mut recv, Path::new(local_path), size).await?;
+            let mut bar = ProgressBar::new(&format!("↓ {}", short_name(local_path)), size);
+            let hash = recv_to_file(&mut recv, Path::new(local_path), size, Some(&mut bar)).await?;
+            let secs = bar.elapsed_secs();
+            bar.clear();
             println!(
-                "downloaded {remote_path} → {local_path} ({size} bytes, sha256:{})",
+                "downloaded {remote_path} → {local_path} ({}, sha256:{})",
+                summary(size, secs),
                 hex::encode(hash)
             );
             Ok(())
@@ -259,7 +477,7 @@ pub async fn download(conn: &quinn::Connection, remote_path: &str, local_path: &
                 .await
                 .with_context(|| format!("mkdir {local_path}"))?;
             let mut bytes = 0u64;
-            for _ in 0..count {
+            for i in 0..count {
                 let mut len_buf = [0u8; 2];
                 recv.read_exact(&mut len_buf).await?;
                 let len = u16::from_le_bytes(len_buf) as usize;
@@ -270,11 +488,22 @@ pub async fn download(conn: &quinn::Connection, remote_path: &str, local_path: &
                 let mut size_buf = [0u8; 8];
                 recv.read_exact(&mut size_buf).await?;
                 let size = u64::from_le_bytes(size_buf);
-                let hash = recv_to_file(&mut recv, &base.join(&rel), size).await?;
+                let mut bar = ProgressBar::new(&format!("↓ {}", short_name(&rel)), size);
+                bar.set_note(format!("({}/{})", i + 1, count));
+                let hash = recv_to_file(&mut recv, &base.join(&rel), size, Some(&mut bar)).await?;
+                let secs = bar.elapsed_secs();
+                bar.clear();
                 bytes += size;
-                println!("  ok  {rel} ({size} bytes, sha256:{})", hex::encode(hash));
+                println!(
+                    "  ok  {rel} ({}, sha256:{})",
+                    summary(size, secs),
+                    hex::encode(hash)
+                );
             }
-            println!("downloaded {count} file(s) ({bytes} bytes) → {local_path}");
+            println!(
+                "downloaded {count} file(s) ({}) → {local_path}",
+                human_bytes(bytes)
+            );
             Ok(())
         }
         0x02 => {
@@ -293,6 +522,33 @@ pub async fn download(conn: &quinn::Connection, remote_path: &str, local_path: &
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    #[test]
+    fn test_human_bytes() {
+        assert_eq!(human_bytes(512), "512 B");
+        assert_eq!(human_bytes(1024), "1.0 KiB");
+        assert_eq!(human_bytes(524288000), "500.0 MiB");
+        assert_eq!(human_bytes(1073741824), "1.0 GiB");
+    }
+
+    #[test]
+    fn test_summary() {
+        let s = summary(524288000, 25.1);
+        assert!(s.contains("500.0 MiB"));
+        assert!(s.contains("25.1s"));
+        assert!(s.contains("/s"));
+    }
+
+    #[test]
+    fn test_short_name() {
+        assert_eq!(short_name("/tmp/a.txt"), "a.txt");
+        assert_eq!(short_name("a.txt"), "a.txt");
+        assert_eq!(
+            short_name("/tmp/very_long_file_name_here.bin"),
+            "very_long_file_name…"
+        );
+        assert_eq!(short_name("/tmp/dir/"), "dir");
+    }
 
     #[test]
     fn test_should_exclude_glob() {
