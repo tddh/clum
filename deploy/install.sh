@@ -83,6 +83,7 @@ RECORDING_DIR=/opt/clum/recordings
 BRIDGE_AUDIT_DB=/opt/clum/bridge_events.db
 RMUX_SOCKET=${RMUX_SOCKET}
 EOF
+chmod 600 /etc/clum/bridge.env
 
 # Install rmux daemon if not present
 if ! command -v rmux >/dev/null 2>&1; then

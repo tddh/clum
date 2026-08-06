@@ -11,6 +11,7 @@ const CHUNK_SIZE: usize = 1024 * 1024; // 1 MB pipeline buffer
 
 /// 检查文件路径安全性：拒绝 null byte 和路径穿越（`..`）。
 /// 合法路径直接放行，不做规范化 — 运维工具需要完整文件系统访问。
+/// 符号链接防护在下载侧处理：目录遍历跳过符号链接（见 collect_remote_files）。
 fn sanitize_path(raw: &str) -> anyhow::Result<String> {
     if raw.contains('\0') {
         anyhow::bail!("path contains null byte");
@@ -269,7 +270,17 @@ async fn collect_remote_files(
     let mut entries = tokio::fs::read_dir(dir).await?;
     while let Some(entry) = entries.next_entry().await? {
         let path = entry.path();
-        if path.is_dir() {
+        // 用 symlink_metadata 避免跟随符号链接：目录里的符号链接可能指向
+        // 下载范围之外（如 secret -> /root/.ssh），跟随会把范围外文件带出。
+        let meta = match tokio::fs::symlink_metadata(&path).await {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        if meta.file_type().is_symlink() {
+            tracing::debug!("download: skipping symlink {}", path.display());
+            continue;
+        }
+        if meta.is_dir() {
             Box::pin(collect_remote_files(base, &path, files, depth + 1)).await?;
         } else {
             let rel = path.strip_prefix(base)?.to_string_lossy().to_string();

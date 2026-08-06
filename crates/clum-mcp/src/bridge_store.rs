@@ -99,12 +99,16 @@ impl BridgeStore {
 
     pub async fn list(&self) -> Vec<BridgeEntry> {
         let db = self.db.lock().await;
-        let mut stmt = db
-            .prepare(
-                "SELECT hostname, token_prefix, tags, created_at, revoked_at FROM bridges ORDER BY created_at",
-            )
-            .unwrap();
-        stmt.query_map([], |row| {
+        let mut stmt = match db.prepare(
+            "SELECT hostname, token_prefix, tags, created_at, revoked_at FROM bridges ORDER BY created_at",
+        ) {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::error!("bridge_store list prepare failed: {e}");
+                return Vec::new();
+            }
+        };
+        let rows = match stmt.query_map([], |row| {
             let tags_json: String = row.get(2)?;
             let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
             Ok(BridgeEntry {
@@ -114,42 +118,61 @@ impl BridgeStore {
                 created_at: row.get(3)?,
                 revoked: row.get::<_, Option<String>>(4)?.is_some(),
             })
-        })
-        .unwrap()
-        .filter_map(|r| r.ok())
-        .collect()
+        }) {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::error!("bridge_store list query failed: {e}");
+                return Vec::new();
+            }
+        };
+        rows.filter_map(|r| r.ok()).collect()
     }
 
     pub async fn token_map(&self) -> HashMap<String, String> {
         let db = self.db.lock().await;
         let mut map: HashMap<String, String> = HashMap::new();
 
-        let mut stmt = db
-            .prepare("SELECT token_hash, hostname FROM bridges WHERE revoked_at IS NULL")
-            .unwrap();
-        for (hash, host) in stmt
-            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
-            .unwrap()
-            .filter_map(|r| r.ok())
-        {
+        let mut stmt =
+            match db.prepare("SELECT token_hash, hostname FROM bridges WHERE revoked_at IS NULL") {
+                Ok(s) => s,
+                Err(e) => {
+                    tracing::error!("bridge_store token_map prepare failed: {e}");
+                    return map;
+                }
+            };
+        let rows = match stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?))) {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::error!("bridge_store token_map query failed: {e}");
+                return map;
+            }
+        };
+        for (hash, host) in rows.filter_map(|r| r.ok()) {
             map.insert(hash, host);
         }
 
         // Include previous tokens within 12h grace period
         let cutoff = (chrono::Utc::now() - chrono::Duration::hours(12)).to_rfc3339();
-        let mut prev_stmt = db
-            .prepare(
-                "SELECT previous_token_hash, hostname FROM bridges
-                 WHERE revoked_at IS NULL AND previous_token_hash IS NOT NULL AND rotated_at > ?1",
-            )
-            .unwrap();
-        for (hash, host) in prev_stmt
-            .query_map(rusqlite::params![cutoff], |row| {
-                Ok((row.get(0)?, row.get(1)?))
-            })
-            .unwrap()
-            .filter_map(|r| r.ok())
-        {
+        let mut prev_stmt = match db.prepare(
+            "SELECT previous_token_hash, hostname FROM bridges
+             WHERE revoked_at IS NULL AND previous_token_hash IS NOT NULL AND rotated_at > ?1",
+        ) {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::error!("bridge_store token_map (previous) prepare failed: {e}");
+                return map;
+            }
+        };
+        let prev_rows = match prev_stmt.query_map(rusqlite::params![cutoff], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        }) {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::error!("bridge_store token_map (previous) query failed: {e}");
+                return map;
+            }
+        };
+        for (hash, host) in prev_rows.filter_map(|r| r.ok()) {
             map.entry(hash).or_insert(host);
         }
 
@@ -236,12 +259,16 @@ impl BridgeStore {
 
     pub async fn get_all_host_meta(&self) -> Vec<HostMeta> {
         let db = self.db.lock().await;
-        let mut stmt = db
-            .prepare(
-                "SELECT hostname, host_group, tags, labels FROM bridges WHERE revoked_at IS NULL",
-            )
-            .unwrap();
-        stmt.query_map([], |row| {
+        let mut stmt = match db.prepare(
+            "SELECT hostname, host_group, tags, labels FROM bridges WHERE revoked_at IS NULL",
+        ) {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::error!("bridge_store get_all_host_meta prepare failed: {e}");
+                return Vec::new();
+            }
+        };
+        let rows = match stmt.query_map([], |row| {
             let tags_json: String = row.get(2)?;
             let labels_json: String = row.get(3)?;
             Ok(HostMeta {
@@ -250,10 +277,14 @@ impl BridgeStore {
                 tags: serde_json::from_str(&tags_json).unwrap_or_default(),
                 labels: serde_json::from_str(&labels_json).unwrap_or_default(),
             })
-        })
-        .unwrap()
-        .filter_map(|r| r.ok())
-        .collect()
+        }) {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::error!("bridge_store get_all_host_meta query failed: {e}");
+                return Vec::new();
+            }
+        };
+        rows.filter_map(|r| r.ok()).collect()
     }
 }
 
