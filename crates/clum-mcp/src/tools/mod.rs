@@ -4,10 +4,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::audit;
+use crate::forward::ForwardManager;
 use crate::recording_sync;
 use crate::router::HostRouter;
 use crate::stream::StreamManager;
-use crate::forward::ForwardManager;
 
 mod batch;
 mod bridge_audit;
@@ -17,10 +17,10 @@ mod deploy;
 mod discovery;
 mod exec;
 mod file;
+mod forward;
 mod output;
 mod pane;
 mod session;
-mod forward;
 mod window;
 
 // Re-export audit for all sub-modules
@@ -200,9 +200,9 @@ pub async fn execute_tool(
         "batch_exec" => batch::batch_exec(ctx, args, progress).await,
         "batch_upload" => batch::batch_upload(ctx, args, progress).await,
         "batch_download" => batch::batch_download(ctx, args, progress).await,
-            "forward_create" => forward::forward_create(ctx, args).await,
-            "forward_list" => forward::forward_list(ctx).await,
-            "forward_close" => forward::forward_close(ctx, args).await,
+        "forward_create" => forward::forward_create(ctx, args).await,
+        "forward_list" => forward::forward_list(ctx).await,
+        "forward_close" => forward::forward_close(ctx, args).await,
         "find_panes" => discovery::find_panes(ctx, args).await,
         "find_sessions" => discovery::find_sessions(ctx, args).await,
         "get_pane_title" => pane::get_pane_title(ctx, args).await,

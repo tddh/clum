@@ -137,14 +137,15 @@ pub async fn connect_to_bridge_quic_forward(
         anyhow::bail!("bridge QUIC authentication failed");
     }
 
-    tracing::info!("QUIC forward connected and authenticated to {}", bridge_addr);
+    tracing::info!(
+        "QUIC forward connected and authenticated to {}",
+        bridge_addr
+    );
 
     Ok((conn, send, recv))
 }
 
-fn build_quic_client_config(
-    ca_cert_path: Option<&str>,
-) -> anyhow::Result<rustls::ClientConfig> {
+fn build_quic_client_config(ca_cert_path: Option<&str>) -> anyhow::Result<rustls::ClientConfig> {
     let root_store = clum_core::build_root_store(ca_cert_path)?;
     Ok(rustls::ClientConfig::builder()
         .with_root_certificates(root_store)

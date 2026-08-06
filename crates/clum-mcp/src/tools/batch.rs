@@ -80,7 +80,8 @@ pub(crate) async fn batch_exec(
                 }
             };
 
-            let mut stream = match connect_via_registry(&registry, &host, ca_cert.as_deref()).await {
+            let mut stream = match connect_via_registry(&registry, &host, ca_cert.as_deref()).await
+            {
                 Ok(s) => s,
                 Err(e) => {
                     let done = completed.fetch_add(1, Ordering::Relaxed) + 1;

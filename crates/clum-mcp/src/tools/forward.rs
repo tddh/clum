@@ -120,7 +120,9 @@ pub(crate) async fn forward_list(ctx: &ToolContext) -> Result<Value> {
 }
 
 pub(crate) async fn forward_close(ctx: &ToolContext, args: Value) -> Result<Value> {
-    let forward_id = args["forward_id"].as_str().context("missing 'forward_id'")?;
+    let forward_id = args["forward_id"]
+        .as_str()
+        .context("missing 'forward_id'")?;
 
     let caller_group = ctx
         .caller_group

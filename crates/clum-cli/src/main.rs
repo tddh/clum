@@ -1,10 +1,10 @@
 mod ai;
 mod connect;
+mod forward;
 mod protocol;
 mod replay;
 mod transfer;
 mod tui;
-mod forward;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
@@ -201,7 +201,9 @@ async fn main() -> anyhow::Result<()> {
                 let config = load_host_config(&cli.hosts_file, &host)?;
                 let pane = match pane {
                     Some(p) => p,
-                    None => connect::find_lowest_pane(&config, cli.ca_cert.as_deref(), &session).await?,
+                    None => {
+                        connect::find_lowest_pane(&config, cli.ca_cert.as_deref(), &session).await?
+                    }
                 };
                 crate::tui::run_connect_with_ai(
                     Some(&config),
@@ -217,8 +219,15 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Commands::List { host } => {
-            let conn = get_connection(&server_addr, ca_cert.as_deref(), &api_key, &hosts_file, &host, "list")
-                .await?;
+            let conn = get_connection(
+                &server_addr,
+                ca_cert.as_deref(),
+                &api_key,
+                &hosts_file,
+                &host,
+                "list",
+            )
+            .await?;
             let (mut send, mut recv) = conn.open_bi().await?;
             send.write_all(&[0x01]).await?;
             let request = serde_json::json!({ "type": "list_sessions" });
@@ -280,7 +289,10 @@ async fn main() -> anyhow::Result<()> {
                 let _guard = TempGuard(tmp_path.clone());
                 return replay::replay(
                     std::path::Path::new(&tmp_path),
-                    &replay::ReplayOptions { speed, idle_limit: idle },
+                    &replay::ReplayOptions {
+                        speed,
+                        idle_limit: idle,
+                    },
                 );
             } else {
                 anyhow::bail!("file not found: {expanded} (use --server-addr for remote replay)");

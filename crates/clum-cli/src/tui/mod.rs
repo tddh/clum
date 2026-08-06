@@ -458,18 +458,18 @@ pub async fn run_connect_with_ai(
                             // Ctrl+G → AI 模式
                             is_ai_mode.store(true, Ordering::Relaxed);
                         }
-                    0x1c => {
-                        // Ctrl+\ → detach
-                        detach = true;
-                    }
-                    0x03 => {
-                        // Ctrl+C → detach in watch mode, forward otherwise
-                        if watch {
+                        0x1c => {
+                            // Ctrl+\ → detach
                             detach = true;
-                        } else {
-                            forward.push(b);
                         }
-                    }
+                        0x03 => {
+                            // Ctrl+C → detach in watch mode, forward otherwise
+                            if watch {
+                                detach = true;
+                            } else {
+                                forward.push(b);
+                            }
+                        }
                         0x0c => {
                             // Ctrl+L → 清空 AI 历史
                             handle_clear(&ai).await;

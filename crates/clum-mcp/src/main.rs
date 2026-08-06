@@ -5,6 +5,7 @@ mod audit_cli;
 mod bridge_store;
 mod error;
 mod files;
+mod forward;
 mod handler;
 mod http_server;
 mod progress;
@@ -18,7 +19,6 @@ mod stream;
 mod token_rotation;
 mod tools;
 mod transport;
-mod forward;
 
 use clap::Parser;
 use std::path::PathBuf;
@@ -140,9 +140,7 @@ async fn main() -> anyhow::Result<()> {
         .hosts_file
         .or_else(|| file_config.hosts_file.as_ref().map(PathBuf::from))
         .unwrap_or_else(|| PathBuf::from("config/hosts.yaml"));
-    let ca_cert = cli
-        .ca_cert
-        .or(file_config.ca_cert);
+    let ca_cert = cli.ca_cert.or(file_config.ca_cert);
     let audit_retention_days = cli
         .audit_retention_days
         .unwrap_or(file_config.audit_retention_days);

@@ -169,9 +169,13 @@ impl ForwardManager {
                         active.fetch_add(1, Ordering::Relaxed);
 
                         tokio::spawn(async move {
-                            if let Err(e) =
-                                handle_forward_connection(tcp_stream, conn, remote_host, remote_port)
-                                    .await
+                            if let Err(e) = handle_forward_connection(
+                                tcp_stream,
+                                conn,
+                                remote_host,
+                                remote_port,
+                            )
+                            .await
                             {
                                 tracing::warn!(
                                     "forward {} connection error: {}",
