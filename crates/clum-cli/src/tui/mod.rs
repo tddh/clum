@@ -18,11 +18,11 @@ use ratatui_crossterm::CrosstermBackend;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Mutex;
 
-use crate::connect::connect_to_bridge_quic;
 use crate::protocol::{
     read_attached_response, recv_json_frame, send_json_frame, write_attach_request, write_detach,
     write_resize,
 };
+use crate::term::connect_to_bridge_quic;
 
 use self::ai_panel::{AiPanel, Message, Role};
 
@@ -305,8 +305,7 @@ pub async fn run_connect_with_ai(
 ) -> Result<()> {
     crate::ai::init_opencode_dir(opencode_dir);
     let conn = if let Some((server_addr, host)) = &server {
-        crate::connect::connect_via_server(server_addr, ca_cert_path, host, api_key, "connect")
-            .await?
+        crate::term::connect_via_server(server_addr, ca_cert_path, host, api_key, "term").await?
     } else {
         let config = config.context("either config or server must be provided")?;
         let addr = config

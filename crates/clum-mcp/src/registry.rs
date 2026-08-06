@@ -31,6 +31,7 @@ impl BridgeConn {
     }
 }
 
+#[allow(dead_code)]
 pub struct BridgeInfo {
     pub hostname: String,
     pub tags: Vec<String>,

@@ -87,7 +87,7 @@ pub async fn connect_to_bridge_quic(
 ) -> Result<quinn::Connection> {
     let roots = clum_core::build_root_store(ca_cert_path)?;
 
-    let mut tls_config = rustls::ClientConfig::builder()
+    let tls_config = rustls::ClientConfig::builder()
         .with_root_certificates(roots)
         .with_no_client_auth();
 

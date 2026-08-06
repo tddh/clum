@@ -1,8 +1,8 @@
 mod ai;
-mod connect;
 mod forward;
 mod protocol;
 mod replay;
+mod term;
 mod transfer;
 mod tui;
 
@@ -143,7 +143,7 @@ async fn get_connection(
     purpose: &str,
 ) -> anyhow::Result<quinn::Connection> {
     if let Some(addr) = server_addr {
-        connect::connect_via_server(addr, ca_cert, host, api_key.as_deref(), purpose).await
+        term::connect_via_server(addr, ca_cert, host, api_key.as_deref(), purpose).await
     } else {
         let config = load_host_config(hosts_file, host)?;
         let addr = config
@@ -154,7 +154,7 @@ async fn get_connection(
             .bridge_token
             .as_deref()
             .context("bridge_token not configured in hosts.yaml")?;
-        connect::connect_to_bridge_quic(addr, token, ca_cert).await
+        term::connect_to_bridge_quic(addr, token, ca_cert).await
     }
 }
 
@@ -202,7 +202,7 @@ async fn main() -> anyhow::Result<()> {
                 let pane = match pane {
                     Some(p) => p,
                     None => {
-                        connect::find_lowest_pane(&config, cli.ca_cert.as_deref(), &session).await?
+                        term::find_lowest_pane(&config, cli.ca_cert.as_deref(), &session).await?
                     }
                 };
                 crate::tui::run_connect_with_ai(
