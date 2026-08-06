@@ -452,13 +452,27 @@ pub async fn list_local_recordings(
                         continue;
                     }
                 }
-                let meta = file_entry.metadata().await?;
+                let file_meta = file_entry.metadata().await?;
+                let size_bytes = file_meta.len();
+
+                // Parse session info from filename: {user}_{session}__{pane_id}_{ts}_{random}.cast
+                let (user, sess_name, pane_id) = parse_cast_filename(&fname);
+
+                // Read .meta sidecar for duration and timestamp.
+                let meta_path = file_entry.path().with_extension("meta");
+                let (duration_secs, started_at) = read_meta_sidecar(&meta_path).await;
+
                 results.push(json!({
                     "host": host_name,
                     "date": date_name,
                     "file": fname,
-                    "size_bytes": meta.len(),
+                    "size_bytes": size_bytes,
                     "path": file_entry.path().to_string_lossy(),
+                    "user": user,
+                    "session": sess_name,
+                    "pane": pane_id,
+                    "duration_secs": duration_secs,
+                    "started_at": started_at,
                 }));
             }
         }
@@ -476,6 +490,43 @@ pub async fn list_local_recordings(
     });
 
     Ok(results)
+}
+
+/// Parse cast filename into (user, session, pane).
+/// Format: {user}_{session}__{pane_id}_{timestamp}_{random}.cast
+fn parse_cast_filename(fname: &str) -> (String, String, String) {
+    let stem = fname.strip_suffix(".cast").unwrap_or(fname);
+    // Split at "__" to get {user}_{session} and {pane}_{ts}_{random}
+    if let Some((prefix, _rest)) = stem.split_once("__") {
+        let pane = prefix.rsplit('_').next().unwrap_or("").to_string();
+        let user_session = &prefix[..prefix.len().saturating_sub(pane.len() + 1)];
+        if let Some((user, sess)) = user_session.split_once('_') {
+            return (user.to_string(), sess.to_string(), pane);
+        }
+    }
+    (String::new(), String::new(), String::new())
+}
+
+async fn read_meta_sidecar(meta_path: &std::path::Path) -> (Option<f64>, Option<String>) {
+    match tokio::fs::read_to_string(meta_path).await {
+        Ok(content) => {
+            let meta: serde_json::Value = match serde_json::from_str(&content) {
+                Ok(v) => v,
+                Err(_) => return (None, None),
+            };
+            let duration = meta["duration_secs"].as_f64();
+            let started_at = meta["closed_at"].as_str().and_then(|closed| {
+                chrono::DateTime::parse_from_rfc3339(closed).ok().map(|dt| {
+                    let d = duration.unwrap_or(0.0);
+                    (dt - chrono::Duration::milliseconds((d * 1000.0) as i64))
+                        .format("%Y-%m-%dT%H:%M:%S%:z")
+                        .to_string()
+                })
+            });
+            (duration, started_at)
+        }
+        Err(_) => (None, None),
+    }
 }
 
 #[cfg(test)]

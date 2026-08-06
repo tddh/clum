@@ -956,7 +956,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "list_recordings",
-                "description": "List PTY session recordings synced to local storage (asciinema v2 .cast files). Filter by hostname, date (YYYY-MM-DD), or session name prefix. Returns host, date, file, size_bytes, and path for each recording (path is used with get_recording). Recordings are periodically synced from bridges by a background task.",
+                "description": "List PTY session recordings synced to local storage (asciinema v2 .cast files). Filter by hostname, date (YYYY-MM-DD), or session name prefix. Returns host, date, file, size_bytes, path, user, session (name), pane, duration_secs, and started_at for each recording. Recordings are periodically synced from bridges by a background task.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
