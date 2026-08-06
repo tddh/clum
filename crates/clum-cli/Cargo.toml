@@ -28,7 +28,7 @@ serde_json.workspace = true
 serde_yml = "0.0"
 tokio.workspace = true
 tracing.workspace = true
-tracing-subscriber.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 opencode = { package = "opencode-client-sdk", version = "1.2" }
 
 [target.'cfg(unix)'.dependencies]
