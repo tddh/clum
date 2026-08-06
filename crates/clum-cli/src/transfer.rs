@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use anyhow::{bail, Context, Result};
 use sha2::{Digest, Sha256};
@@ -6,6 +7,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 const STREAM_UPLOAD: u8 = 0x02;
 const STREAM_DOWNLOAD: u8 = 0x03;
+const STREAM_LIST: u8 = 0x08;
 const MODE_OVERWRITE: u8 = 0x01;
 const CHUNK_SIZE: usize = 1024 * 1024;
 const MAX_UPLOAD_CONCURRENCY: usize = 16;
@@ -440,9 +442,199 @@ async fn recv_to_file(
     Ok(hasher.finalize().into())
 }
 
-/// 下载远端文件或目录。local_path 为单文件时是目标文件路径，
-/// 远端为目录时是目标目录（文件写入 local_path/<相对路径>）。
+/// 下载远端文件或目录。先向 bridge 请求清单（0x08）：目录则 16 并发逐文件
+/// 下载（聚合进度条）；旧版 bridge 不支持清单流时回退到串行下载。
 pub async fn download(conn: &quinn::Connection, remote_path: &str, local_path: &str) -> Result<()> {
+    match fetch_manifest(conn, remote_path).await {
+        Ok(entries) => {
+            if entries.len() == 1 && entries[0].0.is_empty() {
+                legacy_download(conn, remote_path, local_path).await
+            } else {
+                download_dir_parallel(conn, remote_path, local_path, entries).await
+            }
+        }
+        Err(e) => {
+            eprintln!("manifest query failed ({e:#}), falling back to sequential download");
+            legacy_download(conn, remote_path, local_path).await
+        }
+    }
+}
+
+/// 0x08 清单流：返回 (相对路径, 大小) 列表；远端为单文件时是 [("", size)]。
+async fn fetch_manifest(conn: &quinn::Connection, remote_path: &str) -> Result<Vec<(String, u64)>> {
+    let (mut send, mut recv) = conn.open_bi().await?;
+    send.write_all(&[STREAM_LIST]).await?;
+    send.write_all(&(remote_path.len() as u16).to_le_bytes())
+        .await?;
+    send.write_all(remote_path.as_bytes()).await?;
+    send.finish()?;
+
+    let mut status = [0u8; 1];
+    recv.read_exact(&mut status).await?;
+    match status[0] {
+        0x00 => {
+            let mut count_buf = [0u8; 4];
+            recv.read_exact(&mut count_buf).await?;
+            let count = u32::from_le_bytes(count_buf);
+            let mut entries = Vec::with_capacity(count as usize);
+            for _ in 0..count {
+                let mut len_buf = [0u8; 2];
+                recv.read_exact(&mut len_buf).await?;
+                let len = u16::from_le_bytes(len_buf) as usize;
+                let mut rel_bytes = vec![0u8; len];
+                recv.read_exact(&mut rel_bytes).await?;
+                let rel = String::from_utf8(rel_bytes).context("invalid UTF-8 in rel path")?;
+                let mut size_buf = [0u8; 8];
+                recv.read_exact(&mut size_buf).await?;
+                entries.push((rel, u64::from_le_bytes(size_buf)));
+            }
+            Ok(entries)
+        }
+        0x02 => {
+            let mut len_buf = [0u8; 2];
+            recv.read_exact(&mut len_buf).await?;
+            let len = u16::from_le_bytes(len_buf) as usize;
+            let mut msg = vec![0u8; len];
+            recv.read_exact(&mut msg).await?;
+            bail!("list failed: {}", String::from_utf8_lossy(&msg));
+        }
+        c => bail!("unexpected list status: 0x{c:02x}"),
+    }
+}
+
+/// 并发下载单个文件（0x03），字节进度计入共享聚合进度条。
+async fn download_one(
+    conn: &quinn::Connection,
+    remote_base: &str,
+    rel: &str,
+    base: &Path,
+    bar: Arc<Mutex<ProgressBar>>,
+) -> Result<(u64, [u8; 32])> {
+    validate_rel_path(rel)?;
+    let remote = format!("{}/{}", remote_base.trim_end_matches('/'), rel);
+    let (mut send, mut recv) = conn.open_bi().await?;
+    send.write_all(&[STREAM_DOWNLOAD]).await?;
+    send.write_all(&(remote.len() as u16).to_le_bytes()).await?;
+    send.write_all(remote.as_bytes()).await?;
+    send.finish()?;
+
+    let mut status = [0u8; 1];
+    recv.read_exact(&mut status).await?;
+    match status[0] {
+        0x00 => {
+            let mut size_buf = [0u8; 8];
+            recv.read_exact(&mut size_buf).await?;
+            let size = u64::from_le_bytes(size_buf);
+            let mut shared = SharedBar(bar);
+            let hash = recv_to_file(&mut recv, &base.join(rel), size, Some(&mut shared)).await?;
+            Ok((size, hash))
+        }
+        0x02 => {
+            let mut len_buf = [0u8; 2];
+            recv.read_exact(&mut len_buf).await?;
+            let len = u16::from_le_bytes(len_buf) as usize;
+            let mut msg = vec![0u8; len];
+            recv.read_exact(&mut msg).await?;
+            bail!("download failed: {}", String::from_utf8_lossy(&msg));
+        }
+        0x04 => bail!("expected file but server returned directory: {remote}"),
+        c => bail!("unexpected download status: 0x{c:02x}"),
+    }
+}
+
+/// 目录并行下载：清单预知总量，聚合进度条 + 完成计数，与目录上传样式一致。
+async fn download_dir_parallel(
+    conn: &quinn::Connection,
+    remote_path: &str,
+    local_path: &str,
+    entries: Vec<(String, u64)>,
+) -> Result<()> {
+    let base = PathBuf::from(local_path);
+    tokio::fs::create_dir_all(&base)
+        .await
+        .with_context(|| format!("mkdir {local_path}"))?;
+
+    if entries.is_empty() {
+        println!("no files to download (empty remote directory)");
+        return Ok(());
+    }
+
+    let total_files = entries.len();
+    let total_bytes: u64 = entries.iter().map(|e| e.1).sum();
+    let bar = Arc::new(Mutex::new(ProgressBar::new(
+        &format!("↓ {}", short_name(remote_path)),
+        total_bytes,
+    )));
+    if let Ok(mut b) = bar.lock() {
+        b.set_note(format!("(0/{total_files} files)"));
+    }
+    let bar_enabled = bar.lock().map(|b| b.is_enabled()).unwrap_or(false);
+
+    let sem = Arc::new(tokio::sync::Semaphore::new(MAX_UPLOAD_CONCURRENCY));
+    let mut set = tokio::task::JoinSet::new();
+    let done_count = Arc::new(std::sync::atomic::AtomicU32::new(0));
+    for (rel, _size) in entries {
+        let permit = sem.clone().acquire_owned().await.expect("semaphore closed");
+        let conn = conn.clone();
+        let bar = bar.clone();
+        let done_count = done_count.clone();
+        let remote_base = remote_path.to_string();
+        let base = base.clone();
+        set.spawn(async move {
+            let _permit = permit;
+            let res = download_one(&conn, &remote_base, &rel, &base, bar.clone()).await;
+            let n_done = done_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+            if bar_enabled {
+                if let Ok(mut b) = bar.lock() {
+                    b.set_note(format!("({n_done}/{total_files} files)"));
+                }
+            }
+            (rel, res)
+        });
+    }
+
+    let (mut ok, mut failed) = (0u32, 0u32);
+    let mut bytes = 0u64;
+    while let Some(joined) = set.join_next().await {
+        let (rel, res) = joined.context("download task panicked")?;
+        match res {
+            Ok((size, hash)) => {
+                ok += 1;
+                bytes += size;
+                if !bar_enabled {
+                    println!("  ok  {rel} ({size} bytes, sha256:{})", hex::encode(hash));
+                }
+            }
+            Err(e) => {
+                failed += 1;
+                if let Ok(b) = bar.lock() {
+                    b.clear();
+                }
+                eprintln!("  FAIL {rel}: {e}");
+            }
+        }
+    }
+    let secs = bar.lock().map(|b| b.elapsed_secs()).unwrap_or(0.0);
+    if let Ok(b) = bar.lock() {
+        b.clear();
+    }
+    println!(
+        "download done: {ok} ok ({}), {failed} failed, {:.1}s → {local_path}",
+        human_bytes(bytes),
+        secs
+    );
+    if failed > 0 {
+        bail!("{failed} file(s) failed to download");
+    }
+    Ok(())
+}
+
+/// 串行下载（旧协议路径）：清单流不可用时的回退。
+async fn legacy_download(
+    conn: &quinn::Connection,
+    remote_path: &str,
+    local_path: &str,
+) -> Result<()> {
     let (mut send, mut recv) = conn.open_bi().await?;
     send.write_all(&[STREAM_DOWNLOAD]).await?;
     send.write_all(&(remote_path.len() as u16).to_le_bytes())

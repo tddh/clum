@@ -28,7 +28,8 @@ fn sanitize_path(raw: &str) -> anyhow::Result<String> {
 // ─── QUIC stream handlers ───
 
 /// QUIC stream dispatcher: read stream type byte, route to handler.
-/// 0x01 = JSON protocol frames (LE32 length prefix), 0x02 = file upload, 0x03 = file download, 0x05 = port forward.
+/// 0x01 = JSON protocol frames (LE32 length prefix), 0x02 = file upload, 0x03 = file download,
+/// 0x05 = port forward, 0x08 = directory listing (for parallel download).
 #[allow(clippy::too_many_arguments)]
 pub async fn handle_quic_stream(
     send: quinn::SendStream,
@@ -67,6 +68,7 @@ pub async fn handle_quic_stream(
         0x02 => handle_upload_quic(send, recv).await,
         0x03 => handle_download_quic(send, recv).await,
         0x05 => handle_forward_quic(send, recv).await,
+        0x08 => handle_list_quic(send, recv).await,
         0x06 => {
             crate::interactive::handle_interactive_control(
                 send,
@@ -255,6 +257,63 @@ async fn download_dir_quic(mut send: quinn::SendStream, remote_path: &str) -> an
         remote_path,
         files.len()
     );
+    Ok(())
+}
+
+/// 0x08 = 目录清单（并行下载用）：只返回文件列表与大小，不传内容。
+/// 响应：[0x00][count u32]，随后 count × [rel_len u16][rel][size u64]；
+/// 远端为单文件时 count=1 且 rel 为空串；错误：[0x02][msg_len u16][msg]。
+async fn handle_list_quic(
+    mut send: quinn::SendStream,
+    mut recv: quinn::RecvStream,
+) -> anyhow::Result<()> {
+    let mut path_len_buf = [0u8; 2];
+    recv.read_exact(&mut path_len_buf).await?;
+    let path_len = u16::from_le_bytes(path_len_buf) as usize;
+    let mut path = vec![0u8; path_len];
+    recv.read_exact(&mut path).await?;
+    let remote_path = sanitize_path(&String::from_utf8_lossy(&path))?;
+
+    let meta = match tokio::fs::metadata(&remote_path).await {
+        Ok(m) => m,
+        Err(e) => {
+            let msg = format!("failed to stat: {e}");
+            send.write_all(&[0x02]).await?;
+            send.write_all(&(msg.len() as u16).to_le_bytes()).await?;
+            send.write_all(msg.as_bytes()).await?;
+            send.finish()?;
+            return Ok(());
+        }
+    };
+
+    let entries: Vec<(String, u64)> = if meta.is_dir() {
+        let base = std::path::Path::new(&remote_path);
+        let mut files: Vec<(std::path::PathBuf, String)> = Vec::new();
+        collect_remote_files(base, base, &mut files, 0).await?;
+        let mut out = Vec::with_capacity(files.len());
+        for (abs_path, rel) in files {
+            let size = tokio::fs::metadata(&abs_path)
+                .await
+                .map(|m| m.len())
+                .unwrap_or(0);
+            out.push((rel, size));
+        }
+        out
+    } else {
+        vec![(String::new(), meta.len())]
+    };
+
+    send.write_all(&[0x00]).await?;
+    send.write_all(&(entries.len() as u32).to_le_bytes())
+        .await?;
+    for (rel, size) in &entries {
+        send.write_all(&(rel.len() as u16).to_le_bytes()).await?;
+        send.write_all(rel.as_bytes()).await?;
+        send.write_all(&size.to_le_bytes()).await?;
+    }
+    send.finish()?;
+
+    tracing::info!("QUIC listed {} ({} files)", remote_path, entries.len());
     Ok(())
 }
 
