@@ -34,7 +34,7 @@ pub fn instructions() -> String {
 - `clum-cli upload <host> <local> <remote>` — file upload through server relay\n\
 - `clum-cli download <host> <remote> <local>` — file download\n\
 - `clum-cli forward <host> --local <port> --remote <host:port>` — port forwarding\n\
-- `clum-cli connect <host> [--session <name>]` — interactive PTY\n\
+- `clum-cli term <host> [--session <name>]` — interactive PTY\n\
 - `clum-cli list <host>` — list sessions\n\
 - `clum-cli replay <host/file.cast>` — remote recording playback\n\
 - Requires env: CLUM_SERVER_ADDR, CLUM_API_KEY (legacy YUNYING_* still accepted as fallback; or --server-addr / --api-key flags)\n\n\

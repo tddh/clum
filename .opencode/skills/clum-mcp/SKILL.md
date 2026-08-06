@@ -15,7 +15,7 @@ clum is a **remote Linux operations platform** — not a simple SSH tool. Unders
 |---------|-------------|
 | **No direct SSH** | You do NOT hold SSH keys. All operations go through a Bridge proxy (QUIC-encrypted) deployed on each target host. |
 | **Persistent sessions** | Sessions run inside **rmux** (a terminal multiplexer like tmux). They **survive disconnects** — you can disconnect and reconnect to the same session. Long-running commands keep running in the background. |
-| **Shared sessions** | The same session can be used by AI (via MCP) and humans (via CLI `connect`) simultaneously or in turns. After you run a command, a human can attach and see the results. |
+| **Shared sessions** | The same session can be used by AI (via MCP) and humans (via CLI `term`) simultaneously or in turns. After you run a command, a human can attach and see the results. |
 | **Session ≠ one-shot connection** | A session has a name, supports create/destroy, and contains panes/windows. Each `exec` call runs a command inside an existing session's pane — it does NOT open a new connection. |
 | **Multi-host registry** | Hosts come from two sources: **enrolled bridges** (auto-registered via QUIC, shown as `via: "enrolled"`) and **hosts.yaml** (static config, `via: "direct"`). Use `host_list` to see all. Use `host_set_meta` to tag/label enrolled hosts. |
 | **Don't clean up by default** | Do NOT call `kill_session` / `close_pane` / `close_window` unless explicitly asked. Sessions are shared resources — a human or another AI might be using them. |
