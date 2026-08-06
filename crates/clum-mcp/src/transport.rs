@@ -350,3 +350,143 @@ async fn open_json_stream(conn: &quinn::Connection) -> Result<BridgeStream> {
         recv,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use tokio::io::AsyncWriteExt;
+
+    #[test]
+    fn constants_file_idle_timeout() {
+        assert_eq!(FILE_IDLE_TIMEOUT, Duration::from_secs(3600));
+        assert_eq!(FILE_IDLE_TIMEOUT.as_secs(), 3600);
+    }
+
+    #[test]
+    fn constants_connect_timeout() {
+        assert_eq!(CONNECT_TIMEOUT, Duration::from_secs(10));
+        assert_eq!(CONNECT_TIMEOUT.as_secs(), 10);
+    }
+
+    #[tokio::test]
+    async fn with_retry_succeeds_first_try() {
+        let result = with_retry("test", 3, || async { Ok::<i32, anyhow::Error>(42) }).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[tokio::test]
+    async fn with_retry_succeeds_after_failures() {
+        let counter = AtomicU32::new(0);
+        let result = with_retry("test", 3, || {
+            let c = counter.fetch_add(1, Ordering::SeqCst);
+            async move {
+                if c < 2 {
+                    anyhow::bail!("attempt {c} failed")
+                } else {
+                    Ok(c)
+                }
+            }
+        })
+        .await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 2);
+        assert_eq!(counter.load(Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn with_retry_all_failures_returns_last_error() {
+        let result: anyhow::Result<i32> =
+            with_retry("test", 2, || async { anyhow::bail!("always fail") }).await;
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("always fail"));
+    }
+
+    #[tokio::test]
+    async fn with_retry_zero_max_retries_fails_immediately() {
+        let result: anyhow::Result<i32> =
+            with_retry("test", 0, || async { anyhow::bail!("no retries") }).await;
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("no retries"));
+    }
+
+    #[tokio::test]
+    async fn send_recv_json_roundtrip_simple() {
+        let (client, server) = tokio::io::duplex(4096);
+        let (mut _cr, mut cw) = tokio::io::split(client);
+        let (mut sr, mut _sw) = tokio::io::split(server);
+
+        let value = serde_json::json!({"hello": "world", "num": 42});
+        let (send_res, recv_res) =
+            tokio::join!(send_json_frame(&mut cw, &value), recv_json_frame(&mut sr));
+
+        assert!(send_res.is_ok(), "send failed: {:?}", send_res.err());
+        assert!(recv_res.is_ok(), "recv failed: {:?}", recv_res.err());
+        assert_eq!(recv_res.unwrap(), value);
+    }
+
+    #[tokio::test]
+    async fn send_recv_json_roundtrip_empty_object() {
+        let (client, server) = tokio::io::duplex(4096);
+        let (mut _cr, mut cw) = tokio::io::split(client);
+        let (mut sr, mut _sw) = tokio::io::split(server);
+
+        let value = serde_json::json!({});
+        let (send_res, recv_res) =
+            tokio::join!(send_json_frame(&mut cw, &value), recv_json_frame(&mut sr));
+
+        assert!(send_res.is_ok());
+        assert!(recv_res.is_ok());
+        assert_eq!(recv_res.unwrap(), value);
+    }
+
+    #[tokio::test]
+    async fn send_recv_json_roundtrip_null() {
+        let (client, server) = tokio::io::duplex(4096);
+        let (mut _cr, mut cw) = tokio::io::split(client);
+        let (mut sr, mut _sw) = tokio::io::split(server);
+
+        let value = serde_json::Value::Null;
+        let (send_res, recv_res) =
+            tokio::join!(send_json_frame(&mut cw, &value), recv_json_frame(&mut sr));
+
+        assert!(send_res.is_ok());
+        assert!(recv_res.is_ok());
+        assert_eq!(recv_res.unwrap(), value);
+    }
+
+    #[tokio::test]
+    async fn send_recv_json_roundtrip_nested() {
+        let (client, server) = tokio::io::duplex(8192);
+        let (mut _cr, mut cw) = tokio::io::split(client);
+        let (mut sr, mut _sw) = tokio::io::split(server);
+
+        let value = serde_json::json!({
+            "array": [1, "two", null, true, {"deep": [3.14]}],
+            "escaped": "line1\nline2\t\"quoted\""
+        });
+        let (send_res, recv_res) =
+            tokio::join!(send_json_frame(&mut cw, &value), recv_json_frame(&mut sr));
+
+        assert!(send_res.is_ok());
+        assert!(recv_res.is_ok());
+        assert_eq!(recv_res.unwrap(), value);
+    }
+
+    #[tokio::test]
+    async fn recv_json_frame_rejects_oversized_frame() {
+        let (mut client, mut server) = tokio::io::duplex(64);
+
+        let fake_len = (clum_core::MAX_FRAME_SIZE + 1) as u32;
+        client.write_all(&fake_len.to_le_bytes()).await.unwrap();
+        drop(client);
+
+        let result = recv_json_frame(&mut server).await;
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("frame too large"), "unexpected error: {msg}");
+    }
+}

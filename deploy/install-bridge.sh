@@ -7,6 +7,8 @@ BRIDGE_BINARY="${1:?Usage: $0 <bridge-binary> <user@host> [<certs-dir>]}"
 REMOTE_HOST="${2:?Usage: $0 <bridge-binary> <user@host> [<certs-dir>]}"
 CERTS_DIR="${3:-certs}"
 REMOTE_DIR="/opt/clum"
+BIN_DIR="/usr/local/bin"
+ETC_DIR="/etc/clum"
 BRIDGE_TOKEN="${BRIDGE_TOKEN:-$(openssl rand -hex 32)}"
 
 HOST_IP=$(echo "$REMOTE_HOST" | cut -d@ -f2 | cut -d: -f1)
@@ -31,19 +33,19 @@ ssh "$REMOTE_HOST" "echo 'export RMUX_TMPDIR=\$HOME/.rmux' | sudo tee /etc/profi
 echo "Wrote RMUX_TMPDIR=\$HOME/.rmux to /etc/profile.d/clum.sh"
 
 # 3. 创建目录
-ssh "$REMOTE_HOST" "sudo mkdir -p $REMOTE_DIR/certs && sudo chown \$USER:\$USER $REMOTE_DIR"
+ssh "$REMOTE_HOST" "sudo mkdir -p $BIN_DIR $ETC_DIR $REMOTE_DIR/recordings && sudo chown \$USER:\$USER $BIN_DIR"
 
-# 4. 上传 bridge 二进制
-scp "$BRIDGE_BINARY" "$REMOTE_HOST:$REMOTE_DIR/"
-ssh "$REMOTE_HOST" "sudo chmod 755 $REMOTE_DIR/rmux-bridge"
+# 4. 上传 bridge 二进制到 /usr/local/bin/
+scp "$BRIDGE_BINARY" "$REMOTE_HOST:$BIN_DIR/"
+ssh "$REMOTE_HOST" "sudo chmod 755 $BIN_DIR/rmux-bridge"
 
-# 5. 上传主机专属的 TLS 证书
-scp "$HOST_CERT" "$REMOTE_HOST:$REMOTE_DIR/certs/${HOST_IP}.crt"
-scp "$HOST_KEY" "$REMOTE_HOST:$REMOTE_DIR/certs/${HOST_IP}.key"
-ssh "$REMOTE_HOST" "chmod 600 $REMOTE_DIR/certs/${HOST_IP}.key"
+# 5. 上传主机专属的 TLS 证书到 /etc/clum/
+scp "$HOST_CERT" "$REMOTE_HOST:$ETC_DIR/${HOST_IP}.crt"
+scp "$HOST_KEY" "$REMOTE_HOST:$ETC_DIR/${HOST_IP}.key"
+ssh "$REMOTE_HOST" "chmod 600 $ETC_DIR/${HOST_IP}.key"
 
-# 6. 写入 token
-ssh "$REMOTE_HOST" "echo 'BRIDGE_AUTH_TOKEN=$BRIDGE_TOKEN' | sudo tee $REMOTE_DIR/bridge.env > /dev/null && sudo chmod 600 $REMOTE_DIR/bridge.env"
+# 6. 写入 token 到 /etc/clum/bridge.env
+ssh "$REMOTE_HOST" "echo 'BRIDGE_AUTH_TOKEN=$BRIDGE_TOKEN' | sudo tee $ETC_DIR/bridge.env > /dev/null && sudo chmod 600 $ETC_DIR/bridge.env"
 
 # 7. 检测 rmux socket 路径（优先 /run/rmux，然后 \$HOME/.rmux，回退 /tmp）
 RMUX_SOCK=$(ssh "$REMOTE_HOST" "for d in /run/rmux \$HOME/.rmux /tmp; do s=\$(ls \$d/rmux-*/default 2>/dev/null | head -1); [ -n \"\$s\" ] && echo \$s && break; done; [ -z \"\$s\" ] && echo '/tmp/rmux-0/default'")
@@ -58,13 +60,13 @@ Requires=rmux-daemon.service
 
 [Service]
 Type=simple
-EnvironmentFile=/opt/clum/bridge.env
-ExecStart=/opt/clum/rmux-bridge \\
+EnvironmentFile=/etc/clum/bridge.env
+ExecStart=/usr/local/bin/rmux-bridge \\
     --quic-listen-addr 0.0.0.0:9778 \\
     --max-connections 256 \\
     --rmux-socket $RMUX_SOCK \\
-    --tls-cert /opt/clum/certs/${HOST_IP}.crt \\
-    --tls-key /opt/clum/certs/${HOST_IP}.key
+    --tls-cert /etc/clum/${HOST_IP}.crt \\
+    --tls-key /etc/clum/${HOST_IP}.key
 Restart=always
 RestartSec=5
 

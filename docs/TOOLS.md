@@ -343,7 +343,7 @@
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | 主机名 |
-| `check` | string | | 检查特定 capability（可选，如 `"sixel"`） |
+| `check` | string | | 检查特定 capability（可选，如 `"stream.control"`） |
 
 **返回** `{"ok": true, "capabilities": ["web.share", "sdk.waits", ...], "count": 20}` — 指定 `check` 时额外返回 `"has_capability": true/false`
 
@@ -829,7 +829,7 @@
 | `host` | string | ✅ | 主机名称 |
 | `local_path` | string | ✅ | 本地文件路径 |
 | `remote_path` | string | ✅ | 远程目标路径 |
-| `overwrite` | string | | 覆盖策略: `overwrite`(默认) / `skip` / `rename` / `error` |
+| `overwrite` | string | | 覆盖策略: `overwrite`(默认) / `skip` / `rename` / `error`（=放弃，文件已存在时报错） |
 | `exclude` | string[] | | glob 排除模式，如 `["*.log", "target/**/*"]` |
 
 **返回** `{"ok": true, "files": [...], "total": N, "uploaded": N, "skipped": N, "failed": 0}`
@@ -913,7 +913,7 @@ clum-mcp audit cleanup [--db <path>] [--older-than <days>] [--max-size <mb>]
 | `host_name` | string | 目标主机 |
 | `session_name` | string | 会话名 |
 | `pane_id` | string | 窗格 ID（非 pane 操作为空） |
-| `action` | string | 操作类型（66 种 AuditAction） |
+| `action` | string | 操作类型（67 种 AuditAction） |
 | `detail` | string | 操作参数 |
 | `output_summary` | string | Exec/CmdEscape 的输出摘要（前 500 字符） |
 | `success` | bool | 操作是否成功 |
@@ -1006,7 +1006,7 @@ Upload a file or directory to multiple hosts concurrently.
 | `hosts` | string[] | ✅ | 主机名列表 |
 | `local_path` | string | ✅ | 本地文件或目录路径 |
 | `remote_path` | string | ✅ | 远程目标路径 |
-| `overwrite` | string | | overwrite\|skip\|rename\|error（默认 overwrite） |
+| `overwrite` | string | | 覆盖策略: `overwrite`(默认) / `skip` / `rename` / `error`（=放弃，文件已存在时报错） |
 | `exclude` | string[] | | 排除 glob 模式 |
 | `concurrency` | integer | | 最大并发连接数（默认 5，0=不限制） |
 
@@ -1166,7 +1166,7 @@ forward_create host="tf01" local_port=8080 remote_host="api.internal" remote_por
 
 将编译好的 rmux-bridge 二进制部署到远程主机并重启服务。仅支持升级场景（目标主机必须已有 bridge 运行）。首次部署请通过 SSH 执行 `deploy/install-bridge.sh`。
 
-内部流程：查询 systemd ExecStart → 校验路径 → 上传二进制 → 设权限 → 替换 → nohup 后台重启。
+内部流程：查询 systemd ExecStart → 校验路径 → 上传二进制 → 设权限 → 替换 → `systemctl restart` 重启服务（fire-and-forget，不等待重连验证）。
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|

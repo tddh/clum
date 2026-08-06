@@ -377,6 +377,7 @@ just test        # cargo test --workspace
 just fmt         # cargo fmt --all
 just lint        # cargo clippy --workspace -- -D warnings
 just build       # cargo build --workspace
+just release-linux  # 交叉编译 Linux x86_64 musl
 ```
 
 ## 技术栈

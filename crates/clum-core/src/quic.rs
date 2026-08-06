@@ -111,3 +111,75 @@ pub async fn connect_bridge(
     authenticate_bridge(&conn, auth_token).await?;
     Ok(conn)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    fn ensure_crypto_provider() {
+        static INIT: std::sync::Once = std::sync::Once::new();
+        INIT.call_once(|| {
+            rustls::crypto::ring::default_provider()
+                .install_default()
+                .expect("failed to install ring crypto provider");
+        });
+    }
+
+    #[test]
+    fn build_transport_config_does_not_panic_standard_params() {
+        let _config = build_transport_config(Duration::from_secs(30), Duration::from_secs(15));
+    }
+
+    #[test]
+    fn build_transport_config_does_not_panic_zero_timeout() {
+        let _config = build_transport_config(Duration::from_secs(0), Duration::from_secs(5));
+    }
+
+    #[test]
+    fn build_transport_config_does_not_panic_large_timeout() {
+        let _config = build_transport_config(Duration::from_secs(3600), Duration::from_secs(60));
+    }
+
+    #[test]
+    fn build_transport_config_does_not_panic_zero_keepalive() {
+        let _config = build_transport_config(Duration::from_secs(30), Duration::from_secs(0));
+    }
+
+    #[test]
+    fn window_size_constant_is_16mb() {
+        assert_eq!(WINDOW_SIZE, 16 * 1024 * 1024);
+    }
+
+    #[test]
+    fn default_keepalive_is_15_seconds() {
+        assert_eq!(DEFAULT_KEEPALIVE, Duration::from_secs(15));
+    }
+
+    #[test]
+    fn build_client_crypto_none_ca_uses_webpki_roots() {
+        ensure_crypto_provider();
+        let result = build_client_crypto(None, &[]);
+        assert!(result.is_ok(), "should build crypto with webpki roots");
+    }
+
+    #[test]
+    fn build_client_crypto_with_alpn_succeeds() {
+        ensure_crypto_provider();
+        let alpn = &[b"h3" as &[u8]];
+        let result = build_client_crypto(None, alpn);
+        assert!(result.is_ok(), "should build crypto with ALPN set");
+    }
+
+    #[test]
+    fn build_client_crypto_nonexistent_ca_returns_error() {
+        let result = build_client_crypto(Some("/nonexistent/ca-cert.pem"), &[]);
+        assert!(result.is_err(), "nonexistent CA path should return error");
+    }
+
+    #[test]
+    fn constants_are_nonzero() {
+        assert!(WINDOW_SIZE > 0);
+        assert!(DEFAULT_KEEPALIVE > Duration::from_secs(0));
+    }
+}

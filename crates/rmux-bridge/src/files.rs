@@ -457,4 +457,82 @@ mod tests {
         let result = sanitize_path("/tmp/nonexistent-file-xyz-123.txt").unwrap();
         assert_eq!(result, "/tmp/nonexistent-file-xyz-123.txt");
     }
+
+    // ── sanitize_path edge cases ──
+
+    #[test]
+    fn test_sanitize_path_empty_string() {
+        let result = sanitize_path("").unwrap();
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_sanitize_path_bare_dotdot() {
+        assert!(sanitize_path("..").is_err());
+    }
+
+    #[test]
+    fn test_sanitize_path_double_dot_in_filename() {
+        // "file..name" contains ".." but is NOT a path component —
+        // current simple substring check rejects it as a tradeoff.
+        assert!(sanitize_path("file..name").is_err());
+    }
+
+    // ── copy_with_buf chunk boundary tests ──
+
+    #[tokio::test]
+    async fn test_copy_with_buf_empty_reader() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("empty.dat");
+        let dst = dir.path().join("out.dat");
+
+        tokio::fs::File::create(&src).await.unwrap();
+
+        let mut reader = tokio::fs::File::open(&src).await.unwrap();
+        let mut writer = tokio::fs::File::create(&dst).await.unwrap();
+
+        let total = copy_with_buf(&mut reader, &mut writer).await.unwrap();
+        drop(writer);
+
+        assert_eq!(total, 0);
+        assert_eq!(std::fs::metadata(&dst).unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_copy_with_buf_smaller_than_chunk() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("small.bin");
+        let dst = dir.path().join("out.bin");
+
+        let data = vec![0xAB; 4096]; // 4 KB ≪ CHUNK_SIZE (1 MB)
+        tokio::fs::write(&src, &data).await.unwrap();
+
+        let mut reader = tokio::fs::File::open(&src).await.unwrap();
+        let mut writer = tokio::fs::File::create(&dst).await.unwrap();
+
+        let total = copy_with_buf(&mut reader, &mut writer).await.unwrap();
+        drop(writer);
+
+        assert_eq!(total, data.len() as u64);
+        assert_eq!(std::fs::read(&dst).unwrap(), data);
+    }
+
+    #[tokio::test]
+    async fn test_copy_with_buf_exact_chunk_size() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("exact.bin");
+        let dst = dir.path().join("out.bin");
+
+        let data = vec![0xCD; CHUNK_SIZE]; // exactly 1 MB
+        tokio::fs::write(&src, &data).await.unwrap();
+
+        let mut reader = tokio::fs::File::open(&src).await.unwrap();
+        let mut writer = tokio::fs::File::create(&dst).await.unwrap();
+
+        let total = copy_with_buf(&mut reader, &mut writer).await.unwrap();
+        drop(writer);
+
+        assert_eq!(total, CHUNK_SIZE as u64);
+        assert_eq!(std::fs::read(&dst).unwrap(), data);
+    }
 }

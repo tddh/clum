@@ -293,3 +293,132 @@ pub fn generate_bridge_token() -> String {
     getrandom::getrandom(&mut bytes).expect("CSPRNG failed");
     hex::encode(bytes)
 }
+
+#[cfg(test)]
+impl BridgeStore {
+    /// Test-only constructor: wraps an existing rusqlite::Connection directly,
+    /// bypassing the schema creation in `open()`. Each test is responsible for
+    /// setting up the schema (or not) depending on what it needs to verify.
+    fn from_conn(conn: rusqlite::Connection) -> Self {
+        Self {
+            db: tokio::sync::Mutex::new(conn),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Helper: run an async closure synchronously using a new single-threaded runtime.
+    fn block_on<F: std::future::Future>(f: F) -> F::Output {
+        tokio::runtime::Runtime::new().unwrap().block_on(f)
+    }
+
+    /// Create the full bridges table schema (matching `BridgeStore::open`),
+    /// used by tests that need a real table to operate on.
+    fn create_test_schema(conn: &rusqlite::Connection) {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS bridges (
+                token_hash   TEXT PRIMARY KEY,
+                token_prefix TEXT NOT NULL,
+                hostname     TEXT NOT NULL UNIQUE,
+                tags         TEXT NOT NULL DEFAULT '[]',
+                labels       TEXT NOT NULL DEFAULT '{}',
+                machine_id   TEXT,
+                os_info      TEXT,
+                created_at   TEXT NOT NULL,
+                revoked_at   TEXT,
+                host_group   TEXT NOT NULL DEFAULT '',
+                previous_token_hash TEXT,
+                rotated_at   TEXT
+            );",
+        )
+        .unwrap();
+    }
+
+    // ── Empty DB / error-fallback tests ──────────────────────────────
+
+    #[test]
+    fn list_empty_db_returns_empty_vec() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        let store = BridgeStore::from_conn(conn);
+        let result = block_on(store.list());
+        assert!(
+            result.is_empty(),
+            "expected empty Vec for fresh in-memory db"
+        );
+    }
+
+    #[test]
+    fn token_map_empty_db_returns_empty_hashmap() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        let store = BridgeStore::from_conn(conn);
+        let result = block_on(store.token_map());
+        assert!(
+            result.is_empty(),
+            "expected empty HashMap for fresh in-memory db"
+        );
+    }
+
+    #[test]
+    fn get_all_host_meta_empty_db_returns_empty_vec() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        let store = BridgeStore::from_conn(conn);
+        let result = block_on(store.get_all_host_meta());
+        assert!(
+            result.is_empty(),
+            "expected empty Vec for fresh in-memory db"
+        );
+    }
+
+    // ── Behaviour tests (require schema) ─────────────────────────────
+
+    #[test]
+    fn add_then_list_finds_record() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        create_test_schema(&conn);
+        let store = BridgeStore::from_conn(conn);
+
+        block_on(store.add(
+            "test-host",
+            "test-token-longenough",
+            &["tag1".into(), "tag2".into()],
+            Some("prod"),
+        ))
+        .unwrap();
+
+        let entries = block_on(store.list());
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].hostname, "test-host");
+        assert!(!entries[0].revoked);
+    }
+
+    #[test]
+    fn validate_token_invalid_token_returns_false() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        create_test_schema(&conn);
+        let store = BridgeStore::from_conn(conn);
+
+        let valid = block_on(store.validate_token("nonexistent-token-1234"));
+        assert!(!valid, "unknown token should return false");
+    }
+
+    #[test]
+    fn remove_then_list_shows_revoked_flag() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        create_test_schema(&conn);
+        let store = BridgeStore::from_conn(conn);
+
+        block_on(store.add("test-host", "test-token-longenough", &[], None)).unwrap();
+        block_on(store.remove("test-host")).unwrap();
+
+        let entries = block_on(store.list());
+        assert_eq!(
+            entries.len(),
+            1,
+            "list() still returns the entry after revoke"
+        );
+        assert!(entries[0].revoked, "revoked flag should be true");
+    }
+}

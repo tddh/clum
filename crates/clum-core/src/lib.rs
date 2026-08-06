@@ -52,7 +52,7 @@ pub fn build_root_store(ca_cert_path: Option<&str>) -> anyhow::Result<rustls::Ro
 
 #[cfg(test)]
 mod tests {
-    use super::inject_env_fallback;
+    use super::*;
 
     #[test]
     fn fallback_mirrors_legacy_when_new_unset() {
@@ -81,5 +81,23 @@ mod tests {
         );
         std::env::remove_var(new_key);
         std::env::remove_var(legacy_key);
+    }
+
+    #[test]
+    fn build_root_store_none_uses_webpki_roots() {
+        let store = build_root_store(None).expect("should build store from webpki roots");
+        assert!(!store.is_empty(), "webpki roots store should not be empty");
+    }
+
+    #[test]
+    fn build_root_store_nonexistent_path_returns_error() {
+        let result = build_root_store(Some("/nonexistent/path/definitely/not/here.pem"));
+        assert!(result.is_err(), "nonexistent path should return error");
+    }
+
+    #[test]
+    fn build_root_store_empty_nonexistent_dir_path_returns_error() {
+        let result = build_root_store(Some(""));
+        assert!(result.is_err(), "empty path should return error");
     }
 }

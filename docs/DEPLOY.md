@@ -374,7 +374,7 @@ clum-mcp audit cleanup --older-than 30
 ├── bridge.crt                    # 主机 TLS 证书（可选，直连回退用）
 └── bridge.key                    # TLS 私钥（权限 600，可选）
 
-/opt/agent-ops/                  # 远程主机数据
+/opt/clum/                       # 远程主机数据
 ├── recordings/                   # PTY 录制文件（asciinema v2）
 └── bridge_events.db              # Bridge 侧审计数据库
 

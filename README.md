@@ -378,6 +378,7 @@ just test        # cargo test --workspace
 just fmt         # cargo fmt --all
 just lint        # cargo clippy --workspace -- -D warnings
 just build       # cargo build --workspace
+just release-linux  # cross-compile Linux x86_64 musl
 ```
 
 ## Tech Stack
