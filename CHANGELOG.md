@@ -21,17 +21,32 @@
 
 ## [Unreleased]
 
+### Added
+- **term**：断线检测（`conn.closed()`）与自动重连（1s→30s 指数退避），重连后回放 attach scrollback 恢复屏幕；AI 面板状态跨重连保留。
+- **term**：读取 ctrl 流 `0x83 process_exited`，远端卸载（Ctrl+B D）或 pane 进程退出时干净退出并提示 `term: detached (exit code N)`，不再卡死。
+- **clum-core::quic**：新增共享 QUIC 传输层（`build_transport_config`/`client_endpoint`/`connect_bridge`/`authenticate_bridge`），clum-mcp、clum-cli、rmux-bridge 统一复用，消除 6 处重复建连代码与参数漂移（窗口/BBR/keepalive 归一）。
+
 ### Changed
+- **MCP 工具**：`session_name` 全部工具缺省默认 `"clum"`（原为必填报错），schema 移出 required，TOOLS.md 同步。
+- **错误码**：`TUNNEL_DENIED` → `FORWARD_DENIED`（与 docs/TOOLS.md 及 `FORWARD_NOT_FOUND` 对齐）。
+- CLI 直连 bridge 新增 10s 握手超时（原无限等待）。
+- `forward_create` 建连不再挂保活 auth 流任务（握手完成即关闭）。
 - `http_server.rs`：结构体 `YunyingServer` → `ClumServer`（0.10.0 改名遗漏清理）。
 - `deploy/install.sh`：新增 rmux socket 自动检测（与 `deploy-bridge.sh` 逻辑一致，未检测到时回退 `/root/.rmux/rmux-0/default`），不再硬编码。
 - `deploy/deploy-bridge.sh`：bridge.env 补写 `RECORDING_DIR=/opt/clum/recordings`，与 `install.sh` 对齐（此前缺失导致录制落入二进制同目录的默认路径）。
 - download token TTL 接入 `server-config.yaml` 的 `token_ttl_hours`（默认 24h），不再硬编码 1 小时。
 - justfile：移除 `update-all-bridges`（硬编码 IP 清单，改用 `deploy_bridge` MCP 工具）与 `deploy-mcp`（直接用 `bash deploy/deploy-mcp.sh`）。
 
+### Fixed
+- README/README.zh：`connect` → `term` 重命名遗漏。
+- docs/TOOLS.md：`list_recordings` 示例补齐 0.10.1 新增字段。
+- `.qoder/skills/clum-mcp/SKILL.md`：`TUNNEL_DENIED`/`TUNNEL_NOT_FOUND` 更新为 `FORWARD_*`。
+
 ### Removed
 - `scripts/migrate-to-yunying.sh`：agent-ops → yunying 时代的迁移脚本，已被 `scripts/migrate-to-clum.sh` 取代。
 
 ### Docs
+- AGENTS.md：新增开发/测试隔离规则（测试必须用独立会话，严禁破坏默认 `clum` 会话）。
 - 全面对齐文档与 0.10.0 实现：TOOLS.md（deploy_bridge `restart_sent` 状态、`FORBIDDEN` 错误码、`resolved_pane_id`/`auto_resolved`、tunnel `group` 字段）、terminal-state-design.md（§3.3 伪代码同步、新增 §4.6 exec 安全门禁）、connect-design.md（§6.2.2 过时标注）、DEPLOY.md（bridge.env 变量清单、socket 检测表述）、SECURITY.md（TLS 表述、HTTP 端点防护）、SKILL.md（`FORBIDDEN`/`UNKNOWN` 错误码）。
 
 ## [0.10.0] — 2026-08-04
