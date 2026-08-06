@@ -37,7 +37,7 @@ AI Agent（通过 MCP）
 
 # 模式 2：人类 CLI 介入调查，AI 辅助
 人类（通过 CLI PTY 透传）
-  → clum-cli connect tf01   # 进入 AI 正在操作的同一会话
+  → clum-cli term tf01   # 进入 AI 正在操作的同一会话
   → vim /etc/nginx/nginx.conf  # 用熟悉的工具手动编辑
   AI Agent（通过 MCP）
   → exec: nginx -t && systemctl reload nginx   # AI 验证并生效
@@ -54,7 +54,7 @@ AI（通过 MCP）
 - **故障排查**：AI 或人类进入一个活跃会话，读取系统状态、诊断根因、执行修复 —— 全部在一个持久化终端内完成
 - **临时运维**：跨多台主机快速执行一次性命令（`batch_exec`）、文件传输、端口转发 —— 无需写 Playbook
 - **交互式排错**：编译、长任务监控、交互式调试等需要持久会话的场景 —— 支持 MCP（AI）和 CLI PTY 透传（人类）两种方式
-- **远程开发**：`clum-cli connect devbox` —— 在自己熟悉的终端环境里操作远程机器，按 `Ctrl+G` 随时唤起 AI 辅助
+- **远程开发**：`clum-cli term devbox` —— 在自己熟悉的终端环境里操作远程机器，按 `Ctrl+G` 随时唤起 AI 辅助
 - **合规审计**：覆盖 AI 和人类在每台主机上的所有操作，全链路可追溯，通过 `clum-mcp audit query` 查询
 
 ## 架构
@@ -93,7 +93,7 @@ graph LR
 
 | 能力          | 说明                                                                         |
 | ----------- | -------------------------------------------------------------------------- |
-| **交互式终端直连** | `clum-cli connect` CLI 命令，PTY 透传至远程 rmux 会话 + 内置 AI 对话面板（Ctrl+G），SSE 实时流式输出，支持 vim/htop 等 TUI 程序 |
+| **交互式终端直连** | `clum-cli term` CLI 命令，PTY 透传至远程 rmux 会话 + 内置 AI 对话面板（Ctrl+G），SSE 实时流式输出，支持 vim/htop 等 TUI 程序 |
 | **交互式会话管理** | 创建/销毁/列举会话，多窗格分屏，窗口布局                                                      |
 | **命令执行**    | `exec` 一站式执行（sentinel 检测 + exit code 提取，scrollback 全量捕获大输出，断连自动重连恢复），支持交互式程序（send_keys + capture_pane） |
 | **输出等待**    | `wait_for_text` 等待终端出现指定文本，`wait_exit` 等待进程退出                              |

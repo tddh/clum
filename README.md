@@ -37,7 +37,7 @@ AI Agent (via MCP)
 
 # Pattern 2: Human investigates via CLI while AI assists
 Human (via CLI PTY passthrough)
-  → clum-cli connect tf01  # same session AI was working in
+  → clum-cli term tf01  # same session AI was working in
   → vim /etc/nginx/nginx.conf  # human edits in familiar tools
   AI Agent (via MCP)
   → exec: nginx -t && systemctl reload nginx  # AI validates & applies
@@ -54,7 +54,7 @@ AI (via MCP)
 - **Incident response**: AI or human jumps into a live session, reads system state, diagnoses root cause, and executes repairs — all within the same persistent terminal
 - **Ad-hoc operations**: Quick one-off commands across multiple hosts (`batch_exec`), file transfers, port forwarding — no Playbook needed
 - **Interactive debugging**: Persistent sessions for builds, long-running task monitoring, or interactive troubleshooting via both MCP (AI) and CLI PTY passthrough (human)
-- **Remote development**: `clum-cli connect devbox` — work on a remote machine with your familiar terminal environment, with AI assistance one keystroke away (Ctrl+G)
+- **Remote development**: `clum-cli term devbox` — work on a remote machine with your familiar terminal environment, with AI assistance one keystroke away (Ctrl+G)
 - **Compliance auditing**: Full-chain audit trail covering both AI and human operations on every host, queryable via `clum-mcp audit query`
 
 ## Architecture
@@ -93,7 +93,7 @@ graph LR
 
 | Feature | Description |
 |---------|-------------|
-| **Interactive terminal** | `clum-cli connect` — PTY-passthrough to remote rmux sessions + built-in AI chat panel (Ctrl+G) with real-time SSE streaming, supports vim/htop/TUI |
+| **Interactive terminal** | `clum-cli term` — PTY-passthrough to remote rmux sessions + built-in AI chat panel (Ctrl+G) with real-time SSE streaming, supports vim/htop/TUI |
 | **Session management** | Create/destroy/list sessions, multi-pane splits, window layouts |
 | **Command execution** | `exec` one-shot execution (sentinel detection + exit code, full scrollback capture for large outputs, auto-reconnect on connection drop), interactive programs via send_keys + capture_pane |
 | **Output waiting** | `wait_for_text` for terminal text, `wait_exit` for process exit |

@@ -1,4 +1,4 @@
-# Rust 构建产物
+#.workbuddy/ Rust 构建产物
 /target/
 
 # 证书与私钥（永不提交）
@@ -68,3 +68,5 @@ release-pkg/
 docs/superpowers/
 deploy/*.tar.gz
 downloaded-readme.md
+.workbuddy
+.workbuddy/*

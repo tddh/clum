@@ -32,7 +32,16 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    Connect {
+    /// Open an interactive terminal on a remote rmux session.
+    ///
+    /// PTY passthrough with built-in AI chat panel (Ctrl+G).
+    ///
+    /// Examples:
+    ///   clum-cli term prod-web-01
+    ///   clum-cli term prod-web-01 --session debug
+    ///   clum-cli term prod-web-01 --pane %1
+    ///   clum-cli term prod-web-01 --watch
+    Term {
         host: String,
 
         #[arg(long, default_value = "clum")]
@@ -41,8 +50,9 @@ enum Commands {
         #[arg(long)]
         pane: Option<String>,
 
+        /// Observe only — keyboard input is not forwarded to the remote host.
         #[arg(long)]
-        readonly: bool,
+        watch: bool,
 
         #[arg(long, default_value = ".")]
         opencode_dir: String,
@@ -167,11 +177,11 @@ async fn main() -> anyhow::Result<()> {
     let hosts_file = cli.hosts_file.clone();
 
     let result = match cli.command {
-        Commands::Connect {
+        Commands::Term {
             host,
             session,
             pane,
-            readonly,
+            watch,
             opencode_dir,
         } => {
             if let Some(server_addr) = &cli.server_addr {
@@ -181,7 +191,7 @@ async fn main() -> anyhow::Result<()> {
                     cli.ca_cert.as_deref(),
                     &session,
                     &pane,
-                    readonly,
+                    !watch,
                     &opencode_dir,
                     Some((server_addr.clone(), host.clone())),
                     cli.api_key.as_deref(),
@@ -198,7 +208,7 @@ async fn main() -> anyhow::Result<()> {
                     cli.ca_cert.as_deref(),
                     &session,
                     &pane,
-                    readonly,
+                    !watch,
                     &opencode_dir,
                     None,
                     None,
