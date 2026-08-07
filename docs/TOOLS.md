@@ -548,6 +548,8 @@
 
 关闭窗格（杀死 pane 进程）。
 
+> ⚠️ **WARNING**: NEVER use this unless the user explicitly asks to close/kill/destroy the pane. Closing a pane will terminate any running process and discard all output. If you need to restart the process, use `respawn_pane` instead.
+
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | |
@@ -600,6 +602,8 @@
 ### `close_window`
 
 关闭窗口（杀死其中所有 pane）。
+
+> ⚠️ **WARNING**: NEVER use this unless the user explicitly asks to close/kill/destroy the window. Use `list_window_panes` to verify window contents before closing.
 
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
@@ -714,6 +718,8 @@
 ### `kill_session`
 
 销毁整个会话（所有 window/pane/进程）。
+
+> ⚠️ **WARNING**: NEVER use this unless the user explicitly asks to close/kill/destroy the session. Sessions may contain ongoing work, unsaved data, or long-running processes. Use `session_list` or `find_sessions` to verify session contents before destroying.
 
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
@@ -913,7 +919,7 @@ clum-mcp audit cleanup [--db <path>] [--older-than <days>] [--max-size <mb>]
 | `host_name` | string | 目标主机 |
 | `session_name` | string | 会话名 |
 | `pane_id` | string | 窗格 ID（非 pane 操作为空） |
-| `action` | string | 操作类型（67 种 AuditAction） |
+| `action` | string | 操作类型（68 种 AuditAction） |
 | `detail` | string | 操作参数 |
 | `output_summary` | string | Exec/CmdEscape 的输出摘要（前 500 字符） |
 | `success` | bool | 操作是否成功 |
@@ -1318,6 +1324,55 @@ forward_create host="tf01" local_port=8080 remote_host="api.internal" remote_por
 **安全限制**：路径必须在 recordings 目录内，路径穿越会被拒绝。
 
 **回放方式**：使用 CLI `clum-cli replay <file.cast> [--speed 2.0] [--idle 1.0]` 或第三方工具 `asciinema play`。
+
+---
+
+### `search_recordings`
+
+搜索录制内容（asciinema v2 格式），支持 substring 和 regex 匹配，ANSI 转义码自动剥离。用于查找"某个命令何时执行过"或"终端里哪里出过这个错误"。
+
+**参数**
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|------|------|:---:|------|------|
+| `query` | string | ✅ | — | 搜索关键词或 regex |
+| `host` | string | | | 按主机名过滤 |
+| `date_from` | string | | | 起始日期（YYYY-MM-DD，含） |
+| `date_to` | string | | | 截止日期（YYYY-MM-DD，含） |
+| `session` | string | | | 会话名前缀过滤 |
+| `match_mode` | string | | `plain` | `plain`（substring）或 `regex` |
+| `search_input` | boolean | | `true` | 是否搜索输入事件 |
+| `search_output` | boolean | | `true` | 是否搜索输出事件 |
+| `context_lines` | integer | | 2 | 匹配行前后各返回几行上下文（最大 10） |
+| `limit` | integer | | 50 | 最多返回条数（最大 200） |
+| `offset` | integer | | 0 | 分页偏移 |
+
+**返回**
+
+```json
+{
+  "ok": true,
+  "total": 2,
+  "matches": [{
+    "host": "tf01",
+    "date": "2026-08-06",
+    "file": "root_clum__%0_1723000000.cast",
+    "session": "clum",
+    "user": "root",
+    "pane": "%0",
+    "line": 847,
+    "elapsed_secs": 234.5,
+    "event_type": "i",
+    "matched_text": "systemctl restart nginx",
+    "context_before": ["root@tf01:~# uptime", "12:34:56 up 30 days"],
+    "context_after": ["", "root@tf01:~# systemctl status nginx"]
+  }],
+  "scanned_files": 1,
+  "scanned_bytes": 20480
+}
+```
+
+**限制**：单次最多扫描 100 个录制文件，单文件最大 64MB。不可解析的行（损坏/binary）静默跳过。
 
 ---
 

@@ -29,10 +29,12 @@ pub fn instructions() -> String {
 ## Audit\n\
 - `audit_query` — query the **Server-side** centralized audit log (all MCP tool calls: who, when, which host, what action, success/failure). Use this to review operation history.\n\
 - `query_bridge_audit` — query a specific host's **Bridge-side** connection event log (auth events, attach/detach). Less useful in central server mode.\n\
-- Prefer `audit_query` for \"who did what\" questions.\n\n\
+- `list_recordings` — list synced PTY session recordings (asciinema v2). Filter by host, date, session.\n\
+- `search_recordings` — search the text content of recordings for keywords or regex. Useful for \"when was this command run?\" or \"where did this error appear?\".\n\
+- Prefer `audit_query` for \"who did what\" questions; use `search_recordings` for \"what actually happened in the terminal\".\n\n\
 ## CLI Commands (via Bash tool)\n\
-- `clum-cli upload <host> <local> <remote>` — file upload through server relay\n\
-- `clum-cli download <host> <remote> <local>` — file download\n\
+- `clum-cli push <host> <local> <remote>` — file upload through server relay\n\
+- `clum-cli pull <host> <remote> <local>` — file download\n\
 - `clum-cli forward <host> --local <port> --remote <host:port>` — port forwarding\n\
 - `clum-cli term <host> [--session <name>]` — interactive PTY\n\
 - `clum-cli list <host>` — list sessions\n\
@@ -278,7 +280,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "file_upload",
-                "description": "Upload files/directories to remote host via QUIC. Central server mode: local_path refers to the SERVER filesystem, not the client machine. For client-to-remote transfers use clum-cli upload. Auto-creates target dirs. overwrite: overwrite(default)|skip|rename|error. exclude: glob patterns. Paths containing '..' are rejected by the bridge (path traversal protection). ⚠️ Do NOT add exclude/overwrite unless user explicitly requests.",
+                "description": "Upload files/directories to remote host via QUIC. Central server mode: local_path refers to the SERVER filesystem, not the client machine. For client-to-remote transfers use clum-cli push. Auto-creates target dirs. overwrite: overwrite(default)|skip|rename|error. exclude: glob patterns. Paths containing '..' are rejected by the bridge (path traversal protection). ⚠️ Do NOT add exclude/overwrite unless user explicitly requests.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -293,7 +295,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "file_download",
-                "description": "Download a file or directory from remote host via QUIC. Central server mode: local_path writes to the SERVER filesystem, not the client machine. For remote-to-client downloads use clum-cli download. Auto-detects path type: single file downloads directly; directory recursively downloads all files preserving structure. Returns size and SHA256 for files, or file list for directories. Paths containing '..' are rejected by the bridge; MCP validates relative paths from bridge. ⚠️ Do NOT modify paths or add filters unless user explicitly requests.",
+                "description": "Download a file or directory from remote host via QUIC. Central server mode: local_path writes to the SERVER filesystem, not the client machine. For remote-to-client downloads use clum-cli pull. Auto-detects path type: single file downloads directly; directory recursively downloads all files preserving structure. Returns size and SHA256 for files, or file list for directories. Paths containing '..' are rejected by the bridge; MCP validates relative paths from bridge. ⚠️ Do NOT modify paths or add filters unless user explicitly requests.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -975,6 +977,27 @@ pub fn tools_definition() -> Value {
                         "path": { "type": "string", "description": "Recording file path (from list_recordings)" }
                     },
                     "required": ["path"]
+                }
+            },
+            {
+                "name": "search_recordings",
+                "description": "Search the text content of synced PTY session recordings (asciinema v2 format). Scans locally synced .cast files for a keyword or regex, returning matched lines with surrounding context. Supports filtering by host, date range, session name, and event type (input/output). ANSI escape codes are stripped before matching. Non-parseable lines (corrupted/binary) are silently skipped. Use this to find when a specific command was run or when a specific string appeared in terminal output.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "host": { "type": "string", "description": "Filter by hostname" },
+                        "date_from": { "type": "string", "description": "Start date (YYYY-MM-DD, inclusive)" },
+                        "date_to": { "type": "string", "description": "End date (YYYY-MM-DD, inclusive)" },
+                        "session": { "type": "string", "description": "Filter by session name prefix" },
+                        "query": { "type": "string", "description": "Search keyword or regex pattern" },
+                        "match_mode": { "type": "string", "description": "plain (substring, default) or regex" },
+                        "search_input": { "type": "boolean", "description": "Include input events in search (default: true)" },
+                        "search_output": { "type": "boolean", "description": "Include output events in search (default: true)" },
+                        "context_lines": { "type": "integer", "description": "Lines of context before/after each match (default: 2, max: 10)" },
+                        "limit": { "type": "integer", "description": "Max matches to return (default: 50, max: 200)" },
+                        "offset": { "type": "integer", "description": "Skip first N matches for pagination (default: 0)" }
+                    },
+                    "required": ["query"]
                 }
             }
         ]

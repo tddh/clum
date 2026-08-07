@@ -11,7 +11,7 @@
 └─────────────────┘                     │                                        │
 ┌─────────────────┐  QUIC :9788         │  TCP :9788  HTTP/2 (MCP 生态)          │
 │  人类运维         │◄──────────────────►│  UDP :9788  QUIC (Bridge/CLI)          │
-│  (clum-cli)   │  PTY/upload/forward  │                                        │
+│  (clum-cli)   │  PTY/push/forward  │                                        │
 └─────────────────┘                     │  集中审计 + API Key + 注册表 + 静态文件  │
                                         └───────────┬──────────┬─────────────────┘
                                                     │ QUIC     │ QUIC
@@ -26,7 +26,7 @@
 ```
 
 - **clum-mcp (Central Server)**: 中央 MCP Server，双栈监听。AI 客户端通过 HTTP 连接，Bridge 通过 QUIC 反向注册。
-- **clum-cli**: 命令行工具，通过 QUIC 连接 Server 中继到 Bridge。支持 term/upload/download/forward/list/replay；upload/download 支持文件与目录（1MB 分块流式传输，目录上传支持 `--exclude` 过滤）。
+- **clum-cli**: 命令行工具，通过 QUIC 连接 Server 中继到 Bridge。支持 term/push/pull/forward/list/replay；push/pull 支持文件与目录（1MB 分块流式传输，目录上传支持 `--exclude` 过滤）。
 - **rmux-bridge**: 部署在每台目标 Linux 主机，主动连接 Server 注册，处理工具执行、文件 I/O、PTY、录制推送。
 - **RMUX daemon**: 每个 Linux 主机上的终端多路复用器。
 

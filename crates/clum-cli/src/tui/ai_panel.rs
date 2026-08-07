@@ -100,7 +100,9 @@ impl AiPanel {
                 code_blocks: vec![],
             });
         } else {
-            msgs.last_mut().unwrap().content.push_str(text);
+            if let Some(last) = msgs.last_mut() {
+                last.content.push_str(text);
+            }
         }
     }
 

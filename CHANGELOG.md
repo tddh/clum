@@ -86,7 +86,7 @@
 
 ### Added
 - HTTP 认证中间件测试：白名单判定 + 各类凭证（API key / bridge token / download token / 无效凭证）的 403/401 行为，共 5 个用例。
-- **yunying-cli 文件传输增强**：`upload`/`download` 支持目录传输（目录上传逐文件并发 + `--exclude` glob 过滤；目录下载走 bridge 0x04 协议，相对路径做穿越校验），并改为 1MB 分块流式传输（不再整文件读入内存），输出含 SHA-256 校验。
+- **clum-cli 文件传输增强**：`push`/`pull` 支持目录传输（目录上传逐文件并发 + `--exclude` glob 过滤；目录下载走 bridge 0x04 协议，相对路径做穿越校验），并改为 1MB 分块流式传输（不再整文件读入内存），输出含 SHA-256 校验。
 - **yunying-cli tunnel 自动重连**：断网后本地端口保持监听，QUIC 连接死亡即时检测（idle timeout 3600s→60s）+ 指数退避重连（1s→30s）；`--give-up-after` 控制断网多久后退出（默认 2h，`0` = 永不退出）。
 
 ### Fixed

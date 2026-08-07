@@ -303,7 +303,7 @@ pub async fn upload(
         let secs = bar.elapsed_secs();
         bar.clear();
         println!(
-            "uploaded {local_path} → {remote_path} ({}, sha256:{})",
+            "pushed {local_path} → {remote_path} ({}, sha256:{})",
             summary(written, secs),
             hex::encode(hash)
         );
@@ -313,11 +313,11 @@ pub async fn upload(
     let mut files: Vec<(PathBuf, String)> = Vec::new();
     collect_files(local, local, remote_path, exclude, &mut files, 0).await?;
     if files.is_empty() {
-        println!("no files to upload (empty directory or all excluded)");
+        println!("no files to push (empty directory or all excluded)");
         return Ok(());
     }
     println!(
-        "uploading {} file(s) from {local_path} → {remote_path}",
+        "pushing {} file(s) from {local_path} → {remote_path}",
         files.len()
     );
 
@@ -392,12 +392,12 @@ pub async fn upload(
         b.clear();
     }
     println!(
-        "upload done: {ok} ok ({}) + {skipped} skipped, {failed} failed, {:.1}s",
+        "push done: {ok} ok ({}) + {skipped} skipped, {failed} failed, {:.1}s",
         human_bytes(bytes),
         secs
     );
     if failed > 0 {
-        bail!("{failed} file(s) failed to upload");
+        bail!("{failed} file(s) failed to push");
     }
     Ok(())
 }
@@ -555,7 +555,7 @@ async fn download_dir_parallel(
         .with_context(|| format!("mkdir {local_path}"))?;
 
     if entries.is_empty() {
-        println!("no files to download (empty remote directory)");
+        println!("no files to pull (empty remote directory)");
         return Ok(());
     }
 
@@ -619,12 +619,12 @@ async fn download_dir_parallel(
         b.clear();
     }
     println!(
-        "download done: {ok} ok ({}), {failed} failed, {:.1}s → {local_path}",
+        "pull done: {ok} ok ({}), {failed} failed, {:.1}s → {local_path}",
         human_bytes(bytes),
         secs
     );
     if failed > 0 {
-        bail!("{failed} file(s) failed to download");
+        bail!("{failed} file(s) failed to pull");
     }
     Ok(())
 }
@@ -654,7 +654,7 @@ async fn legacy_download(
             let secs = bar.elapsed_secs();
             bar.clear();
             println!(
-                "downloaded {remote_path} → {local_path} ({}, sha256:{})",
+                "pulled {remote_path} → {local_path} ({}, sha256:{})",
                 summary(size, secs),
                 hex::encode(hash)
             );
@@ -693,7 +693,7 @@ async fn legacy_download(
                 );
             }
             println!(
-                "downloaded {count} file(s) ({}) → {local_path}",
+                "pulled {count} file(s) ({}) → {local_path}",
                 human_bytes(bytes)
             );
             Ok(())

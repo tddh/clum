@@ -82,6 +82,12 @@ session_attach(host, session_name="clum")
 
 用户的明确指令优先于以上所有默认规则。如果用户指令信息不明确，**必须先确认再执行**，禁止猜测。
 
+### 7. 运维操作必须用 send_keys
+
+操作 rmux-bridge、rmux-daemon 或 clum-mcp 自身时（重启、升级、修改配置后重载等），**必须使用 `send_keys`，禁止使用 `exec`**。
+
+**原因**：这些服务的重启/重载会导致 clum 连接断开。`exec` 依赖与 bridge 的连接来等待命令退出——连接已不存在，`exec` 永远收不到返回，直接超时。`send_keys` 将命令写入 tmux pane，命令在远端 tmux 里独立执行，不受连接影响。命令完成后通过 `capture_pane` 或 `host_list`（等 bridge 重新上线）验证结果。
+
 **需要确认的场景：**
 - ❓ 用户未指定主机 → "你要在哪台主机上操作？"
 - ❓ 用户未指定操作目标 → "你要操作哪个文件/目录？"
@@ -437,6 +443,24 @@ batch_exec(hosts=["k8s-n1","k8s-n2","k8s-n3"], command="DEBIAN_FRONTEND=noninter
 | `started_at` | 录制开始时间 RFC3339 |
 | `duration_secs` | 录制时长（秒，新版录制才有） |
 | `path` | 完整文件路径 |
+
+### 搜索录制
+
+`search_recordings` 搜索录制内容（asciinema v2 格式），支持 substring 和 regex，自动剥离 ANSI 转义码。适用于"这个命令什么时候执行过"、"终端里哪里出过这个错误"。
+
+| 参数 | 说明 |
+|------|------|
+| `query` | 搜索关键词或 regex（必填） |
+| `host` | 按主机过滤 |
+| `date_from` / `date_to` | 日期范围 |
+| `session` | 会话名前缀 |
+| `match_mode` | `plain`（默认）或 `regex` |
+| `search_input` / `search_output` | 搜索输入/输出事件，默认均为 true |
+| `context_lines` | 匹配行前后上下文行数，默认 2 |
+| `limit` | 最多返回条数，默认 50 |
+| `offset` | 分页偏移 |
+
+使用示例：`search_recordings(host="tf01", query="systemctl restart", match_mode="plain")`
 
 ### 回放录制
 

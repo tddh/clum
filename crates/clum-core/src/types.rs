@@ -145,6 +145,7 @@ pub enum AuditAction {
     ConfigReload,
     BridgeAuditQuery,
     AgentRelay,
+    SearchRecordings,
 }
 
 #[cfg(test)]

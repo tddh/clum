@@ -71,8 +71,8 @@ graph LR
     C3 <-->|Unix Socket| D3[RMUX daemon]
 ```
 
-- **clum-mcp（Central Server）** — 中央 MCP Server：HTTP :9788 面向 AI 客户端（MCP 协议）+ QUIC :9788 面向 Bridge 注册和 CLI 数据平面。提供 67 个工具、集中审计、API Key 认证、静态文件服务。
-- **clum-cli** — 命令行工具：PTY 透传（`term`）、文件传输（`upload`/`download`，支持文件与目录、分块流式传输 + SHA-256 校验、目录 `--exclude` 过滤）、端口转发（`forward`，断网自动重连，`--give-up-after` 控制放弃时限）、会话列表（`list`）、录制回放（`replay`）。内置 AI 对话面板（Ctrl+G）。
+- **clum-mcp（Central Server）** — 中央 MCP Server：HTTP :9788 面向 AI 客户端（MCP 协议）+ QUIC :9788 面向 Bridge 注册和 CLI 数据平面。提供 68 个工具、集中审计、API Key 认证、静态文件服务。
+- **clum-cli** — 命令行工具：PTY 透传（`term`）、文件传输（`push`/`pull`，支持文件与目录、分块流式传输 + SHA-256 校验、目录 `--exclude` 过滤）、端口转发（`forward`，断网自动重连，`--give-up-after` 控制放弃时限）、会话列表（`list`）、录制回放（`replay`）。内置 AI 对话面板（Ctrl+G）。
 - **rmux-bridge** — 部署在每台 Linux 主机的 Agent。主动连接 Central Server 注册，处理工具执行、文件 I/O、PTY 会话、录制推送。
 - **RMUX daemon** — 每台 Linux 主机上的终端多路复用器（基于 rmux）。
 
@@ -329,7 +329,7 @@ echo "$(cat)" >> knowledge.jsonl && git commit -am "新增排障经验条目"
 
 ## 工具列表
 
-共 67 个 MCP 工具，覆盖完整终端生命周期；另有 `audit query/stats/cleanup` CLI 子命令供人类直接查询审计日志：
+共 68 个 MCP 工具，覆盖完整终端生命周期；另有 `audit query/stats/cleanup` CLI 子命令供人类直接查询审计日志：
 
 | 类别 | 工具 |
 |------|------|
@@ -346,7 +346,7 @@ echo "$(cat)" >> knowledge.jsonl && git commit -am "新增排障经验条目"
 | 批量操作 | `batch_exec`, `batch_upload`, `batch_download` |
 | 端口转发 | `forward_create`, `forward_list`, `forward_close` |
 | 部署升级 | `deploy_bridge` |
-| 审计录制 | `audit_query`, `query_bridge_audit`, `list_recordings`, `get_recording` |
+| 审计录制 | `audit_query`, `query_bridge_audit`, `list_recordings`, `get_recording`, `search_recordings` |
 | 系统 | `clum_usage_rules` |
 
 > 💡 `stream_pane` 适用于长命令实时输出监控（阻塞读，增量返回），替代 capture_pane 轮询。
@@ -391,7 +391,7 @@ just release-linux  # 交叉编译 Linux x86_64 musl
 
 ## 文档
 
-- [工具文档](docs/TOOLS.md) — 67 个 MCP 工具的完整参数与返回值
+- [工具文档](docs/TOOLS.md) — 68 个 MCP 工具的完整参数与返回值
 - [部署文档](docs/DEPLOY.md) — 架构、构建、部署、运维、安全
 - [终端状态感知设计](docs/terminal-state-design.md) — 终端状态启发式检测引擎
 - [贡献指南](CONTRIBUTING.md)

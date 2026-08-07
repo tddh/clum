@@ -76,19 +76,21 @@ enum Commands {
         idle: Option<f64>,
     },
 
-    /// Upload a file or directory to a remote host
-    Upload {
+    /// Push a file or directory to a remote host
+    #[command(name = "push")]
+    Push {
         host: String,
         local_path: String,
         remote_path: String,
 
-        /// Glob patterns to exclude when uploading a directory (repeatable)
+        /// Glob patterns to exclude when pushing a directory (repeatable)
         #[arg(long)]
         exclude: Vec<String>,
     },
 
-    /// Download a file or directory from a remote host
-    Download {
+    /// Pull a file or directory from a remote host
+    #[command(name = "pull")]
+    Pull {
         host: String,
         remote_path: String,
         local_path: String,
@@ -311,7 +313,7 @@ async fn main() -> anyhow::Result<()> {
                 },
             )
         }
-        Commands::Upload {
+        Commands::Push {
             host,
             local_path,
             remote_path,
@@ -323,14 +325,14 @@ async fn main() -> anyhow::Result<()> {
                 &api_key,
                 &hosts_file,
                 &host,
-                "upload",
+                "push",
             )
             .await?;
             let result = transfer::upload(&conn, &local_path, &remote_path, &exclude).await;
             conn.close(0u32.into(), b"done");
             result
         }
-        Commands::Download {
+        Commands::Pull {
             host,
             remote_path,
             local_path,
@@ -341,7 +343,7 @@ async fn main() -> anyhow::Result<()> {
                 &api_key,
                 &hosts_file,
                 &host,
-                "download",
+                "pull",
             )
             .await?;
             let result = transfer::download(&conn, &remote_path, &local_path).await;

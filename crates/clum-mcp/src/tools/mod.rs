@@ -20,6 +20,7 @@ mod file;
 mod forward;
 mod output;
 mod pane;
+mod search;
 mod session;
 mod window;
 
@@ -427,6 +428,7 @@ pub async fn execute_tool(
                 }
             }
         }
+        "search_recordings" => search::search_recordings(ctx, args).await,
         _ => anyhow::bail!("unknown tool: {}", tool_name),
     }
 }

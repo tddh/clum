@@ -71,8 +71,8 @@ graph LR
     C3 <-->|Unix Socket| D3[RMUX daemon]
 ```
 
-- **clum-mcp (Central Server)** — Central MCP Server: HTTP :9788 for AI clients (MCP protocol) + QUIC :9788 for Bridge registration and CLI data plane. Provides 67 tools, centralized audit, API Key auth, and static file serving.
-- **clum-cli** — CLI for humans: PTY passthrough (`term`), file transfer (`upload`/`download` — files or directories, chunked streaming with SHA-256, `--exclude` globs for directories), port forwarding (`forward` — auto-reconnects on network loss, `--give-up-after`), session listing (`list`), recording playback (`replay`). Built-in AI chat panel (Ctrl+G).
+- **clum-mcp (Central Server)** — Central MCP Server: HTTP :9788 for AI clients (MCP protocol) + QUIC :9788 for Bridge registration and CLI data plane. Provides 68 tools, centralized audit, API Key auth, and static file serving.
+- **clum-cli** — CLI for humans: PTY passthrough (`term`), file transfer (`push`/`pull` — files or directories, chunked streaming with SHA-256, `--exclude` globs for directories), port forwarding (`forward` — auto-reconnects on network loss, `--give-up-after`), session listing (`list`), recording playback (`replay`). Built-in AI chat panel (Ctrl+G).
 - **rmux-bridge** — Agent deployed on each Linux host. Reverse-connects to the Central Server, handles tool execution, file I/O, PTY sessions, and recording push.
 - **RMUX daemon** — Terminal multiplexer on each Linux host (rmux-based).
 
@@ -330,7 +330,7 @@ This design keeps clum focused on operations while enabling teams to build their
 
 ## Tools
 
-67 MCP tools covering the full terminal lifecycle, plus `audit query/stats/cleanup` CLI subcommands for human operators:
+68 MCP tools covering the full terminal lifecycle, plus `audit query/stats/cleanup` CLI subcommands for human operators:
 
 | Category | Tools |
 |----------|-------|
@@ -347,7 +347,7 @@ This design keeps clum focused on operations while enabling teams to build their
 | Batch | `batch_exec`, `batch_upload`, `batch_download` |
 | Tunnel | `forward_create`, `forward_list`, `forward_close` |
 | Deploy | `deploy_bridge` |
-| Audit | `audit_query`, `query_bridge_audit`, `list_recordings`, `get_recording` |
+| Audit | `audit_query`, `query_bridge_audit`, `list_recordings`, `get_recording`, `search_recordings` |
 | System | `clum_usage_rules` |
 
 > 💡 `stream_pane` is ideal for real-time output monitoring of long-running commands (blocking read, incremental return), replacing capture_pane polling.
@@ -392,7 +392,7 @@ just release-linux  # cross-compile Linux x86_64 musl
 
 ## Docs
 
-- [Tool Reference](docs/TOOLS.md) — 67 MCP tools with parameters and return values
+- [Tool Reference](docs/TOOLS.md) — 68 MCP tools with parameters and return values
 - [Deployment Guide](docs/DEPLOY.md) — Architecture, build, deploy, operations, security
 - [Terminal State Design](docs/terminal-state-design.md) — Terminal state awareness heuristic engine
 - [Contributing](CONTRIBUTING.md)
