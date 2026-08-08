@@ -623,9 +623,7 @@ fn load_server_tls(
         .with_no_client_auth()
         .with_single_cert(certs, key)
         .map_err(|e| anyhow::anyhow!("build TLS config: {e}"))?;
-    // Transitional dual ALPN: accept "clum" plus legacy "yunying" so pre-0.10
-    // bridges keep connecting. Drop b"yunying" once all bridges are upgraded.
-    rustls_config.alpn_protocols = vec![b"clum".to_vec(), b"yunying".to_vec()];
+    rustls_config.alpn_protocols = vec![b"clum".to_vec()];
 
     quinn::crypto::rustls::QuicServerConfig::try_from(Arc::new(rustls_config))
         .map_err(|e| anyhow::anyhow!("QUIC crypto config: {e}"))

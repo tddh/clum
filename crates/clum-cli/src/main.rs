@@ -163,8 +163,6 @@ async fn get_connection(
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let _ = rustls::crypto::ring::default_provider().install_default();
-    clum_core::inject_env_fallback("CLUM_SERVER_ADDR", "YUNYING_SERVER_ADDR");
-    clum_core::inject_env_fallback("CLUM_API_KEY", "YUNYING_API_KEY");
     // quinn_udp 的 "No buffer space available" WARN 属正常背压（自动重传），
     // 会打断进度条显示，默认压到 ERROR；RUST_LOG 仍可覆盖。
     tracing_subscriber::fmt()

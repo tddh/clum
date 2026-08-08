@@ -20,8 +20,6 @@ use crate::protocol::ProtocolProxy;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    clum_core::inject_env_fallback("CLUM_SERVER_ADDR", "YUNYING_SERVER_ADDR");
-    clum_core::inject_env_fallback("CLUM_CA_CERT", "YUNYING_CA_CERT");
     let config = config::BridgeConfig::parse();
 
     tracing_subscriber::fmt()
@@ -262,13 +260,10 @@ async fn main() -> anyhow::Result<()> {
 }
 
 fn load_registration_token(env_token: &str) -> String {
-    // Transitional: read new path first, fall back to legacy pre-0.10 path.
-    for path in ["/etc/clum/token", "/etc/yunying/token"] {
-        if let Ok(file_token) = std::fs::read_to_string(path) {
-            let trimmed = file_token.trim().to_string();
-            if !trimmed.is_empty() {
-                return trimmed;
-            }
+    if let Ok(file_token) = std::fs::read_to_string("/etc/clum/token") {
+        let trimmed = file_token.trim().to_string();
+        if !trimmed.is_empty() {
+            return trimmed;
         }
     }
     env_token.to_string()
