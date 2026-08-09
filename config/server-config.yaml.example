@@ -32,6 +32,13 @@ recordings_max_size_mb: 5000
 # ─── Token settings ───
 token_ttl_hours: 24
 
+# ─── File transfer bandwidth limits ───
+# file_transfer:
+#   upload_bandwidth_mbps: 80         # per-stream upload (0=unlimited)
+#   download_bandwidth_mbps: 80       # per-stream download (0=unlimited)
+#   max_upload_concurrency: 16        # concurrent uploads per host
+#   max_download_concurrency: 0       # concurrent downloads per host (0=unlimited)
+
 # ─── Inline bridge enrollment (optional) ───
 # Bridges can also be enrolled dynamically via the bridge_store SQLite DB.
 # bridges:

@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{bail, Context, Result};
+use clum_core::rate_limiter::BandwidthLimiter;
 use clum_core::types::HostConfig;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -73,6 +74,7 @@ pub async fn upload_file(
     exclude: &[String],
     progress: &mut crate::progress::ProgressReporter,
     registry: &Arc<BridgeRegistry>,
+    limiter: Option<&BandwidthLimiter>,
 ) -> Result<Vec<FileResult>> {
     let meta = tokio::fs::metadata(local_path)
         .await
@@ -88,6 +90,7 @@ pub async fn upload_file(
             exclude,
             progress,
             registry,
+            limiter,
         )
         .await
     } else {
@@ -103,12 +106,14 @@ pub async fn upload_file(
             overwrite,
             progress,
             registry,
+            limiter,
         )
         .await?;
         Ok(vec![result])
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn upload_single(
     host: &HostConfig,
     local_path: &str,
@@ -117,6 +122,7 @@ async fn upload_single(
     overwrite: OverwriteMode,
     progress: &mut crate::progress::ProgressReporter,
     registry: &Arc<BridgeRegistry>,
+    limiter: Option<&BandwidthLimiter>,
 ) -> Result<FileResult> {
     let meta = tokio::fs::metadata(local_path).await?;
     let file_size = meta.len();
@@ -132,7 +138,7 @@ async fn upload_single(
     send.write_all(&file_size.to_le_bytes()).await?;
 
     let mut file = tokio::fs::File::open(local_path).await?;
-    copy_with_buf(&mut file, &mut send, file_size, progress).await?;
+    copy_with_buf(&mut file, &mut send, file_size, progress, limiter).await?;
     send.finish()?;
 
     let mut code = [0u8; 1];
@@ -171,6 +177,7 @@ async fn upload_dir(
     exclude: &[String],
     progress: &crate::progress::ProgressReporter,
     registry: &Arc<BridgeRegistry>,
+    limiter: Option<&BandwidthLimiter>,
 ) -> Result<Vec<FileResult>> {
     let base = Path::new(local_path).to_path_buf();
     let mut files = Vec::new();
@@ -188,6 +195,7 @@ async fn upload_dir(
         let conn = conn.clone();
         let permit = semaphore.clone().acquire_owned().await?;
         let mut file_progress = progress.clone();
+        let task_limiter = limiter.map(|l| l.clone_stream());
 
         handles.push(tokio::spawn(async move {
             let _permit = permit;
@@ -203,7 +211,14 @@ async fn upload_dir(
             send.write_all(&file_size.to_le_bytes()).await?;
 
             let mut file = tokio::fs::File::open(&local).await?;
-            copy_with_buf(&mut file, &mut send, file_size, &mut file_progress).await?;
+            copy_with_buf(
+                &mut file,
+                &mut send,
+                file_size,
+                &mut file_progress,
+                task_limiter.as_ref(),
+            )
+            .await?;
             send.finish()?;
 
             let mut code = [0u8; 1];
@@ -259,6 +274,7 @@ pub async fn download_file(
     ca_cert_path: Option<&str>,
     progress: &mut crate::progress::ProgressReporter,
     registry: &Arc<BridgeRegistry>,
+    limiter: Option<&BandwidthLimiter>,
 ) -> Result<Vec<FileResult>> {
     let conn = get_conn(host, registry, ca_cert_path).await?;
     let (mut send, mut recv) = conn.open_bi().await?;
@@ -274,11 +290,11 @@ pub async fn download_file(
 
     match code[0] {
         0x00 => {
-            let result = read_single_file(&mut recv, local_path, progress).await?;
+            let result = read_single_file(&mut recv, local_path, progress, limiter).await?;
             Ok(vec![result])
         }
         0x04 => {
-            let results = read_directory(&mut recv, local_path, progress).await?;
+            let results = read_directory(&mut recv, local_path, progress, limiter).await?;
             Ok(results)
         }
         0x02 => {
@@ -297,6 +313,7 @@ async fn read_single_file(
     recv: &mut quinn::RecvStream,
     local_path: &str,
     progress: &mut crate::progress::ProgressReporter,
+    limiter: Option<&BandwidthLimiter>,
 ) -> Result<FileResult> {
     let mut size_buf = [0u8; 8];
     recv.read_exact(&mut size_buf).await?;
@@ -325,6 +342,9 @@ async fn read_single_file(
         let n = recv.read(&mut buf[..to_read]).await?.unwrap_or(0);
         if n == 0 {
             break;
+        }
+        if let Some(lim) = limiter {
+            lim.acquire(n as u64).await;
         }
         hasher.update(&buf[..n]);
         file.write_all(&buf[..n]).await?;
@@ -362,6 +382,7 @@ async fn read_directory(
     recv: &mut quinn::RecvStream,
     local_base: &str,
     progress: &mut crate::progress::ProgressReporter,
+    limiter: Option<&BandwidthLimiter>,
 ) -> Result<Vec<FileResult>> {
     let mut count_buf = [0u8; 4];
     recv.read_exact(&mut count_buf).await?;
@@ -416,6 +437,9 @@ async fn read_directory(
             if n == 0 {
                 break;
             }
+            if let Some(lim) = limiter {
+                lim.acquire(n as u64).await;
+            }
             hasher.update(&buf[..n]);
             file.write_all(&buf[..n]).await?;
             remaining -= n as u64;
@@ -446,6 +470,7 @@ async fn copy_with_buf<R, W>(
     writer: &mut W,
     total_size: u64,
     progress: &mut crate::progress::ProgressReporter,
+    limiter: Option<&BandwidthLimiter>,
 ) -> std::io::Result<u64>
 where
     R: AsyncReadExt + Unpin,
@@ -457,6 +482,9 @@ where
         let n = reader.read(&mut buf).await?;
         if n == 0 {
             break;
+        }
+        if let Some(lim) = limiter {
+            lim.acquire(n as u64).await;
         }
         writer.write_all(&buf[..n]).await?;
         total += n as u64;

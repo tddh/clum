@@ -288,7 +288,8 @@ pub fn tools_definition() -> Value {
                         "local_path": { "type": "string", "description": "Local file/directory path" },
                         "remote_path": { "type": "string", "description": "Remote destination path" },
                         "overwrite": { "type": "string", "enum": ["overwrite", "skip", "rename", "error"], "description": "overwrite|skip|rename|error (default: overwrite)" },
-                        "exclude": { "type": "array", "items": { "type": "string" }, "description": "Glob patterns, e.g. [\"*.log\"]. Only if user specifies." }
+                        "exclude": { "type": "array", "items": { "type": "string" }, "description": "Glob patterns, e.g. [\"*.log\"]. Only if user specifies." },
+                        "bandwidth_limit_mbps": { "type": "integer", "description": "Bandwidth limit in Mbps (0=unlimited, default: 0)" }
                     },
                     "required": ["host", "local_path", "remote_path"]
                 }
@@ -301,7 +302,8 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "remote_path": { "type": "string", "description": "Remote file or directory path to download" },
-                        "local_path": { "type": "string", "description": "Local destination path (for directories, this is the root directory)" }
+                        "local_path": { "type": "string", "description": "Local destination path (for directories, this is the root directory)" },
+                        "bandwidth_limit_mbps": { "type": "integer", "description": "Bandwidth limit in Mbps (0=unlimited, default: 0)" }
                     },
                     "required": ["host", "remote_path", "local_path"]
                 }

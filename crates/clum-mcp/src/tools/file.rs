@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use clum_core::rate_limiter::BandwidthConfig;
 use serde_json::{json, Value};
 
 use super::ToolContext;
@@ -31,6 +32,15 @@ pub(crate) async fn file_upload(
                 .collect()
         })
         .unwrap_or_default();
+    let bw_mbps = args["bandwidth_limit_mbps"].as_u64().unwrap_or(0);
+
+    let limiter = clum_core::rate_limiter::BandwidthLimiter::new(
+        &BandwidthConfig {
+            per_stream: bw_mbps * 125_000,
+            global: 0,
+        },
+        None,
+    );
 
     let result = crate::files::upload_file(
         &host,
@@ -41,6 +51,7 @@ pub(crate) async fn file_upload(
         &exclude,
         progress,
         &ctx.bridge_registry,
+        limiter.as_ref(),
     )
     .await;
     super::audit(
@@ -83,6 +94,15 @@ pub(crate) async fn file_download(
         .as_str()
         .context("missing 'local_path'")?;
     let host = super::common::resolve_host_config(ctx, host_name).await?;
+    let bw_mbps = args["bandwidth_limit_mbps"].as_u64().unwrap_or(0);
+
+    let limiter = clum_core::rate_limiter::BandwidthLimiter::new(
+        &BandwidthConfig {
+            per_stream: bw_mbps * 125_000,
+            global: 0,
+        },
+        None,
+    );
 
     let result = crate::files::download_file(
         &host,
@@ -91,6 +111,7 @@ pub(crate) async fn file_download(
         ctx.ca_cert_path.as_deref(),
         progress,
         &ctx.bridge_registry,
+        limiter.as_ref(),
     )
     .await;
     super::audit(

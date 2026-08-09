@@ -86,6 +86,10 @@ enum Commands {
         /// Glob patterns to exclude when pushing a directory (repeatable)
         #[arg(long)]
         exclude: Vec<String>,
+
+        /// Rate limit in Mbps (0 = unlimited)
+        #[arg(short = 'B', long, default_value = "0")]
+        bw_limit: u64,
     },
 
     /// Pull a file or directory from a remote host
@@ -94,6 +98,10 @@ enum Commands {
         host: String,
         remote_path: String,
         local_path: String,
+
+        /// Rate limit in Mbps (0 = unlimited)
+        #[arg(short = 'B', long, default_value = "0")]
+        bw_limit: u64,
     },
 
     /// Create a local port forward to a remote service (auto-reconnects on network loss)
@@ -316,6 +324,7 @@ async fn main() -> anyhow::Result<()> {
             local_path,
             remote_path,
             exclude,
+            bw_limit,
         } => {
             let conn = get_connection(
                 &server_addr,
@@ -326,7 +335,8 @@ async fn main() -> anyhow::Result<()> {
                 "push",
             )
             .await?;
-            let result = transfer::upload(&conn, &local_path, &remote_path, &exclude).await;
+            let result =
+                transfer::upload(&conn, &local_path, &remote_path, &exclude, bw_limit).await;
             conn.close(0u32.into(), b"done");
             result
         }
@@ -334,6 +344,7 @@ async fn main() -> anyhow::Result<()> {
             host,
             remote_path,
             local_path,
+            bw_limit,
         } => {
             let conn = get_connection(
                 &server_addr,
@@ -344,7 +355,7 @@ async fn main() -> anyhow::Result<()> {
                 "pull",
             )
             .await?;
-            let result = transfer::download(&conn, &remote_path, &local_path).await;
+            let result = transfer::download(&conn, &remote_path, &local_path, bw_limit).await;
             conn.close(0u32.into(), b"done");
             result
         }

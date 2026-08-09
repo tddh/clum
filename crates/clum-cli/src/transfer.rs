@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{bail, Context, Result};
+use clum_core::rate_limiter::BandwidthLimiter;
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -230,6 +231,7 @@ async fn upload_one(
     local: &Path,
     remote: &str,
     mut progress: Option<&mut dyn ByteProgress>,
+    limiter: Option<&BandwidthLimiter>,
 ) -> Result<(u8, u64, [u8; 32])> {
     let meta = tokio::fs::metadata(local)
         .await
@@ -253,6 +255,9 @@ async fn upload_one(
         let n = file.read(&mut buf).await?;
         if n == 0 {
             break;
+        }
+        if let Some(lim) = limiter {
+            lim.acquire(n as u64).await;
         }
         send.write_all(&buf[..n]).await?;
         if let Some(p) = progress.as_deref_mut() {
@@ -291,7 +296,15 @@ pub async fn upload(
     local_path: &str,
     remote_path: &str,
     exclude: &[String],
+    bw_limit: u64,
 ) -> Result<()> {
+    let limiter = BandwidthLimiter::new(
+        &clum_core::rate_limiter::BandwidthConfig {
+            per_stream: bw_limit * 125_000,
+            global: 0,
+        },
+        None,
+    );
     let local = Path::new(local_path);
     let meta = tokio::fs::metadata(local)
         .await
@@ -299,7 +312,8 @@ pub async fn upload(
 
     if !meta.is_dir() {
         let mut bar = ProgressBar::new(&format!("↑ {}", short_name(local_path)), meta.len());
-        let (_, written, hash) = upload_one(conn, local, remote_path, Some(&mut bar)).await?;
+        let (_, written, hash) =
+            upload_one(conn, local, remote_path, Some(&mut bar), limiter.as_ref()).await?;
         let secs = bar.elapsed_secs();
         bar.clear();
         println!(
@@ -343,10 +357,18 @@ pub async fn upload(
         let conn = conn.clone();
         let bar = bar.clone();
         let done_count = done_count.clone();
+        let task_limiter = limiter.as_ref().map(|l| l.clone_stream());
         set.spawn(async move {
             let _permit = permit;
             let mut shared = SharedBar(bar.clone());
-            let res = upload_one(&conn, &local_file, &remote, Some(&mut shared)).await;
+            let res = upload_one(
+                &conn,
+                &local_file,
+                &remote,
+                Some(&mut shared),
+                task_limiter.as_ref(),
+            )
+            .await;
             // 主循环的 join 要等 spawn 阶段结束才消费，计数必须在任务内即时更新
             let n_done = done_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
             if bar_enabled {
@@ -408,6 +430,7 @@ async fn recv_to_file(
     path: &Path,
     size: u64,
     mut progress: Option<&mut dyn ByteProgress>,
+    limiter: Option<&BandwidthLimiter>,
 ) -> Result<[u8; 32]> {
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
@@ -431,6 +454,9 @@ async fn recv_to_file(
                 size - remaining
             );
         }
+        if let Some(lim) = limiter {
+            lim.acquire(n as u64).await;
+        }
         hasher.update(&buf[..n]);
         file.write_all(&buf[..n]).await?;
         remaining -= n as u64;
@@ -444,18 +470,31 @@ async fn recv_to_file(
 
 /// 下载远端文件或目录。先向 bridge 请求清单（0x08）：目录则 16 并发逐文件
 /// 下载（聚合进度条）；旧版 bridge 不支持清单流时回退到串行下载。
-pub async fn download(conn: &quinn::Connection, remote_path: &str, local_path: &str) -> Result<()> {
+pub async fn download(
+    conn: &quinn::Connection,
+    remote_path: &str,
+    local_path: &str,
+    bw_limit: u64,
+) -> Result<()> {
+    let limiter = BandwidthLimiter::new(
+        &clum_core::rate_limiter::BandwidthConfig {
+            per_stream: bw_limit * 125_000,
+            global: 0,
+        },
+        None,
+    );
     match fetch_manifest(conn, remote_path).await {
         Ok(entries) => {
             if entries.len() == 1 && entries[0].0.is_empty() {
-                legacy_download(conn, remote_path, local_path).await
+                legacy_download(conn, remote_path, local_path, limiter.as_ref()).await
             } else {
-                download_dir_parallel(conn, remote_path, local_path, entries).await
+                download_dir_parallel(conn, remote_path, local_path, entries, limiter.as_ref())
+                    .await
             }
         }
         Err(e) => {
             eprintln!("manifest query failed ({e:#}), falling back to sequential download");
-            legacy_download(conn, remote_path, local_path).await
+            legacy_download(conn, remote_path, local_path, limiter.as_ref()).await
         }
     }
 }
@@ -509,6 +548,7 @@ async fn download_one(
     rel: &str,
     base: &Path,
     bar: Arc<Mutex<ProgressBar>>,
+    limiter: Option<&BandwidthLimiter>,
 ) -> Result<(u64, [u8; 32])> {
     validate_rel_path(rel)?;
     let remote = format!("{}/{}", remote_base.trim_end_matches('/'), rel);
@@ -526,7 +566,8 @@ async fn download_one(
             recv.read_exact(&mut size_buf).await?;
             let size = u64::from_le_bytes(size_buf);
             let mut shared = SharedBar(bar);
-            let hash = recv_to_file(&mut recv, &base.join(rel), size, Some(&mut shared)).await?;
+            let hash =
+                recv_to_file(&mut recv, &base.join(rel), size, Some(&mut shared), limiter).await?;
             Ok((size, hash))
         }
         0x02 => {
@@ -548,6 +589,7 @@ async fn download_dir_parallel(
     remote_path: &str,
     local_path: &str,
     entries: Vec<(String, u64)>,
+    limiter: Option<&BandwidthLimiter>,
 ) -> Result<()> {
     let base = PathBuf::from(local_path);
     tokio::fs::create_dir_all(&base)
@@ -580,9 +622,18 @@ async fn download_dir_parallel(
         let done_count = done_count.clone();
         let remote_base = remote_path.to_string();
         let base = base.clone();
+        let task_limiter = limiter.map(|l| l.clone_stream());
         set.spawn(async move {
             let _permit = permit;
-            let res = download_one(&conn, &remote_base, &rel, &base, bar.clone()).await;
+            let res = download_one(
+                &conn,
+                &remote_base,
+                &rel,
+                &base,
+                bar.clone(),
+                task_limiter.as_ref(),
+            )
+            .await;
             let n_done = done_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
             if bar_enabled {
                 if let Ok(mut b) = bar.lock() {
@@ -634,6 +685,7 @@ async fn legacy_download(
     conn: &quinn::Connection,
     remote_path: &str,
     local_path: &str,
+    limiter: Option<&BandwidthLimiter>,
 ) -> Result<()> {
     let (mut send, mut recv) = conn.open_bi().await?;
     send.write_all(&[STREAM_DOWNLOAD]).await?;
@@ -650,7 +702,14 @@ async fn legacy_download(
             recv.read_exact(&mut size_buf).await?;
             let size = u64::from_le_bytes(size_buf);
             let mut bar = ProgressBar::new(&format!("↓ {}", short_name(local_path)), size);
-            let hash = recv_to_file(&mut recv, Path::new(local_path), size, Some(&mut bar)).await?;
+            let hash = recv_to_file(
+                &mut recv,
+                Path::new(local_path),
+                size,
+                Some(&mut bar),
+                limiter,
+            )
+            .await?;
             let secs = bar.elapsed_secs();
             bar.clear();
             println!(
@@ -682,7 +741,8 @@ async fn legacy_download(
                 let size = u64::from_le_bytes(size_buf);
                 let mut bar = ProgressBar::new(&format!("↓ {}", short_name(&rel)), size);
                 bar.set_note(format!("({}/{})", i + 1, count));
-                let hash = recv_to_file(&mut recv, &base.join(&rel), size, Some(&mut bar)).await?;
+                let hash = recv_to_file(&mut recv, &base.join(&rel), size, Some(&mut bar), limiter)
+                    .await?;
                 let secs = bar.elapsed_secs();
                 bar.clear();
                 bytes += size;

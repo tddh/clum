@@ -43,6 +43,46 @@ pub struct ServerConfig {
 
     #[serde(default = "default_recordings_max_size_mb")]
     pub recordings_max_size_mb: u64,
+
+    #[serde(default)]
+    pub file_transfer: FileTransferConfig,
+}
+
+#[derive(Debug, Deserialize, Clone, Default)]
+#[allow(dead_code)]
+pub struct FileTransferConfig {
+    /// Upload bandwidth per stream in Mbps. 0 = unlimited.
+    #[serde(default)]
+    pub upload_bandwidth_mbps: u64,
+    /// Download bandwidth per stream in Mbps. 0 = unlimited.
+    #[serde(default)]
+    pub download_bandwidth_mbps: u64,
+    /// Max concurrent file uploads per host. 0 = unlimited.
+    #[serde(default = "default_upload_concurrency")]
+    pub max_upload_concurrency: usize,
+    /// Max concurrent file downloads per host. 0 = unlimited.
+    #[serde(default)]
+    pub max_download_concurrency: usize,
+}
+
+fn default_upload_concurrency() -> usize {
+    16
+}
+
+#[allow(dead_code)]
+impl FileTransferConfig {
+    pub fn upload_config(&self) -> clum_core::rate_limiter::BandwidthConfig {
+        clum_core::rate_limiter::BandwidthConfig {
+            per_stream: self.upload_bandwidth_mbps * 125_000,
+            global: 0,
+        }
+    }
+    pub fn download_config(&self) -> clum_core::rate_limiter::BandwidthConfig {
+        clum_core::rate_limiter::BandwidthConfig {
+            per_stream: self.download_bandwidth_mbps * 125_000,
+            global: 0,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Clone)]

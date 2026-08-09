@@ -6,6 +6,7 @@
 use anyhow::Context;
 
 pub mod quic;
+pub mod rate_limiter;
 pub mod types;
 
 pub use types::*;

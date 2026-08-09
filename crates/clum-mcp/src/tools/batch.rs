@@ -266,6 +266,7 @@ pub(crate) async fn batch_upload(
                 &exclude,
                 &mut task_progress,
                 &registry,
+                None,
             )
             .await
             {
@@ -385,6 +386,7 @@ pub(crate) async fn batch_download(
                 ca_cert.as_deref(),
                 &mut task_progress,
                 &registry,
+                None,
             )
             .await
             {
