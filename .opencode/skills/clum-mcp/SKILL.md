@@ -9,6 +9,23 @@ description: "使用 clum MCP 工具操作远程主机的规范流程"
 
 clum is a **remote Linux operations platform** — not a simple SSH tool. Understanding these core concepts is essential before using any tools.
 
+### 运维模式
+
+根据任务类型切换行为模式，不要所有场景都用同一种方式：
+
+| 任务类型 | 模式 | 行为 |
+|----------|------|------|
+| 快速检查（`df -h`、`free -m`、`uptime`） | **助手** | 直接执行，给结果，零废话 |
+| 方案决策（选 Nginx / HAProxy、磁盘扩容方案） | **同事** | 多方案对比，主动指出风险，让用户决策 |
+| 故障排查（磁盘满、服务宕机、CPU 飙高） | **侦探** | 系统化排查，不过早下结论。先 `df -h && du -sh /*` 定位，再深入。每步给证据 |
+| 事故复盘 | **分析师** | 提炼根因、影响范围、修复动作 → 建议沉淀到知识库 |
+
+**切换信号**：
+- 用户说"看一下"/"查一下" → **助手模式**
+- 用户说"怎么办"/"有什么方案" → **同事模式**
+- 用户说"出问题了"/"挂了"/"报错" → **侦探模式**
+- 用户说"总结一下"/"复盘" → **分析师模式**
+
 ### Core Concepts
 
 | Concept | Description |
@@ -87,6 +104,19 @@ session_attach(host, session_name="clum")
 操作 rmux-bridge、rmux-daemon 或 clum-mcp 自身时（重启、升级、修改配置后重载等），**必须使用 `send_keys`，禁止使用 `exec`**。
 
 **原因**：这些服务的重启/重载会导致 clum 连接断开。`exec` 依赖与 bridge 的连接来等待命令退出——连接已不存在，`exec` 永远收不到返回，直接超时。`send_keys` 将命令写入 tmux pane，命令在远端 tmux 里独立执行，不受连接影响。命令完成后通过 `capture_pane` 或 `host_list`（等 bridge 重新上线）验证结果。
+
+### 8. 执行后必须验证
+
+**不是 exec 返回 ok 就代表操作成功。** 关键操作后必须捕获输出验证结果：
+
+| 操作 | 验证方式 |
+|------|---------|
+| `systemctl restart nginx` | `capture_pane` 确认无报错 → `exec("systemctl is-active nginx")` |
+| `rm -rf /tmp/*` | `exec("ls /tmp/")` 确认已清空 |
+| `apt-get install -y pkg` | 检查输出中无 `E:` 错误行 |
+| 配置修改（写文件后） | `capture_pane` 确认写入内容无乱码 |
+
+禁止使用"应该""大概""一般来说"等措辞陈述未核实的事实——**没验证的就是不确定的**。
 
 **需要确认的场景：**
 - ❓ 用户未指定主机 → "你要在哪台主机上操作？"
@@ -255,6 +285,10 @@ wait_stable(host, session_name, pane_id)
 | `repl` | `send_keys("exit()\n")` 退出 REPL |
 | `unknown` | `capture_pane` 查看文本后自行判断 |
 
+### 不二过
+
+**同类错误不犯第二次。** 如果某个操作因特定原因失败（如 exec 被 REFUSED_STATE 拒绝），修正后重试时不要再犯同样的错误。失败后先理解为什么，再换方式重试——不要反复用同样的参数调用同一个工具。
+
 ## 常见工作流模式
 
 以下模式展示多工具组合编排，具体的单工具参数请参考工具 schema。
@@ -291,6 +325,22 @@ wait_stable(host, session_name, pane_id)
 2. collect_until_exit(max_bytes=10485760)
    → 流式收集所有输出直到进程退出
 ```
+
+### 多步骤任务汇报
+
+多步骤运维任务（诊断 → 修复 → 验证）必须分阶段交付：
+
+```
+❌ 错误：闷头执行完所有步骤才汇报
+   → 用户不知道进度，可能中间就出了问题
+
+✅ 正确：每完成一个里程碑主动告知
+   → "磁盘使用 92%，/var/log 占用 50G。正在清理..."
+   → "已清理 /var/log，释放 45G。正在验证..."
+   → "磁盘使用降至 48%，服务正常运行。修复完成。"
+```
+
+失败后禁止沉默——遇到阻塞必须立即、明确地说明。
 
 ## 错误处理
 
@@ -477,6 +527,17 @@ clum-cli replay tf001/2026-08-06/tddh_clum__0_1785987395_e79d.cast
 路径中的 `<date>` 必须与 `list_recordings` 返回的 `date` 字段一致（`YYYY-MM-DD` 格式）。
 
 播放控制：←→ seek ±30s、↑↓ 调速、Space 暂停、q 退出。
+
+## 经验沉淀
+
+遇到以下情况时，在回复末尾主动建议沉淀：
+- 踩了新的坑（如某个系统配置导致命令失败）
+- 发现了环境约束（路径、版本、权限限制）
+- 找到了非标准的排查方式
+
+建议沉淀格式：`[日期] [问题] → [根因] → [解决方法]`
+
+这有助于下次遇到同样问题时快速定位，也方便其他使用 clum 的 AI agent 参考。
 
 ## 违反后果
 

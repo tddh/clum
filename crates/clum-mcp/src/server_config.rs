@@ -48,15 +48,21 @@ pub struct ServerConfig {
     pub file_transfer: FileTransferConfig,
 }
 
-#[derive(Debug, Deserialize, Clone, Default)]
+#[derive(Debug, Deserialize, Clone)]
 #[allow(dead_code)]
 pub struct FileTransferConfig {
     /// Upload bandwidth per stream in Mbps. 0 = unlimited.
-    #[serde(default)]
+    #[serde(default = "default_upload_bw")]
     pub upload_bandwidth_mbps: u64,
     /// Download bandwidth per stream in Mbps. 0 = unlimited.
-    #[serde(default)]
+    #[serde(default = "default_download_bw")]
     pub download_bandwidth_mbps: u64,
+    /// Global upload bandwidth in Mbps across all streams. 0 = unlimited.
+    #[serde(default)]
+    pub global_upload_bandwidth_mbps: u64,
+    /// Global download bandwidth in Mbps across all streams. 0 = unlimited.
+    #[serde(default)]
+    pub global_download_bandwidth_mbps: u64,
     /// Max concurrent file uploads per host. 0 = unlimited.
     #[serde(default = "default_upload_concurrency")]
     pub max_upload_concurrency: usize,
@@ -65,8 +71,29 @@ pub struct FileTransferConfig {
     pub max_download_concurrency: usize,
 }
 
+impl Default for FileTransferConfig {
+    fn default() -> Self {
+        Self {
+            upload_bandwidth_mbps: default_upload_bw(),
+            download_bandwidth_mbps: default_download_bw(),
+            global_upload_bandwidth_mbps: 0,
+            global_download_bandwidth_mbps: 0,
+            max_upload_concurrency: default_upload_concurrency(),
+            max_download_concurrency: 0,
+        }
+    }
+}
+
 fn default_upload_concurrency() -> usize {
     16
+}
+
+fn default_upload_bw() -> u64 {
+    70
+}
+
+fn default_download_bw() -> u64 {
+    70
 }
 
 #[allow(dead_code)]
@@ -74,13 +101,13 @@ impl FileTransferConfig {
     pub fn upload_config(&self) -> clum_core::rate_limiter::BandwidthConfig {
         clum_core::rate_limiter::BandwidthConfig {
             per_stream: self.upload_bandwidth_mbps * 125_000,
-            global: 0,
+            global: self.global_upload_bandwidth_mbps * 125_000,
         }
     }
     pub fn download_config(&self) -> clum_core::rate_limiter::BandwidthConfig {
         clum_core::rate_limiter::BandwidthConfig {
             per_stream: self.download_bandwidth_mbps * 125_000,
-            global: 0,
+            global: self.global_download_bandwidth_mbps * 125_000,
         }
     }
 }

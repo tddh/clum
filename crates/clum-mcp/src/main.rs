@@ -261,6 +261,7 @@ async fn main() -> anyhow::Result<()> {
         recordings_dir,
         bridge_registry: Arc::clone(&bridge_registry),
         bridge_store: Arc::clone(&bridge_store),
+        file_transfer: file_config.file_transfer.clone(),
     });
 
     match cli.mode.as_str() {

@@ -286,4 +286,69 @@ mod tests {
         assert_eq!(v["error"], "host not found: tf99");
         assert_eq!(v["retryable"], false);
     }
+
+    #[test]
+    fn classify_rbac_forbidden() {
+        let r = classify_message("host tf01 not in your group");
+        assert_eq!(r.code, "FORBIDDEN");
+        assert!(!r.retryable);
+        assert!(r.hint.contains("分组"));
+
+        let r = classify_message("forbidden: access denied");
+        assert_eq!(r.code, "FORBIDDEN");
+        assert!(!r.retryable);
+    }
+
+    #[test]
+    fn classify_window_not_found() {
+        let r = classify_message("window not found");
+        assert_eq!(r.code, "WINDOW_NOT_FOUND");
+        assert!(!r.retryable);
+        assert!(r.hint.contains("window_info"));
+
+        let r = classify_message("can't find window 3");
+        assert_eq!(r.code, "WINDOW_NOT_FOUND");
+    }
+
+    #[test]
+    fn classify_case_insensitive() {
+        let r = classify_message("HOST NOT FOUND: tf99");
+        assert_eq!(r.code, "HOST_NOT_FOUND");
+
+        let r = classify_message("Connection REFUSED");
+        assert_eq!(r.code, "BRIDGE_UNREACHABLE");
+        assert!(r.retryable);
+
+        let r = classify_message("FORBIDDEN");
+        assert_eq!(r.code, "FORBIDDEN");
+    }
+
+    #[test]
+    fn enrich_error_idempotent_on_non_object() {
+        let mut v = json!(42);
+        enrich_error(&mut v);
+        assert_eq!(v, json!(42));
+    }
+
+    #[test]
+    fn enrich_error_idempotent_on_ok_true() {
+        let mut v = json!({"ok": true, "error": "host not found: tf99"});
+        enrich_error(&mut v);
+        assert!(!v.as_object().unwrap().contains_key("error_code"));
+        assert_eq!(v["ok"], true);
+    }
+
+    #[test]
+    fn error_result_with_anyhow_context() {
+        let e = anyhow::anyhow!("host not found: tf99")
+            .context("middle wrapper")
+            .context("outer context");
+        let v = error_result(&e);
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["error_code"], "HOST_NOT_FOUND");
+        let error_str = v["error"].as_str().unwrap();
+        assert!(error_str.contains("host not found"));
+        assert!(error_str.contains("outer context"));
+        assert_eq!(v["retryable"], false);
+    }
 }

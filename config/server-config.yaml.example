@@ -33,11 +33,14 @@ recordings_max_size_mb: 5000
 token_ttl_hours: 24
 
 # ─── File transfer bandwidth limits ───
+# Default per-stream limit is 70 Mbps. Set to 0 to disable.
 # file_transfer:
-#   upload_bandwidth_mbps: 80         # per-stream upload (0=unlimited)
-#   download_bandwidth_mbps: 80       # per-stream download (0=unlimited)
-#   max_upload_concurrency: 16        # concurrent uploads per host
-#   max_download_concurrency: 0       # concurrent downloads per host (0=unlimited)
+#   upload_bandwidth_mbps: 70             # per-stream upload Mbps (default: 70)
+#   download_bandwidth_mbps: 70           # per-stream download Mbps (default: 70)
+#   global_upload_bandwidth_mbps: 0       # total upload across all streams (0=unlimited)
+#   global_download_bandwidth_mbps: 0     # total download across all streams (0=unlimited)
+#   max_upload_concurrency: 16            # concurrent uploads per host
+#   max_download_concurrency: 0           # concurrent downloads per host (0=unlimited)
 
 # ─── Inline bridge enrollment (optional) ───
 # Bridges can also be enrolled dynamically via the bridge_store SQLite DB.

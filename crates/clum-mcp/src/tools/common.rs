@@ -150,3 +150,175 @@ pub(crate) fn enrich_pane_response(response: &mut Value, pane_id: &str, auto_res
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::sync::Arc;
+
+    // ── make_semaphore ────────────────────────────────────────────
+
+    #[test]
+    fn test_make_semaphore_zero() {
+        let result = make_semaphore(0);
+        assert!(result.is_none(), "concurrency=0 should return None");
+    }
+
+    #[test]
+    fn test_make_semaphore_positive() {
+        let result = make_semaphore(3);
+        assert!(result.is_some(), "concurrency>0 should return Some");
+        let sem = result.unwrap();
+        let _p1 = sem.try_acquire().expect("permit 1");
+        let _p2 = sem.try_acquire().expect("permit 2");
+        let _p3 = sem.try_acquire().expect("permit 3");
+        assert!(
+            sem.try_acquire().is_err(),
+            "第 4 次获取许可应失败（只有 3 个许可）"
+        );
+    }
+
+    #[test]
+    fn test_make_semaphore_arc_shared() {
+        // 验证返回 Arc，可以被 clone
+        let result = make_semaphore(1);
+        let sem = result.unwrap();
+        let sem2: Arc<tokio::sync::Semaphore> = Arc::clone(&sem);
+        // 获取唯一的许可
+        let _p = sem2.try_acquire().expect("permit via clone");
+        assert!(sem.try_acquire().is_err(), "原 Arc 也不应有剩余许可");
+    }
+
+    // ── enrich_pane_response ──────────────────────────────────────
+
+    #[test]
+    fn test_enrich_pane_response_with_ok_field() {
+        let mut response = json!({"ok": true, "result": "done"});
+        enrich_pane_response(&mut response, "%0", false);
+        assert_eq!(response["resolved_pane_id"], json!("%0"));
+        assert!(response
+            .as_object()
+            .unwrap()
+            .contains_key("resolved_pane_id"));
+    }
+
+    #[test]
+    fn test_enrich_pane_response_auto_resolved() {
+        let mut response = json!({"ok": true});
+        enrich_pane_response(&mut response, "%2", true);
+        assert_eq!(response["resolved_pane_id"], json!("%2"));
+        assert_eq!(response["auto_resolved"], json!(true));
+    }
+
+    #[test]
+    fn test_enrich_pane_response_not_auto() {
+        let mut response = json!({"ok": false, "error": "boom"});
+        enrich_pane_response(&mut response, "%5", false);
+        assert_eq!(response["resolved_pane_id"], json!("%5"));
+        // auto_resolved 为 false 时不应写入该字段
+        assert!(response.get("auto_resolved").is_none());
+    }
+
+    #[test]
+    fn test_enrich_pane_response_non_object_no_panic() {
+        // 非 Object 类型不应崩溃，也不应修改值
+        let mut arr = json!([1, 2, 3]);
+        enrich_pane_response(&mut arr, "%0", true);
+        assert_eq!(arr, json!([1, 2, 3]));
+
+        let mut s = json!("hello");
+        enrich_pane_response(&mut s, "%1", false);
+        assert_eq!(s, json!("hello"));
+
+        let mut n = json!(null);
+        enrich_pane_response(&mut n, "%2", false);
+        assert_eq!(n, json!(null));
+    }
+
+    // ── collect_batch_results ─────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_collect_batch_results_all_success() {
+        let handles: Vec<_> = (0..3)
+            .map(|i| {
+                let host = format!("host{}", i);
+                tokio::task::spawn(async move { (host.clone(), json!({"ok": true, "host": host})) })
+            })
+            .collect();
+
+        let (results_map, success, failed) = collect_batch_results(handles).await;
+
+        assert_eq!(success, 3, "all three should succeed");
+        assert_eq!(failed, 0);
+        assert_eq!(results_map.len(), 3);
+        assert!(results_map.get("host1").unwrap()["ok"].as_bool().unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_collect_batch_results_all_failed_ok_field() {
+        let handles: Vec<_> = (0..2)
+            .map(|i| {
+                let host = format!("bad{}", i);
+                tokio::task::spawn(async move {
+                    (
+                        host.clone(),
+                        json!({"ok": false, "error": "something wrong"}),
+                    )
+                })
+            })
+            .collect();
+
+        let (results_map, success, failed) = collect_batch_results(handles).await;
+
+        assert_eq!(success, 0);
+        assert_eq!(failed, 2, "两个 ok=false 都应计为 failed");
+        assert_eq!(results_map.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_collect_batch_results_join_failed() {
+        // 通过 abort 一个 spawned task 来模拟 JoinError
+        let handle = tokio::task::spawn(async {
+            // 不立即返回，让外面 abort 掉
+            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+            ("never".to_string(), json!({"ok": true}))
+        });
+        handle.abort();
+
+        let (results_map, success, failed) = collect_batch_results(vec![handle]).await;
+
+        assert_eq!(success, 0);
+        assert_eq!(failed, 1);
+        assert_eq!(results_map.len(), 1);
+        let unknown = results_map.get("unknown").unwrap();
+        assert_eq!(unknown["ok"], json!(false));
+        assert_eq!(unknown["error"], json!("task cancelled"));
+    }
+
+    #[tokio::test]
+    async fn test_collect_batch_results_mixed() {
+        let h1 =
+            tokio::task::spawn(async { ("good".to_string(), json!({"ok": true, "data": 42})) });
+        let h2 = tokio::task::spawn(async {
+            (
+                "bad".to_string(),
+                json!({"ok": false, "error": "cmd failed"}),
+            )
+        });
+        let h3 = tokio::task::spawn(async {
+            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+            ("never".to_string(), json!({"ok": true}))
+        });
+        h3.abort();
+
+        let (results_map, success, failed) = collect_batch_results(vec![h1, h2, h3]).await;
+
+        assert_eq!(success, 1, "只有 good 是 success");
+        assert_eq!(failed, 2, "bad(ok=false) + cancelled");
+        assert_eq!(results_map.len(), 3);
+        assert_eq!(results_map["good"]["data"], json!(42));
+        assert_eq!(results_map["bad"]["ok"], json!(false));
+        assert_eq!(results_map["unknown"]["error"], json!("task cancelled"));
+    }
+}

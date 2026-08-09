@@ -7,7 +7,7 @@ pub fn instructions() -> String {
 - clum is a remote operations platform with a **central server**: You → MCP Server → QUIC → Bridge → rmux daemon → Linux host. This is NOT direct SSH.\n\
 - Bridges **reverse-register** to the central server. `host_list` shows online status (`online: true` = enrolled, `null` = direct fallback).\n\
 - **Sessions run inside rmux (a terminal multiplexer like tmux) and survive disconnects**. You can disconnect and reconnect to the same session. Long-running commands keep running in the background.\n\
-- Sessions are shared resources: the same session can be used by AI (via MCP) and humans (via CLI `connect`) simultaneously or in turns.\n\
+- Sessions are shared resources: the same session can be used by AI (via MCP) and humans (via CLI `term`) simultaneously or in turns.\n\
 - You do NOT hold SSH keys. Security is handled by API Key auth + Bridge Token + TLS 1.3.\n\
 - Every operation runs inside an existing session's pane — it does NOT open a new SSH connection.\n\
 - Multiple hosts are managed through a registry (`host_list` to see available hosts).\n\n\

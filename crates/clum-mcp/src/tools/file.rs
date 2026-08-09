@@ -33,14 +33,15 @@ pub(crate) async fn file_upload(
         })
         .unwrap_or_default();
     let bw_mbps = args["bandwidth_limit_mbps"].as_u64().unwrap_or(0);
-
-    let limiter = clum_core::rate_limiter::BandwidthLimiter::new(
-        &BandwidthConfig {
+    let cfg = if bw_mbps > 0 {
+        BandwidthConfig {
             per_stream: bw_mbps * 125_000,
             global: 0,
-        },
-        None,
-    );
+        }
+    } else {
+        ctx.file_transfer.upload_config()
+    };
+    let limiter = clum_core::rate_limiter::BandwidthLimiter::new(&cfg, None);
 
     let result = crate::files::upload_file(
         &host,
@@ -95,14 +96,15 @@ pub(crate) async fn file_download(
         .context("missing 'local_path'")?;
     let host = super::common::resolve_host_config(ctx, host_name).await?;
     let bw_mbps = args["bandwidth_limit_mbps"].as_u64().unwrap_or(0);
-
-    let limiter = clum_core::rate_limiter::BandwidthLimiter::new(
-        &BandwidthConfig {
+    let cfg = if bw_mbps > 0 {
+        BandwidthConfig {
             per_stream: bw_mbps * 125_000,
             global: 0,
-        },
-        None,
-    );
+        }
+    } else {
+        ctx.file_transfer.download_config()
+    };
+    let limiter = clum_core::rate_limiter::BandwidthLimiter::new(&cfg, None);
 
     let result = crate::files::download_file(
         &host,

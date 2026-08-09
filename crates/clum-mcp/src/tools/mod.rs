@@ -31,9 +31,6 @@ pub struct ToolContext {
     pub router: Arc<HostRouter>,
     pub ca_cert_path: Option<String>,
     pub audit_db: Arc<audit::AuditDb>,
-    // Identity fields are Arc-wrapped so a cloned ToolContext gets its own
-    // isolated copy — each HTTP request carries the identity derived from its
-    // own API key, with no shared mutable state between requests.
     pub agent_name: Arc<std::sync::Mutex<String>>,
     pub caller_group: Arc<std::sync::Mutex<Option<String>>>,
     pub forward_manager: Arc<ForwardManager>,
@@ -42,6 +39,7 @@ pub struct ToolContext {
     #[allow(dead_code)]
     pub bridge_registry: Arc<crate::registry::BridgeRegistry>,
     pub bridge_store: Arc<crate::bridge_store::BridgeStore>,
+    pub file_transfer: crate::server_config::FileTransferConfig,
 }
 
 impl Clone for ToolContext {
@@ -67,6 +65,7 @@ impl Clone for ToolContext {
             recordings_dir: self.recordings_dir.clone(),
             bridge_registry: Arc::clone(&self.bridge_registry),
             bridge_store: Arc::clone(&self.bridge_store),
+            file_transfer: self.file_transfer.clone(),
         }
     }
 }

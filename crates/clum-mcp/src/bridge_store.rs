@@ -421,4 +421,159 @@ mod tests {
         );
         assert!(entries[0].revoked, "revoked flag should be true");
     }
+
+    // ── add without group ────────────────────────────────────────────
+
+    #[test]
+    fn test_add_without_group() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        create_test_schema(&conn);
+        let store = BridgeStore::from_conn(conn);
+
+        block_on(store.add("test-host", "sometoken1234567890abc", &[], None)).unwrap();
+
+        let metas = block_on(store.get_all_host_meta());
+        assert_eq!(metas.len(), 1);
+        assert_eq!(metas[0].hostname, "test-host");
+        assert_eq!(metas[0].group, "");
+    }
+
+    // ── validate token (positive case) ───────────────────────────────
+
+    #[test]
+    fn test_validate_token_valid() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        create_test_schema(&conn);
+        let store = BridgeStore::from_conn(conn);
+
+        block_on(store.add("test-host", "valid-token-1234567890", &[], None)).unwrap();
+
+        let valid = block_on(store.validate_token("valid-token-1234567890"));
+        assert!(valid, "token that was just added should validate true");
+    }
+
+    // ── rotate then old token stays valid (12h grace) ────────────────
+
+    #[test]
+    fn test_rotate_token_old_still_valid() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        create_test_schema(&conn);
+        let store = BridgeStore::from_conn(conn);
+
+        block_on(store.add("test-host", "oldtoken1234567890abcdef", &[], None)).unwrap();
+        block_on(store.rotate_token("test-host", "newtoken1234567890abcdef")).unwrap();
+
+        let old_valid = block_on(store.validate_token("oldtoken1234567890abcdef"));
+        let new_valid = block_on(store.validate_token("newtoken1234567890abcdef"));
+        assert!(
+            old_valid,
+            "old token should still be valid within 12h grace period"
+        );
+        assert!(new_valid, "new token should be valid");
+    }
+
+    // ── join generates new token, old becomes invalid ────────────────
+
+    #[test]
+    fn test_join_generates_new_token() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        create_test_schema(&conn);
+        let store = BridgeStore::from_conn(conn);
+
+        block_on(store.add("test-host", "oldtoken1234567890abcdef", &[], None)).unwrap();
+        let new_token = block_on(store.join("test-host")).unwrap();
+
+        assert_ne!(
+            new_token, "oldtoken1234567890abcdef",
+            "join should return a new token"
+        );
+        // Old token should no longer be valid (join does NOT preserve
+        // previous_token_hash — unlike rotate).
+        let old_valid = block_on(store.validate_token("oldtoken1234567890abcdef"));
+        let new_valid = block_on(store.validate_token(&new_token));
+        assert!(!old_valid, "old token should be invalid after join");
+        assert!(new_valid, "new token should be valid");
+    }
+
+    // ── join nonexistent host ────────────────────────────────────────
+
+    #[test]
+    fn test_join_nonexistent_host_fails() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        create_test_schema(&conn);
+        let store = BridgeStore::from_conn(conn);
+
+        let result = block_on(store.join("ghost-host"));
+        assert!(result.is_err(), "joining a nonexistent host should error");
+    }
+
+    // ── set_host_meta updates tags ───────────────────────────────────
+
+    #[test]
+    fn test_set_host_meta_updates_tags() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        create_test_schema(&conn);
+        let store = BridgeStore::from_conn(conn);
+
+        block_on(store.add("test-host", "sometoken1234567890abc", &[], None)).unwrap();
+
+        let updated = block_on(store.set_host_meta(
+            "test-host",
+            None,
+            Some(&["web".into(), "prod".into()]),
+            None,
+        ))
+        .unwrap();
+        assert!(updated, "set_host_meta on existing host should return true");
+
+        let metas = block_on(store.get_all_host_meta());
+        assert_eq!(metas.len(), 1);
+        assert_eq!(metas[0].tags, vec!["web", "prod"]);
+    }
+
+    // ── set_host_meta updates group ──────────────────────────────────
+
+    #[test]
+    fn test_set_host_meta_updates_group() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        create_test_schema(&conn);
+        let store = BridgeStore::from_conn(conn);
+
+        block_on(store.add("test-host", "sometoken1234567890abc", &[], None)).unwrap();
+
+        let updated =
+            block_on(store.set_host_meta("test-host", Some("production"), None, None)).unwrap();
+        assert!(updated);
+
+        let metas = block_on(store.get_all_host_meta());
+        assert_eq!(metas.len(), 1);
+        assert_eq!(metas[0].group, "production");
+    }
+
+    // ── set_host_meta on nonexistent host returns false ──────────────
+
+    #[test]
+    fn test_set_host_meta_nonexistent_returns_false() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        create_test_schema(&conn);
+        let store = BridgeStore::from_conn(conn);
+
+        let updated = block_on(store.set_host_meta("no-such-host", Some("g"), None, None)).unwrap();
+        assert!(
+            !updated,
+            "set_host_meta on nonexistent host should return false"
+        );
+    }
+
+    // ── remove nonexistent host does not panic ───────────────────────
+
+    #[test]
+    fn test_remove_nonexistent_no_error() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        create_test_schema(&conn);
+        let store = BridgeStore::from_conn(conn);
+
+        // Must not panic.
+        block_on(store.remove("ghost-host")).unwrap();
+    }
 }
