@@ -280,7 +280,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "file_upload",
-                "description": "Upload files/directories to remote host via QUIC. Central server mode: local_path refers to the SERVER filesystem, not the client machine. For client-to-remote transfers use clum-cli push. Auto-creates target dirs. overwrite: overwrite(default)|skip|rename|error. exclude: glob patterns. Paths containing '..' are rejected by the bridge (path traversal protection). ⚠️ Do NOT add exclude/overwrite unless user explicitly requests.",
+                "description": "Upload files/directories to remote host via QUIC. Central server mode: local_path refers to the SERVER filesystem, not the client machine. For client-to-remote transfers use clum-cli push. Auto-creates target dirs. overwrite: overwrite(default)|skip|rename|error. exclude: glob patterns. bandwidth_limit_mbps: rate limit in Mbps (0=unlimited). Paths containing '..' are rejected by the bridge (path traversal protection). ⚠️ Do NOT add exclude/overwrite unless user explicitly requests.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -296,7 +296,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "file_download",
-                "description": "Download a file or directory from remote host via QUIC. Central server mode: local_path writes to the SERVER filesystem, not the client machine. For remote-to-client downloads use clum-cli pull. Auto-detects path type: single file downloads directly; directory recursively downloads all files preserving structure. Returns size and SHA256 for files, or file list for directories. Paths containing '..' are rejected by the bridge; MCP validates relative paths from bridge. ⚠️ Do NOT modify paths or add filters unless user explicitly requests.",
+                "description": "Download a file or directory from remote host via QUIC. Central server mode: local_path writes to the SERVER filesystem, not the client machine. For remote-to-client downloads use clum-cli pull. Auto-detects path type: single file downloads directly; directory recursively downloads all files preserving structure. bandwidth_limit_mbps: rate limit in Mbps (0=unlimited). Returns size and SHA256 for files, or file list for directories. Paths containing '..' are rejected by the bridge; MCP validates relative paths from bridge. ⚠️ Do NOT modify paths or add filters unless user explicitly requests.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
