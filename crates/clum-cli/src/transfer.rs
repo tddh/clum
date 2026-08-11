@@ -225,6 +225,20 @@ fn validate_rel_path(rel: &str) -> Result<()> {
     Ok(())
 }
 
+/// 单文件 push 的远端目标路径：若 `remote_path` 以 `/` 结尾（目录语义），
+/// 自动拼接本地文件名（对齐 scp 行为）；否则原样使用。
+fn resolve_remote_file(remote_path: &str, local: &Path) -> String {
+    if remote_path.ends_with('/') {
+        let name = local
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_default();
+        format!("{remote_path}{name}")
+    } else {
+        remote_path.to_string()
+    }
+}
+
 /// 上传单个文件。返回 (status, written_bytes, sha256)。
 async fn upload_one(
     conn: &quinn::Connection,
@@ -311,13 +325,14 @@ pub async fn upload(
         .with_context(|| format!("stat {local_path}"))?;
 
     if !meta.is_dir() {
+        let remote = resolve_remote_file(remote_path, local);
         let mut bar = ProgressBar::new(&format!("↑ {}", short_name(local_path)), meta.len());
         let (_, written, hash) =
-            upload_one(conn, local, remote_path, Some(&mut bar), limiter.as_ref()).await?;
+            upload_one(conn, local, &remote, Some(&mut bar), limiter.as_ref()).await?;
         let secs = bar.elapsed_secs();
         bar.clear();
         println!(
-            "pushed {local_path} → {remote_path} ({}, sha256:{})",
+            "pushed {local_path} → {remote} ({}, sha256:{})",
             summary(written, secs),
             hex::encode(hash)
         );
@@ -822,6 +837,35 @@ mod tests {
         assert!(validate_rel_path("sub/../../escape").is_err());
         // ".." 作为文件名片段是合法的，只有独立分量 ".." 才拒绝
         assert!(validate_rel_path("foo..bar/baz").is_ok());
+    }
+
+    #[test]
+    fn test_resolve_remote_file_dir_suffix_appends_local_name() {
+        let local = Path::new("/tmp/foo.txt");
+        assert_eq!(resolve_remote_file("/remote/", &local), "/remote/foo.txt");
+        assert_eq!(
+            resolve_remote_file("/remote/dir/", &local),
+            "/remote/dir/foo.txt"
+        );
+        assert_eq!(resolve_remote_file("/", &local), "/foo.txt");
+    }
+
+    #[test]
+    fn test_resolve_remote_file_file_path_unchanged() {
+        let local = Path::new("/tmp/foo.txt");
+        assert_eq!(
+            resolve_remote_file("/remote/foo.txt", &local),
+            "/remote/foo.txt"
+        );
+        assert_eq!(resolve_remote_file("/remote/bar", &local), "/remote/bar");
+        assert_eq!(resolve_remote_file("rel/foo.txt", &local), "rel/foo.txt");
+    }
+
+    #[test]
+    fn test_resolve_remote_file_no_file_name() {
+        let local = Path::new("");
+        assert_eq!(resolve_remote_file("/remote/", &local), "/remote/");
+        assert_eq!(resolve_remote_file("/remote/file", &local), "/remote/file");
     }
 
     #[tokio::test]
