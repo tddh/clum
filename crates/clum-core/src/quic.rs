@@ -179,7 +179,7 @@ mod tests {
 
     #[test]
     fn constants_are_nonzero() {
-        assert!(WINDOW_SIZE > 0);
+        const { assert!(WINDOW_SIZE > 0) };
         assert!(DEFAULT_KEEPALIVE > Duration::from_secs(0));
     }
 }

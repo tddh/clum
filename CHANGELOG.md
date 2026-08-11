@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.11.0] — 2026-08-11
+
+### Added
+- **文件传输带宽限速**：`clum-core::rate_limiter` 新增 token-bucket 限速器（`RateLimiter`/`BandwidthLimiter`，AtomicU64 实现，零依赖），以 1MB chunk 粒度注入所有 copy/recv 循环：
+  - **MCP**：`file_upload`/`file_download` 新增 `bandwidth_limit_mbps` 参数（0=不限速，默认取服务端配置）。
+  - **CLI**：`push`/`pull` 新增 `-B/--bw-limit <Mbps>`（默认 0=不限速）。
+  - **服务端配置**：`server-config.yaml` 新增 `file_transfer` 节——`upload/download_bandwidth_mbps`（**默认 70Mbps**，防止公网带宽打满导致断连）、`global_*_bandwidth_mbps`（全局聚合限速，0=不限）、`max_upload_concurrency`（默认 16）。
+  - 优先级：CLI/MCP 显式传值 > 服务端配置 > 不限速；`None/0` 向后兼容。
+- **`search_recordings` MCP 工具**：全文搜索 asciinema 录制内容，支持 substring/regex 匹配、ANSI escape 剥离、上下文行输出，按 host/日期范围/session/事件类型（输入/输出）过滤；逐行流式扫描，解析失败行跳过不报错。用于回答"这条命令什么时候跑的 / 这个错误在哪出现过"，与 `audit_query`（谁做了什么）互补。
+
+### Changed
+- **CLI**：`upload`/`download` 子命令重命名为 `push`/`pull`（旧名保留为 alias，现有脚本不受影响），transfer 用户可见字符串、README、TOOLS.md、SKILL.md 同步。
+
+### Removed
+- **移除全部 yunying 遗留兼容层**（0.10.0 过渡期正式结束）：
+  - `YUNYING_*` 环境变量 fallback（bridge/cli/clum-core 三处）。
+  - `/etc/yunying/token` 文件路径 fallback。
+  - QUIC ALPN 仅保留 `b"clum"`，移除 `b"yunying"`。
+  - 删除死代码 `inject_env_fallback`。
+  - ⚠️ **破坏性变更**：升级前必须先升级所有 bridge 到 0.10.x，否则旧 bridge 直连新 server 将 `QUIC handshake failed`。
+
+### Fixed
+- `ai_panel.rs`：`unwrap()` 改为防御式 `if-let`，避免异常路径 panic。
+
+### Quality
+- 新增 GitHub Actions CI pipeline（`.github/workflows/ci.yml`）：`cargo check` / `cargo fmt --check` / `cargo clippy -D warnings` / `cargo test` 四 job。
+- 测试补全 **+102 个**：api_keys +16、common +11、bridge_store +9、error +6、types +7（累计两轮共 +102）。
+- `.opencode/skills/clum-mcp/SKILL.md` 增强：新增运维模式、执行验证、不二过、分阶段汇报、经验沉淀章节。
+
+### Docs
+- README/README.zh：`push`/`pull` 重命名与限速参数说明。
+- docs/TOOLS.md：`search_recordings` 工具定义与 `bandwidth_limit_mbps` 参数同步。
+- docs/DEPLOY.md：安装脚本 socket 检测与部署说明对齐。
+
 ## [0.10.2] — 2026-08-06
 
 ### Added

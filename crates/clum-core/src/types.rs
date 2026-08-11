@@ -369,7 +369,7 @@ mod tests {
         assert_eq!(restored.windows, session.windows);
         assert_eq!(restored.panes.len(), 2);
         assert_eq!(restored.panes[0].pane_id, "%0");
-        assert_eq!(restored.panes[1].running, false);
+        assert!(!restored.panes[1].running);
         assert_eq!(restored.panes[1].title, None);
     }
 

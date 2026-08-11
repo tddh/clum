@@ -459,6 +459,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::approx_constant)]
     async fn send_recv_json_roundtrip_nested() {
         let (client, server) = tokio::io::duplex(8192);
         let (mut _cr, mut cw) = tokio::io::split(client);
