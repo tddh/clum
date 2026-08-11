@@ -23,6 +23,7 @@
 
 ### Fixed
 - `ai_panel.rs`：`unwrap()` 改为防御式 `if-let`，避免异常路径 panic。
+- **CLI push 目录路径报错**：`push` 的远端目标以 `/` 结尾（如 `/tmp/`）时，旧实现把目录路径原样传给 bridge，bridge 无法将临时文件 rename 到目录且不回传 status，CLI 误报 `stream finished early (0 bytes read)`。新增 `resolve_remote_file`——目标以 `/` 结尾时自动拼接本地文件名（对齐 scp 语义），并在 push 摘要中显示实际落盘路径。
 
 ### Quality
 - 新增 GitHub Actions CI pipeline（`.github/workflows/ci.yml`）：`cargo check` / `cargo fmt --check` / `cargo clippy -D warnings` / `cargo test` 四 job。
