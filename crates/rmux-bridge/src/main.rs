@@ -140,14 +140,19 @@ async fn main() -> anyhow::Result<()> {
                     },
                 ));
 
-                let session_state: std::sync::Arc<tokio::sync::Mutex<Option<InteractiveSession>>> =
-                    std::sync::Arc::new(tokio::sync::Mutex::new(None));
+                let session_state: std::sync::Arc<
+                    tokio::sync::Mutex<std::collections::HashMap<String, InteractiveSession>>,
+                > = std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()));
+                let session_counts: std::sync::Arc<
+                    std::sync::Mutex<std::collections::HashMap<String, usize>>,
+                > = std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
 
                 loop {
                     match conn.accept_bi().await {
                         Ok((send, recv)) => {
                             let proxy = protocol_proxy.clone();
                             let state = session_state.clone();
+                            let counts = session_counts.clone();
                             let rec_dir = conn_recording_dir.clone();
                             let rec_enabled = recording_enabled;
                             let rec_fsync = fsync_interval_secs;
@@ -158,6 +163,7 @@ async fn main() -> anyhow::Result<()> {
                                     recv,
                                     proxy,
                                     state,
+                                    counts,
                                     rec_enabled,
                                     rec_dir,
                                     rec_fsync,

@@ -311,8 +311,8 @@ fn set_append_only(path: &Path) {
     use std::os::unix::ffi::OsStrExt;
 
     // FS_IOC_GETFLAGS / FS_IOC_SETFLAGS ioctl numbers and FS_APPEND_FL flag.
-    const FS_IOC_GETFLAGS: libc::c_int = 0x8008_6601_u64 as libc::c_int;
-    const FS_IOC_SETFLAGS: libc::c_int = 0x4008_6602_u64 as libc::c_int;
+    const FS_IOC_GETFLAGS: libc::Ioctl = 0x8008_6601_u64 as libc::Ioctl;
+    const FS_IOC_SETFLAGS: libc::Ioctl = 0x4008_6602_u64 as libc::Ioctl;
     const FS_APPEND_FL: libc::c_int = 0x0000_0020;
 
     let c_path = match CString::new(path.as_os_str().as_bytes()) {
@@ -348,8 +348,8 @@ fn clear_append_only(path: &Path) {
     use std::ffi::CString;
     use std::os::unix::ffi::OsStrExt;
 
-    const FS_IOC_GETFLAGS: libc::c_int = 0x8008_6601_u64 as libc::c_int;
-    const FS_IOC_SETFLAGS: libc::c_int = 0x4008_6602_u64 as libc::c_int;
+    const FS_IOC_GETFLAGS: libc::Ioctl = 0x8008_6601_u64 as libc::Ioctl;
+    const FS_IOC_SETFLAGS: libc::Ioctl = 0x4008_6602_u64 as libc::Ioctl;
     const FS_APPEND_FL: libc::c_int = 0x0000_0020;
 
     let c_path = match CString::new(path.as_os_str().as_bytes()) {

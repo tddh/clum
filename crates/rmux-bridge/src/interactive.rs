@@ -27,7 +27,48 @@ pub struct InteractiveSession {
     pub child_pid: Option<u32>,
     pub exit_code: Option<i32>,
     pub exit_notify: Arc<Notify>,
-    pub recording_file: Option<String>,
+}
+
+/// 会话级活跃连接计数（跨 connection 共享，main/register 创建）。
+/// 用于判断某连接断开时该会话是否还有其它活跃 client：
+/// 若还有则跳过 layout restore，避免 even-vertical 重排误伤其它连接的显示。
+pub struct SessionCounter {
+    counts: Arc<std::sync::Mutex<std::collections::HashMap<String, usize>>>,
+    session: String,
+}
+
+impl SessionCounter {
+    pub fn register(
+        counts: Arc<std::sync::Mutex<std::collections::HashMap<String, usize>>>,
+        session: String,
+    ) -> Self {
+        if let Ok(mut m) = counts.lock() {
+            *m.entry(session.clone()).or_insert(0) += 1;
+        }
+        Self { counts, session }
+    }
+
+    /// 该会话中除自己外的活跃连接数。
+    pub fn active_others(&self) -> usize {
+        if let Ok(m) = self.counts.lock() {
+            m.get(&self.session).copied().unwrap_or(0).saturating_sub(1)
+        } else {
+            0
+        }
+    }
+}
+
+impl Drop for SessionCounter {
+    fn drop(&mut self) {
+        if let Ok(mut m) = self.counts.lock() {
+            if let Some(c) = m.get_mut(&self.session) {
+                *c = c.saturating_sub(1);
+                if *c == 0 {
+                    m.remove(&self.session);
+                }
+            }
+        }
+    }
 }
 
 const SCROLLBACK_LINES: usize = 50;
@@ -54,7 +95,7 @@ pub async fn handle_interactive_control(
     mut send: SendStream,
     mut recv: RecvStream,
     proxy: Arc<tokio::sync::RwLock<ProtocolProxy>>,
-    session_state: Arc<Mutex<Option<InteractiveSession>>>,
+    session_state: Arc<Mutex<std::collections::HashMap<String, InteractiveSession>>>,
     audit_db: Arc<BridgeAuditDb>,
     idle_timeout_secs: u64,
 ) -> Result<()> {
@@ -66,7 +107,7 @@ pub async fn handle_interactive_control(
     let payload_len = read_u16_le(&mut recv).await? as usize;
     let payload = read_bytes(&mut recv, payload_len).await?;
 
-    let (session_name, pane_id, cols, rows, _term) = parse_attach_payload(&payload)?;
+    let (client_id, session_name, pane_id, cols, rows, _term) = parse_attach_payload(&payload)?;
 
     let rp = proxy.read().await;
     let _session = match rp.get_session(&session_name).await {
@@ -112,18 +153,20 @@ pub async fn handle_interactive_control(
     let exit_notify = Arc::new(Notify::new());
     {
         let mut state = session_state.lock().await;
-        *state = Some(InteractiveSession {
-            session_name: session_name.clone(),
-            pane_id: pane_id.clone(),
-            cols,
-            rows,
-            socket_path: rp.socket_path().to_string(),
-            master_fd: None,
-            child_pid: None,
-            exit_code: None,
-            exit_notify: exit_notify.clone(),
-            recording_file: None,
-        });
+        state.insert(
+            client_id.clone(),
+            InteractiveSession {
+                session_name: session_name.clone(),
+                pane_id: pane_id.clone(),
+                cols,
+                rows,
+                socket_path: rp.socket_path().to_string(),
+                master_fd: None,
+                child_pid: None,
+                exit_code: None,
+                exit_notify: exit_notify.clone(),
+            },
+        );
     }
     drop(rp);
 
@@ -173,7 +216,7 @@ pub async fn handle_interactive_control(
                 if let Some(exit_code) = session_state
                     .lock()
                     .await
-                    .as_ref()
+                    .get(&client_id)
                     .and_then(|s| s.exit_code)
                 {
                     write_process_exited(&mut send, exit_code).await?;
@@ -201,7 +244,7 @@ pub async fn handle_interactive_control(
                 let new_rows = u16::from_le_bytes([payload[2], payload[3]]);
 
                 let state = session_state.lock().await;
-                if let Some(master_fd) = state.as_ref().and_then(|s| s.master_fd.as_ref()) {
+                if let Some(master_fd) = state.get(&client_id).and_then(|s| s.master_fd.as_ref()) {
                     let winsize = libc::winsize {
                         ws_row: new_rows,
                         ws_col: new_cols,
@@ -234,7 +277,7 @@ pub async fn handle_interactive_control(
                     })
                     .await;
                 let state = session_state.lock().await;
-                if let Some(pid) = state.as_ref().and_then(|s| s.child_pid) {
+                if let Some(pid) = state.get(&client_id).and_then(|s| s.child_pid) {
                     unsafe {
                         libc::kill(pid as i32, libc::SIGTERM);
                     }
@@ -248,6 +291,9 @@ pub async fn handle_interactive_control(
         }
     }
 
+    // 清理本客户端的 interactive 状态（enrolled 模式多个客户端共享 map，必须按 client_id 移除）
+    session_state.lock().await.remove(&client_id);
+
     Ok(())
 }
 
@@ -256,7 +302,9 @@ pub async fn handle_interactive_data(
     mut send: SendStream,
     mut recv: RecvStream,
     proxy: Arc<tokio::sync::RwLock<ProtocolProxy>>,
-    session_state: Arc<Mutex<Option<InteractiveSession>>>,
+    session_state: Arc<Mutex<std::collections::HashMap<String, InteractiveSession>>>,
+    session_counts: Arc<std::sync::Mutex<std::collections::HashMap<String, usize>>>,
+    client_id: String,
     recording_enabled: bool,
     recording_dir: PathBuf,
     fsync_interval_secs: u64,
@@ -266,7 +314,7 @@ pub async fn handle_interactive_data(
         let start = std::time::Instant::now();
         let timeout = std::time::Duration::from_secs(30);
         loop {
-            if let Some(info) = session_state.lock().await.as_ref() {
+            if let Some(info) = session_state.lock().await.get(&client_id) {
                 break (info.session_name.clone(), info.socket_path.clone());
             }
             if start.elapsed() > timeout {
@@ -275,6 +323,8 @@ pub async fn handle_interactive_data(
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
     };
+    // 登记本连接为该会话的活跃 client；断开时 Drop 自动 -1。
+    let counter = SessionCounter::register(session_counts, session_name.clone());
 
     let mut master: libc::c_int = -1;
     let mut slave: libc::c_int = -1;
@@ -293,7 +343,7 @@ pub async fn handle_interactive_data(
 
     let (cols, rows, pane_id) = {
         let state = session_state.lock().await;
-        let info = state.as_ref().context("session state missing")?;
+        let info = state.get(&client_id).context("session state missing")?;
         (info.cols, info.rows, info.pane_id.clone())
     };
 
@@ -311,12 +361,20 @@ pub async fn handle_interactive_data(
 
     {
         let mut state = session_state.lock().await;
-        if let Some(ref mut s) = *state {
+        if let Some(s) = state.get_mut(&client_id) {
             s.master_fd = Some(master_fd.try_clone()?);
         }
     }
 
     let slave_fd = unsafe { OwnedFd::from_raw_fd(slave) };
+    let slave_tty_name = unsafe {
+        let p = libc::ttyname(slave_fd.as_raw_fd());
+        if p.is_null() {
+            None
+        } else {
+            Some(std::ffi::CStr::from_ptr(p).to_string_lossy().into_owned())
+        }
+    };
     let slave_stdin = slave_fd.try_clone()?;
     let slave_stdout = slave_fd.try_clone()?;
     let slave_stderr = slave_fd;
@@ -343,10 +401,48 @@ pub async fn handle_interactive_data(
 
     {
         let mut state = session_state.lock().await;
-        if let Some(ref mut s) = *state {
+        if let Some(s) = state.get_mut(&client_id) {
             s.child_pid = child_pid;
         }
     }
+
+    // ─── 看门狗：rmux client 被 detach 但子进程不退时主动 kill ───
+    // rmux 存在"server 已 detach client（list-clients 移除），但 attach-session
+    // 客户端进程不退出"的情况，导致 child.wait() 永久阻塞、0x83 发不出、cli 卡死。
+    // 周期查询 list-clients，若自己的 slave tty 已不在 client 列表 → SIGKILL 子进程。
+    let watchdog = {
+        let socket = socket_path.clone();
+        let session = session_name.clone();
+        let slave_tty = slave_tty_name.clone();
+        tokio::spawn(async move {
+            let Some(tty) = slave_tty else { return };
+            let mut interval = tokio::time::interval(Duration::from_secs(2));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            interval.tick().await; // 跳过立即 tick，避免 attach 尚未注册时误杀
+            loop {
+                interval.tick().await;
+                let out = tokio::process::Command::new("rmux")
+                    .args(["-S", &socket, "list-clients", "-t", &session])
+                    .output()
+                    .await;
+                let Ok(out) = out else { continue };
+                let text = String::from_utf8_lossy(&out.stdout);
+                if !text.contains(&tty) {
+                    tracing::info!(
+                        tty = %tty,
+                        pid = child_pid.unwrap_or(0),
+                        "rmux client detached (process lingering), killing child"
+                    );
+                    if let Some(pid) = child_pid {
+                        unsafe {
+                            libc::kill(pid as i32, libc::SIGKILL);
+                        }
+                    }
+                    break;
+                }
+            }
+        })
+    };
 
     let flags = unsafe { libc::fcntl(master_fd.as_raw_fd(), libc::F_GETFL) };
     if flags == -1 {
@@ -397,13 +493,6 @@ pub async fn handle_interactive_data(
             match CastRecorder::start(cast_path.clone(), cols, rows, fsync_interval_secs).await {
                 Ok(rec) => {
                     tracing::info!(path = %cast_path.display(), "started cast recording");
-                    // Store recording path in session state.
-                    {
-                        let mut state = session_state.lock().await;
-                        if let Some(ref mut s) = *state {
-                            s.recording_file = Some(cast_path.to_string_lossy().to_string());
-                        }
-                    }
                     Some(rec)
                 }
                 Err(e) => {
@@ -522,11 +611,12 @@ pub async fn handle_interactive_data(
 
     {
         let mut state = session_state.lock().await;
-        if let Some(ref mut s) = *state {
+        if let Some(s) = state.get_mut(&client_id) {
             s.exit_code = Some(code);
             s.master_fd = None;
             s.child_pid = None;
-            s.exit_notify.notify_one();
+            // 每个客户端（client_id）有自己的 exit_notify，只唤醒本客户端的 control handler。
+            s.exit_notify.notify_waiters();
         }
     }
 
@@ -557,10 +647,12 @@ pub async fn handle_interactive_data(
     // When the client disconnects abnormally (network drop, process killed),
     // the pane may have been left at the client's terminal size. Restore with
     // even-vertical layout so other panes are not permanently squashed.
-    if copy_result.is_err() {
+    // 若该会话还有其它活跃 client（多人同时 term），跳过恢复——
+    // even-vertical 重排会误伤其它连接的显示。
+    if copy_result.is_err() && counter.active_others() == 0 {
         let state = session_state.lock().await;
-        let sn = state.as_ref().map(|s| s.session_name.clone());
-        let pid = state.as_ref().map(|s| s.pane_id.clone());
+        let sn = state.get(&client_id).map(|s| s.session_name.clone());
+        let pid = state.get(&client_id).map(|s| s.pane_id.clone());
         drop(state);
         if let Some(ref sn) = sn {
             let result = proxy
@@ -585,12 +677,25 @@ pub async fn handle_interactive_data(
         }
     }
 
+    // 子进程已退出/已 kill，停止看门狗，避免 task 泄漏。
+    watchdog.abort();
     copy_result?;
     Ok(())
 }
 
-fn parse_attach_payload(data: &[u8]) -> Result<(String, String, u16, u16, String)> {
+fn parse_attach_payload(data: &[u8]) -> Result<(String, String, String, u16, u16, String)> {
     let mut offset = 0;
+
+    if data.len() < 2 {
+        anyhow::bail!("attach payload too short for client_id_len");
+    }
+    let client_id_len = u16::from_le_bytes([data[offset], data[offset + 1]]) as usize;
+    offset += 2;
+    if data.len() < offset + client_id_len {
+        anyhow::bail!("attach payload truncated in client_id");
+    }
+    let client_id = String::from_utf8(data[offset..offset + client_id_len].to_vec())?;
+    offset += client_id_len;
 
     if data.len() < 2 {
         anyhow::bail!("attach payload too short for session_name_len");
@@ -632,7 +737,7 @@ fn parse_attach_payload(data: &[u8]) -> Result<(String, String, u16, u16, String
     }
     let term = String::from_utf8(data[offset..offset + term_len].to_vec())?;
 
-    Ok((session_name, pane_id, cols, rows, term))
+    Ok((client_id, session_name, pane_id, cols, rows, term))
 }
 
 async fn write_attached(send: &mut SendStream, scrollback: &[u8]) -> Result<()> {

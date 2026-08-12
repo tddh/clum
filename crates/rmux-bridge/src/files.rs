@@ -35,7 +35,10 @@ pub async fn handle_quic_stream(
     send: quinn::SendStream,
     mut recv: quinn::RecvStream,
     protocol_proxy: std::sync::Arc<tokio::sync::RwLock<crate::protocol::ProtocolProxy>>,
-    session_state: std::sync::Arc<tokio::sync::Mutex<Option<InteractiveSession>>>,
+    session_state: std::sync::Arc<
+        tokio::sync::Mutex<std::collections::HashMap<String, InteractiveSession>>,
+    >,
+    session_counts: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, usize>>>,
     recording_enabled: bool,
     recording_dir: std::path::PathBuf,
     fsync_interval_secs: u64,
@@ -81,11 +84,23 @@ pub async fn handle_quic_stream(
             .await
         }
         0x07 => {
+            // 0x07 数据流头：1 字节 client_id_len + client_id 字节。
+            // enrolled 模式多客户端共享一个 QUIC connection，必须用 client_id
+            // 匹配各客户端自己的 interactive 状态。
+            let mut cid_len_buf = [0u8; 1];
+            recv.read_exact(&mut cid_len_buf).await?;
+            let cid_len = cid_len_buf[0] as usize;
+            let mut cid_buf = vec![0u8; cid_len];
+            recv.read_exact(&mut cid_buf).await?;
+            let client_id = String::from_utf8(cid_buf)
+                .map_err(|_| anyhow::anyhow!("invalid client_id on 0x07 stream"))?;
             crate::interactive::handle_interactive_data(
                 send,
                 recv,
                 protocol_proxy,
                 session_state,
+                session_counts,
+                client_id,
                 recording_enabled,
                 recording_dir,
                 fsync_interval_secs,

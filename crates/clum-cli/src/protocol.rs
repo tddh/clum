@@ -3,16 +3,21 @@ use quinn::SendStream;
 
 pub async fn write_attach_request(
     send: &mut SendStream,
+    client_id: &str,
     session_name: &str,
     pane_id: &str,
     cols: u16,
     rows: u16,
 ) -> Result<()> {
     let term = "xterm-256color";
-    let payload_len = 2 + session_name.len() + 1 + pane_id.len() + 2 + 2 + 1 + term.len();
+    let payload_len =
+        2 + client_id.len() + 2 + session_name.len() + 1 + pane_id.len() + 2 + 2 + 1 + term.len();
 
     send.write_all(&[0x01]).await?;
     send.write_all(&(payload_len as u16).to_le_bytes()).await?;
+    send.write_all(&(client_id.len() as u16).to_le_bytes())
+        .await?;
+    send.write_all(client_id.as_bytes()).await?;
     send.write_all(&(session_name.len() as u16).to_le_bytes())
         .await?;
     send.write_all(session_name.as_bytes()).await?;

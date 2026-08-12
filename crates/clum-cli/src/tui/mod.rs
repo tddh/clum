@@ -41,6 +41,32 @@ fn write_mouse(seq: &[u8]) -> std::io::Result<()> {
     out.flush()
 }
 
+/// Windows: raw mode 下启用 `ENABLE_VIRTUAL_TERMINAL_INPUT`，否则 ReadFile
+/// 不会返回方向键/功能键（控制台直接丢弃），vim 等无法使用。
+/// crossterm 的 raw mode 不设置该标志，需手动开启（zellij/psmux 同款做法）。
+#[cfg(windows)]
+fn enable_vt_input() -> std::io::Result<()> {
+    use windows_sys::Win32::System::Console::{
+        GetConsoleMode, GetStdHandle, SetConsoleMode, ENABLE_VIRTUAL_TERMINAL_INPUT,
+        STD_INPUT_HANDLE,
+    };
+
+    unsafe {
+        let handle = GetStdHandle(STD_INPUT_HANDLE);
+        if handle.is_null() {
+            return Err(std::io::Error::last_os_error());
+        }
+        let mut mode: u32 = 0;
+        if GetConsoleMode(handle, &mut mode) == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        if SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_INPUT) == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+    }
+    Ok(())
+}
+
 // ── Helper functions ──
 
 async fn capture_pane(
@@ -427,10 +453,21 @@ async fn run_session(
     let json_recv = Arc::new(Mutex::new(json_recv_raw));
 
     // PTY attach (ctrl stream)
+    // client_id 用于在 bridge 侧（enrolled 模式共享 connection）隔离不同客户端的
+    // interactive 状态，避免跨 session/跨客户端的 session_state 串扰。
+    let client_id = conn.stable_id().to_string();
     let (cols, rows) = crossterm::terminal::size()?;
     let (mut ctrl_send, mut ctrl_recv) = conn.open_bi().await?;
     ctrl_send.write_all(&[0x06]).await?;
-    write_attach_request(&mut ctrl_send, session_name, pane_id, cols, rows).await?;
+    write_attach_request(
+        &mut ctrl_send,
+        &client_id,
+        session_name,
+        pane_id,
+        cols,
+        rows,
+    )
+    .await?;
     let scrollback = read_attached_response(&mut ctrl_recv).await?;
     let ctrl_send = Arc::new(Mutex::new(ctrl_send));
 
@@ -441,10 +478,14 @@ async fn run_session(
     }
 
     enable_raw_mode()?;
+    #[cfg(windows)]
+    enable_vt_input()?;
 
-    // PTY data stream
+    // PTY data stream（0x07 + client_id 前缀，bridge 据此匹配自己的 interactive 状态）
     let (mut pty_send_raw, mut pty_recv_raw) = conn.open_bi().await?;
     pty_send_raw.write_all(&[0x07]).await?;
+    pty_send_raw.write_all(&[client_id.len() as u8]).await?;
+    pty_send_raw.write_all(client_id.as_bytes()).await?;
     let pty_send = Arc::new(Mutex::new(pty_send_raw));
 
     // Shared state between PTY mode and AI mode
@@ -505,6 +546,9 @@ async fn run_session(
         Eof,
         ConnLost(quinn::ConnectionError),
         CtrlEnded(Option<i32>),
+        /// 轮询 tick 未检测到尺寸变化时忽略（Windows 专用）。
+        #[cfg_attr(unix, allow(dead_code))]
+        Noop,
     }
 
     let outcome = loop {
@@ -534,14 +578,32 @@ async fn run_session(
                 }
             }
             #[cfg(not(unix))]
-            tokio::select! {
-                r = stdin.read(&mut inbuf) => match r {
-                    Ok(0) => Input::Eof,
-                    Ok(n) => Input::Bytes(n),
-                    Err(_) => Input::Eof,
-                },
-                reason = conn.closed() => Input::ConnLost(reason),
-                code = read_ctrl_exit(&mut ctrl_recv) => Input::CtrlEnded(code),
+            {
+                // Windows 无 SIGWINCH，且 crossterm event 系统与 raw stdin read
+                // 竞争同一 console input buffer 不能共存，故轮询屏幕缓冲尺寸
+                // （zellij AsyncSignalListener 同款做法）。
+                let mut last_size = crossterm::terminal::size().ok();
+                let mut resize_tick = tokio::time::interval(Duration::from_millis(100));
+                resize_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                tokio::select! {
+                    r = stdin.read(&mut inbuf) => match r {
+                        Ok(0) => Input::Eof,
+                        Ok(n) => Input::Bytes(n),
+                        Err(_) => Input::Eof,
+                    },
+                    reason = conn.closed() => Input::ConnLost(reason),
+                    code = read_ctrl_exit(&mut ctrl_recv) => Input::CtrlEnded(code),
+                    _ = resize_tick.tick() => {
+                        let size = crossterm::terminal::size().ok();
+                        let changed = size != last_size;
+                        last_size = size;
+                        if changed {
+                            Input::Resize
+                        } else {
+                            Input::Noop
+                        }
+                    }
+                }
             }
         };
 
@@ -558,6 +620,7 @@ async fn run_session(
                 }
                 break SessionOutcome::RemoteExited(None);
             }
+            Input::Noop => {}
             Input::Resize => {
                 if let Ok((cols, rows)) = crossterm::terminal::size() {
                     let mut cs = ctrl_send.lock().await;

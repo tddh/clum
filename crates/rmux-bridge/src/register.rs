@@ -105,8 +105,11 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
         },
     ));
 
-    let session_state: Arc<tokio::sync::Mutex<Option<InteractiveSession>>> =
-        Arc::new(tokio::sync::Mutex::new(None));
+    let session_state: Arc<
+        tokio::sync::Mutex<std::collections::HashMap<String, InteractiveSession>>,
+    > = Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()));
+    let session_counts: Arc<std::sync::Mutex<std::collections::HashMap<String, usize>>> =
+        Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
 
     // Heartbeat task: send pings on the control stream
     let heartbeat_conn = conn.clone();
@@ -214,6 +217,7 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
             Ok((stream_send, stream_recv)) => {
                 let proxy = protocol_proxy.clone();
                 let state = session_state.clone();
+                let counts = session_counts.clone();
                 let rec_dir = config.recording_dir.clone();
                 let rec_enabled = config.recording_enabled;
                 let rec_fsync = config.recording_fsync_interval_secs;
@@ -225,6 +229,7 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
                         stream_recv,
                         proxy,
                         state,
+                        counts,
                         rec_enabled,
                         rec_dir,
                         rec_fsync,
