@@ -489,6 +489,7 @@ version = "0.11.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "fastrand",
  "quinn",
  "rustls",
  "rustls-pemfile",

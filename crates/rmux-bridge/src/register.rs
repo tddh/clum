@@ -9,6 +9,7 @@ use crate::bridge_audit::BridgeAuditDb;
 use crate::cast_recorder;
 use crate::interactive::InteractiveSession;
 use crate::protocol::ProtocolProxy;
+use clum_core::backoff::FullJitterBackoff;
 
 pub struct RegisterConfig {
     pub server_addr: String,
@@ -25,21 +26,21 @@ pub struct RegisterConfig {
 }
 
 pub async fn run_registration_loop(config: RegisterConfig) {
-    let mut backoff = Duration::from_millis(500);
-    let max_backoff = Duration::from_secs(30);
+    let mut backoff = FullJitterBackoff::new(Duration::from_millis(500), Duration::from_secs(30));
 
     loop {
         match connect_and_register(&config).await {
             Ok(()) => {
                 tracing::info!("registration session ended, reconnecting");
-                backoff = Duration::from_millis(500);
+                backoff.reset();
+                tokio::time::sleep(backoff.next_delay()).await;
             }
             Err(e) => {
-                tracing::warn!("registration failed: {e:#}, retrying in {backoff:?}");
+                let delay = backoff.next_delay();
+                tracing::warn!("registration failed: {e:#}, retrying in {delay:?}");
+                tokio::time::sleep(delay).await;
             }
         }
-        tokio::time::sleep(backoff).await;
-        backoff = (backoff * 2).min(max_backoff);
     }
 }
 

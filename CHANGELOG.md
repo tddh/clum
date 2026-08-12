@@ -1,5 +1,30 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **`clum-core::backoff`：统一 Full Jitter 退避原语**（`FullJitterBackoff`，基于 `fastrand`，零额外传递依赖）。公式 `sleep = random(0, min(cap, base * 2^attempt))`，含溢出防护（checked_shl + saturating）、成功后 `reset()` 归零、`with_seed` 确定性测试构造。消除多实例同步重连的惊群效应。
+
+### Changed
+- **全项目退避统一为 Full Jitter**（替换 5 处手写指数退避，参数逐处对齐）：
+
+| 调用点 | base → cap |
+|--------|-----------|
+| bridge 注册循环（`register.rs`） | 500ms → 30s |
+| MCP QUIC 连接重试（`transport.rs` `with_retry`） | 500ms → 8s（原无封顶，新增） |
+| CLI `forward` 重连（`forward.rs`） | 1s → 30s |
+| CLI `term` 重连（`tui/mod.rs`） | 1s → 30s |
+| `exec` 断连续等（`tools/exec.rs`） | 500ms → 5s |
+
+  所有调用点保留原有语义：成功重置退避、`forward` 的 `--give-up-after` 总超时裁剪、`exec` 的 deadline 预算裁剪、`with_retry` 的 `max_retries` 计数。
+- **bridge 交互会话按 client_id 隔离**（`interactive.rs`/`register.rs`）：新增 `SessionCounter` 跨连接共享活跃连接计数，连接断开时若会话仍有其它活跃 client 则跳过 layout restore，避免 even-vertical 重排误伤其它连接的显示；recording 文件归属按 client 隔离。
+
+### Fixed
+- **CLI term（Windows）**：进程退出检测与 pane 恢复相关修复。
+
+### Docs
+- CHANGELOG：记录 Full Jitter 退避统一改造。
+
 ## [0.11.0] — 2026-08-11
 
 ### Added

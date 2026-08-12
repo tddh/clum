@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use super::ToolContext;
 use crate::transport::{connect_to_host, recv_json_frame, send_json_frame};
+use clum_core::backoff::FullJitterBackoff;
 use clum_core::types::AuditAction;
 
 /// 将字面量转义序列转为实际控制字符。
@@ -688,7 +689,10 @@ pub(crate) async fn exec(
                     AwaitOutcome::Lost => {
                         // sentinel 是远端 pane 上的持久状态，断连不影响命令执行；
                         // 退避重连后继续等待，重连耗时计入总预算
-                        let mut backoff = std::time::Duration::from_millis(500);
+                        let mut backoff = FullJitterBackoff::new(
+                            std::time::Duration::from_millis(500),
+                            std::time::Duration::from_secs(5),
+                        );
                         loop {
                             let now = std::time::Instant::now();
                             if now >= deadline {
@@ -700,15 +704,10 @@ pub(crate) async fn exec(
                                     Some("connection lost and reconnect failed"),
                                 );
                             }
-                            tokio::time::sleep(backoff.min(deadline - now)).await;
-                            match connect_to_host(ctx, &host).await {
-                                Ok(new_tls) => {
-                                    tls = new_tls;
-                                    break;
-                                }
-                                Err(_) => {
-                                    backoff = (backoff * 2).min(std::time::Duration::from_secs(5));
-                                }
+                            tokio::time::sleep(backoff.next_delay().min(deadline - now)).await;
+                            if let Ok(new_tls) = connect_to_host(ctx, &host).await {
+                                tls = new_tls;
+                                break;
                             }
                         }
                     }

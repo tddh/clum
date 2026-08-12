@@ -5,6 +5,7 @@
 
 use anyhow::Context;
 
+pub mod backoff;
 pub mod quic;
 pub mod rate_limiter;
 pub mod types;

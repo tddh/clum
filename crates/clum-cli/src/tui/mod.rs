@@ -8,6 +8,7 @@ use std::time::Duration;
 use std::os::unix::io::AsRawFd;
 
 use anyhow::{Context, Result};
+use clum_core::backoff::FullJitterBackoff;
 use clum_core::HostConfig;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
@@ -370,7 +371,7 @@ pub async fn run_connect_with_ai(
     let is_ai_mode = Arc::new(AtomicBool::new(false));
     let pty_buffer: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
 
-    let mut backoff = Duration::from_secs(1);
+    let mut backoff = FullJitterBackoff::new(Duration::from_secs(1), MAX_RECONNECT_BACKOFF);
     let mut first_attempt = true;
     loop {
         let outcome = run_session(
@@ -398,7 +399,7 @@ pub async fn run_connect_with_ai(
             }
             Ok(SessionOutcome::Lost(reason)) => {
                 println!("\nterm: connection lost ({reason})");
-                backoff = Duration::from_secs(1);
+                backoff.reset();
             }
             Err(e) => {
                 if first_attempt {
@@ -408,12 +409,12 @@ pub async fn run_connect_with_ai(
             }
         }
 
+        let delay = backoff.next_delay();
         println!(
-            "term: reconnecting in {}s... (Ctrl+C to abort)",
-            backoff.as_secs()
+            "term: reconnecting in {:.1}s... (Ctrl+C to abort)",
+            delay.as_secs_f64()
         );
-        tokio::time::sleep(backoff).await;
-        backoff = (backoff * 2).min(MAX_RECONNECT_BACKOFF);
+        tokio::time::sleep(delay).await;
         first_attempt = false;
     }
 }

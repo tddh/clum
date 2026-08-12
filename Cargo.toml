@@ -26,6 +26,7 @@ anyhow = "1"
 regex = "1"
 futures = "0.3"
 quinn = "0.11"
+fastrand = "2"
 clap = "4"
 serde_yml = "0.0"
 rmcp = { version = "=3.0.0", features = ["server", "transport-streamable-http-server"] }

@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
+use clum_core::backoff::FullJitterBackoff;
 
 /// 解析 "30s" / "10m" / "2h" / 纯秒数 "7200"；"0" 表示永不（Duration::ZERO）。
 pub fn parse_duration(s: &str) -> Result<Duration> {
@@ -52,7 +53,7 @@ pub async fn run(
     );
 
     let mut down_since: Option<std::time::Instant> = None;
-    let mut backoff = Duration::from_secs(1);
+    let mut backoff = FullJitterBackoff::new(Duration::from_secs(1), MAX_BACKOFF);
 
     loop {
         if let Some(since) = down_since {
@@ -63,7 +64,7 @@ pub async fn run(
                     give_up_after.as_secs()
                 );
             }
-            let wait = backoff;
+            let wait = backoff.next_delay();
             let wait = if give_up_after != Duration::ZERO {
                 wait.min(give_up_after.saturating_sub(since.elapsed()))
             } else {
@@ -76,7 +77,7 @@ pub async fn run(
                 Ok(c) => {
                     conn = c;
                     down_since = None;
-                    backoff = Duration::from_secs(1);
+                    backoff.reset();
                     eprintln!("forward: reconnected");
                 }
                 Err(e) => {
@@ -86,7 +87,6 @@ pub async fn run(
                     } else {
                         eprintln!("forward: reconnect failed: {msg}");
                     }
-                    backoff = (backoff * 2).min(MAX_BACKOFF);
                 }
             }
             continue;

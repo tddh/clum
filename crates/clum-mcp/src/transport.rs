@@ -6,6 +6,7 @@
 //! stream, retry, registry-aware routing).
 
 use anyhow::{Context, Result};
+use clum_core::backoff::FullJitterBackoff;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context as TaskContext, Poll};
@@ -164,19 +165,20 @@ impl AsyncWrite for BridgeStream {
     }
 }
 
-/// Exponential-backoff retry wrapper (500ms base, doubling).
+/// Full-jitter backoff retry wrapper (500ms base, doubling, 8s cap).
 async fn with_retry<T, F, Fut>(label: &str, max_retries: u32, mut connect: F) -> Result<T>
 where
     F: FnMut() -> Fut,
     Fut: Future<Output = anyhow::Result<T>>,
 {
+    let mut backoff = FullJitterBackoff::new(Duration::from_millis(500), Duration::from_secs(8));
     let mut attempt = 0;
     loop {
         match connect().await {
             Ok(v) => return Ok(v),
             Err(e) if attempt < max_retries => {
                 attempt += 1;
-                let delay = Duration::from_millis(500 * 2u64.pow(attempt));
+                let delay = backoff.next_delay();
                 tracing::warn!(
                     "{label} connect failed (attempt {attempt}/{max_retries}), retrying in {delay:?}: {e}"
                 );

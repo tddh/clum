@@ -13,6 +13,7 @@ rustls-pemfile = "2"
 webpki-roots = "1"
 quinn = { workspace = true, features = ["rustls"] }
 tokio = { workspace = true }
+fastrand.workspace = true
 
 [dev-dependencies]
 serde_json = { workspace = true }
