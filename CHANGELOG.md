@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.12.0] — 2026-08-13
 
 ### Added
 - **`clum-core::backoff`：统一 Full Jitter 退避原语**（`FullJitterBackoff`，基于 `fastrand`，零额外传递依赖）。公式 `sleep = random(0, min(cap, base * 2^attempt))`，含溢出防护（checked_shl + saturating）、成功后 `reset()` 归零、`with_seed` 确定性测试构造。消除多实例同步重连的惊群效应。
@@ -23,7 +23,7 @@
 - **CLI term（Windows）**：进程退出检测与 pane 恢复相关修复。
 
 ### Docs
-- CHANGELOG：记录 Full Jitter 退避统一改造。
+- CHANGELOG：记录 0.12.0 Full Jitter 退避统一改造与交互会话隔离。
 
 ## [0.11.0] — 2026-08-11
 
