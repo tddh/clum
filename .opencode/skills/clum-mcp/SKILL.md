@@ -409,8 +409,10 @@ wait_stable(host, session_name, pane_id)
 └── 截取特定区域 → `capture_region`
 
 文件操作？
-├── 单台上传 → `file_upload`
-├── 单台下载 → `file_download`
+├── 客户端本地文件 ↔ 远程 → `clum-cli push` / `clum-cli pull`（通过 Bash 工具调用，常用场景）
+│   ⚠️ 本机文件传远程用 `clum-cli push <host> <local> <remote>`，远程拉本机用 `clum-cli pull <host> <remote> <local>`
+├── Server 文件系统 ↔ 远程 → `file_upload` / `file_download`
+│   ⚠️ central server 模式下 local_path 是 **SERVER 文件系统**，不是客户端/AI 本地！仅当文件已存在于 Server 上时才用
 ├── 批量上传 → `batch_upload`
 └── 批量下载 → `batch_download`
 

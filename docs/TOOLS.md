@@ -830,10 +830,12 @@
 
 上传文件或目录到远程主机（通过 bridge QUIC 通道）。目标目录不存在时自动创建。支持覆盖策略和 glob 排除。Bridge 端会拒绝包含 `..` 的路径（防路径穿越攻击）。
 
+> ⚠️ **Central Server 模式（推荐部署方式）**：`local_path` 指的是 **SERVER 文件系统**，不是客户端/AI 本地机器。客户端本地文件传远程请用 `clum-cli push <host> <local> <remote>`（通过 Bash 工具调用）。
+
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | 主机名称 |
-| `local_path` | string | ✅ | 本地文件路径 |
+| `local_path` | string | ✅ | Server 上的文件路径（⚠️ 非客户端本地） |
 | `remote_path` | string | ✅ | 远程目标路径 |
 | `overwrite` | string | | 覆盖策略: `overwrite`(默认) / `skip` / `rename` / `error`（=放弃，文件已存在时报错） |
 | `exclude` | string[] | | glob 排除模式，如 `["*.log", "target/**/*"]` |
@@ -848,11 +850,13 @@
 
 从远程主机下载文件或目录（通过 bridge QUIC 通道）。自动检测远程路径类型：单文件直接下载；目录则递归下载所有文件，保持目录结构。返回文件大小和 SHA256 校验值。Bridge 端会拒绝包含 `..` 的路径（防路径穿越攻击）；MCP 端会验证远端返回的相对路径不含 `..` 且非绝对路径。
 
+> ⚠️ **Central Server 模式（推荐部署方式）**：`local_path` 写入的是 **SERVER 文件系统**，不是客户端/AI 本地机器。下载到客户端本地请用 `clum-cli pull <host> <remote> <local>`（通过 Bash 工具调用）。
+
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | 主机名称 |
 | `remote_path` | string | ✅ | 远程文件或目录路径 |
-| `local_path` | string | ✅ | 本地保存路径（目录下载时为本地根目录） |
+| `local_path` | string | ✅ | Server 上的保存路径（⚠️ 非客户端本地；目录下载时为本地根目录） |
 
 **单文件返回** `{"ok": true, "file": {"uri": "...", "local_path": "...", "size": N, "sha256": "..."}}`
 
@@ -1007,10 +1011,12 @@ Execute the same command on multiple hosts concurrently. Sends the command to al
 
 Upload a file or directory to multiple hosts concurrently.
 
+> ⚠️ **Central Server 模式（推荐部署方式）**：`local_path` 指的是 **SERVER 文件系统**，不是客户端/AI 本地机器。客户端本地文件批量上传请先 `clum-cli push` 到 Server 或用单机循环 `clum-cli push`。
+
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `hosts` | string[] | ✅ | 主机名列表 |
-| `local_path` | string | ✅ | 本地文件或目录路径 |
+| `local_path` | string | ✅ | Server 上的文件或目录路径（⚠️ 非客户端本地） |
 | `remote_path` | string | ✅ | 远程目标路径 |
 | `overwrite` | string | | 覆盖策略: `overwrite`(默认) / `skip` / `rename` / `error`（=放弃，文件已存在时报错） |
 | `exclude` | string[] | | 排除 glob 模式 |
@@ -1043,11 +1049,13 @@ Upload a file or directory to multiple hosts concurrently.
 
 Download a file from multiple hosts concurrently. Each host's file is saved to `local_dir/<hostname>/<filename>`. ⚠️ Multiple runs to the same `local_dir` WILL overwrite previous downloads — use different `local_dir` per run to preserve history.
 
+> ⚠️ **Central Server 模式（推荐部署方式）**：`local_dir` 写入的是 **SERVER 文件系统**，不是客户端/AI 本地机器。下载到客户端本地请逐台 `clum-cli pull`。
+
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `hosts` | string[] | ✅ | 主机名列表 |
 | `remote_path` | string | ✅ | 远程文件路径 |
-| `local_dir` | string | ✅ | 本地目录（自动创建 `<hostname>/` 子目录） |
+| `local_dir` | string | ✅ | Server 上的目录（⚠️ 非客户端本地；自动创建 `<hostname>/` 子目录） |
 | `concurrency` | integer | | 最大并发连接数（默认 5，0=不限制） |
 
 **返回**
