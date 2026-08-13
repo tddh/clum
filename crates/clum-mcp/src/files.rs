@@ -14,7 +14,6 @@ use tokio::sync::Semaphore;
 use crate::registry::BridgeRegistry;
 
 const MAX_UPLOAD_CONCURRENCY: usize = 16;
-const MAX_FILE_SIZE: usize = 2 * 1024 * 1024 * 1024; // 2 GB
 const COPY_BUF_SIZE: usize = 1024 * 1024; // 1 MB — 与 bridge CHUNK_SIZE 对齐
 
 const STREAM_UPLOAD: u8 = 0x02;
@@ -94,10 +93,6 @@ pub async fn upload_file(
         )
         .await
     } else {
-        let size = meta.len() as usize;
-        if size > MAX_FILE_SIZE {
-            bail!("file too large: {} bytes (max {})", size, MAX_FILE_SIZE);
-        }
         let result = upload_single(
             host,
             local_path,
@@ -318,13 +313,6 @@ async fn read_single_file(
     let mut size_buf = [0u8; 8];
     recv.read_exact(&mut size_buf).await?;
     let file_size = u64::from_le_bytes(size_buf) as usize;
-    if file_size > MAX_FILE_SIZE {
-        bail!(
-            "file too large: {} bytes (max {})",
-            file_size,
-            MAX_FILE_SIZE
-        );
-    }
 
     if let Some(parent) = Path::new(local_path).parent() {
         tokio::fs::create_dir_all(parent).await?;
@@ -412,13 +400,6 @@ async fn read_directory(
         let mut size_buf = [0u8; 8];
         recv.read_exact(&mut size_buf).await?;
         let file_size = u64::from_le_bytes(size_buf) as usize;
-        if file_size > MAX_FILE_SIZE {
-            bail!(
-                "file too large: {} bytes (max {})",
-                file_size,
-                MAX_FILE_SIZE
-            );
-        }
 
         let local_path = format!("{}/{}", local_base, rel_path);
         if let Some(parent) = Path::new(&local_path).parent() {
