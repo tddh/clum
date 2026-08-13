@@ -250,9 +250,15 @@ async fn ai_loop(
                             }
 
                             if cmd.starts_with("@analyze") {
-                                handle_report(json_send, json_recv, session_name, pane_id, ai_panel)
-                                    .await
-                                    .ok();
+                                handle_report(
+                                    json_send,
+                                    json_recv,
+                                    session_name,
+                                    pane_id,
+                                    ai_panel,
+                                )
+                                .await
+                                .ok();
                             } else if cmd.starts_with("@clear") {
                                 handle_clear(ai_panel).await;
                             } else {
@@ -460,6 +466,8 @@ async fn run_session(
     // interactive 状态，避免跨 session/跨客户端的 session_state 串扰。
     let client_id = conn.stable_id().to_string();
     let (cols, rows) = crossterm::terminal::size()?;
+    // attach 请求与响应必须在同一个 bi-stream 上（write_attach_request 的 0x01
+    // 头与 read_attached_response 的 0x81/0x82 响应成对）
     let (mut ctrl_send, mut ctrl_recv) = conn.open_bi().await?;
     ctrl_send.write_all(&[0x06]).await?;
     write_attach_request(
@@ -471,7 +479,34 @@ async fn run_session(
         rows,
     )
     .await?;
-    let scrollback = read_attached_response(&mut ctrl_recv).await?;
+    // session 不存在时自动创建后重试一次 attach（attach 错误通过 0x82 返回）
+    let scrollback = match read_attached_response(&mut ctrl_recv).await {
+        Ok(s) => s,
+        Err(e) if e.to_string().contains("session not found") => {
+            // 用 JSON channel 创建同名 session（与 MCP session_create 一致）
+            send_json_frame(
+                &mut *json_send.lock().await,
+                &serde_json::json!({ "type": "new_session", "name": session_name, "detached": true }),
+            )
+            .await?;
+            let _resp = recv_json_frame(&mut *json_recv.lock().await).await?;
+            let (s, r) = conn.open_bi().await?;
+            ctrl_send = s;
+            ctrl_recv = r;
+            ctrl_send.write_all(&[0x06]).await?;
+            write_attach_request(
+                &mut ctrl_send,
+                &client_id,
+                session_name,
+                pane_id,
+                cols,
+                rows,
+            )
+            .await?;
+            read_attached_response(&mut ctrl_recv).await?
+        }
+        Err(e) => return Err(e),
+    };
     let ctrl_send = Arc::new(Mutex::new(ctrl_send));
 
     // 恢复当前屏幕内容（首次进入与断线重连都适用）
@@ -558,7 +593,15 @@ async fn run_session(
         if is_ai_mode.load(Ordering::Relaxed) {
             // AI 模式——备用屏（ai_loop 期间由它自己的 crossterm 接管 stdin）
             tokio::io::stdout().flush().await.ok();
-            let result = ai_loop(&json_send, &json_recv, &pty_buffer, ai, session_name, pane_id).await;
+            let result = ai_loop(
+                &json_send,
+                &json_recv,
+                &pty_buffer,
+                ai,
+                session_name,
+                pane_id,
+            )
+            .await;
             is_ai_mode.store(false, Ordering::Relaxed);
             if result.is_err() {
                 break SessionOutcome::Exit;

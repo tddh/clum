@@ -107,6 +107,82 @@ pub async fn find_lowest_pane_via_server(
     lowest_pane_on_conn(&conn, session_name).await
 }
 
+/// Central Server 模式下确保 session 存在：不存在则创建同名 detached session。
+/// term 在 pane 解析与 attach 前调用，使 `term <host> --session <name>` 在
+/// session 缺失时自动创建而非报错退出。
+pub async fn ensure_session_via_server(
+    server_addr: &str,
+    ca_cert_path: Option<&str>,
+    host: &str,
+    api_key: Option<&str>,
+    session_name: &str,
+) -> Result<()> {
+    let conn = connect_via_server(server_addr, ca_cert_path, host, api_key, "term").await?;
+    let (mut send, mut recv) = conn.open_bi().await?;
+    send.write_all(&[0x01]).await?;
+
+    let has = serde_json::json!({
+        "type": "has_session",
+        "name": session_name,
+    });
+    crate::protocol::send_json_frame(&mut send, &has).await?;
+    let resp = crate::protocol::recv_json_frame(&mut recv).await?;
+    let exists = resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
+    if exists {
+        return Ok(());
+    }
+
+    let create = serde_json::json!({
+        "type": "new_session",
+        "name": session_name,
+        "detached": true,
+    });
+    crate::protocol::send_json_frame(&mut send, &create).await?;
+    let resp = crate::protocol::recv_json_frame(&mut recv).await?;
+    if resp.get("ok").and_then(|v| v.as_bool()) != Some(true) {
+        let err = resp["error"].as_str().unwrap_or("unknown error");
+        anyhow::bail!("failed to create session {}: {}", session_name, err);
+    }
+    Ok(())
+}
+
+/// Direct 模式下确保 session 存在（逻辑同 ensure_session_via_server，走 bridge 直连）。
+pub async fn ensure_session(
+    config: &HostConfig,
+    ca_cert_path: Option<&str>,
+    session_name: &str,
+) -> Result<()> {
+    let addr = config
+        .bridge_addr
+        .as_deref()
+        .context("bridge_addr not configured")?;
+    let token = config
+        .bridge_token
+        .as_deref()
+        .context("bridge_token not configured")?;
+    let conn = connect_to_bridge_quic(addr, token, ca_cert_path).await?;
+    let (mut send, mut recv) = conn.open_bi().await?;
+    send.write_all(&[0x01]).await?;
+
+    let has = serde_json::json!({ "type": "has_session", "name": session_name });
+    crate::protocol::send_json_frame(&mut send, &has).await?;
+    let resp = crate::protocol::recv_json_frame(&mut recv).await?;
+    let exists = resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
+    if exists {
+        return Ok(());
+    }
+
+    let create =
+        serde_json::json!({ "type": "new_session", "name": session_name, "detached": true });
+    crate::protocol::send_json_frame(&mut send, &create).await?;
+    let resp = crate::protocol::recv_json_frame(&mut recv).await?;
+    if resp.get("ok").and_then(|v| v.as_bool()) != Some(true) {
+        let err = resp["error"].as_str().unwrap_or("unknown error");
+        anyhow::bail!("failed to create session {}: {}", session_name, err);
+    }
+    Ok(())
+}
+
 async fn lowest_pane_on_conn(conn: &quinn::Connection, session_name: &str) -> Result<String> {
     let (mut send, mut recv) = conn.open_bi().await?;
     send.write_all(&[0x01]).await?;

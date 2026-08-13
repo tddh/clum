@@ -198,6 +198,15 @@ async fn main() -> anyhow::Result<()> {
             opencode_dir,
         } => {
             if let Some(server_addr) = &cli.server_addr {
+                // session 不存在时自动创建，避免 term 报错退出
+                term::ensure_session_via_server(
+                    server_addr,
+                    cli.ca_cert.as_deref(),
+                    &host,
+                    cli.api_key.as_deref(),
+                    &session,
+                )
+                .await?;
                 let pane = match pane {
                     Some(p) => p,
                     None => {
@@ -226,6 +235,8 @@ async fn main() -> anyhow::Result<()> {
                 .await
             } else {
                 let config = load_host_config(&cli.hosts_file, &host)?;
+                // session 不存在时自动创建，避免 term 报错退出
+                term::ensure_session(&config, cli.ca_cert.as_deref(), &session).await?;
                 let pane = match pane {
                     Some(p) => p,
                     None => {
