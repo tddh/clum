@@ -4,8 +4,8 @@ use anyhow::Result;
 use regex::Regex;
 use rmux_sdk::{
     capture::{CapturedRegion, Rect},
-    PaneCloseOutcome, PaneOutputChunk, PaneProcessState, SessionName, SplitDirection,
-    TerminalSizeSpec,
+    events::recovery::PaneRecoveryEvent,
+    PaneCloseOutcome, PaneProcessState, SessionName, SplitDirection, TerminalSizeSpec,
 };
 use serde_json::json;
 use std::path::PathBuf;
@@ -45,17 +45,30 @@ impl ProtocolProxy {
             .ok_or_else(|| anyhow::anyhow!("invalid pane_id: {}", pane_id_str))?;
         let sn = SessionName::new(session_name).map_err(|e| anyhow::anyhow!("{}", e))?;
         let pane = self.rmux.get_pane_by_id(&sn, pane_id).await?;
-        let snapshot = pane.snapshot().await?;
+        // 0.10：recover_output 首个 item 即完整 ANSI rebase 关键帧（替代旧 snapshot + output_stream 两步），
+        // lag/resize/清屏后自动 in-band rebase 重新对齐，不再丢输出。
+        let mut stream = pane.recover_output().await?;
         let (tx, rx) = mpsc::channel(256);
-        let _ = tx.send(snapshot.visible_text()).await;
-        let mut stream = pane.output_stream().await?;
+        // Rebase 关键帧是 ANSI 字节，剥离后转发以保持旧实现"首条纯文本快照"语义（不能去掉空行/命令回显，
+        // 否则破坏流式增量语义，故不用 clean_text）。Bytes 增量与旧实现一致（含 ANSI）。
+        let ansi_re = Regex::new(
+            r"\x1B(?:\[[0-?]*[ -/]*[@-~]|\](?:[^\x07\x1B]|\x1B\\)*(?:\x07|\x1B\\)|[@-Z\\-_])",
+        )
+        .unwrap();
         tokio::spawn(async move {
-            while let Ok(Some(chunk)) = stream.next().await {
-                let text = match chunk {
-                    PaneOutputChunk::Bytes { bytes, .. } => {
+            while let Ok(Some(event)) = stream.next().await {
+                let text = match event {
+                    // 权威关键帧：重置消费端状态后喂入（剥离 ANSI 后为纯文本快照，等价旧首条 visible_text）
+                    PaneRecoveryEvent::Rebase(rebase) => {
+                        let raw = String::from_utf8_lossy(&rebase.keyframe).to_string();
+                        ansi_re.replace_all(&raw, "").to_string()
+                    }
+                    PaneRecoveryEvent::Bytes { bytes, .. } => {
                         String::from_utf8_lossy(&bytes).to_string()
                     }
-                    PaneOutputChunk::Lag(_) => continue,
+                    // 生命周期事件与流结束：不转发文本
+                    PaneRecoveryEvent::Lifecycle(_) | PaneRecoveryEvent::End(_) => continue,
+                    // non_exhaustive 兜底
                     _ => continue,
                 };
                 if tx.send(text).await.is_err() {

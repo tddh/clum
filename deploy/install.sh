@@ -85,10 +85,19 @@ RMUX_SOCKET=${RMUX_SOCKET}
 EOF
 chmod 600 /etc/clum/bridge.env
 
-# Install rmux daemon if not present
-if ! command -v rmux >/dev/null 2>&1; then
-    echo ">>> Installing rmux daemon..."
-    curl -fsSL https://rmux.io/install.sh | sh
+# Install rmux daemon if not present, incomplete (missing libexec private helper), or version mismatch
+# 仅检测 command -v rmux 会漏掉"只拷了 bin 二进制、缺 libexec/rmux/rmux helper"的残缺安装
+# （表现为 term 连上即退 / private rmux helper not found），用 `rmux list-commands`
+# （内部验证 helper 可达）作为完整性判据。官方脚本下载完整包并强制安装三件套。
+RMUX_VERSION=0.10.0
+if ! command -v rmux >/dev/null 2>&1 \
+    || ! rmux list-commands >/dev/null 2>&1 \
+    || [ "$(rmux -V 2>/dev/null | awk '{print $2}')" != "$RMUX_VERSION" ]; then
+    echo ">>> Installing rmux ${RMUX_VERSION} (complete package: bin + daemon + libexec helper)..."
+    RMUX_VERSION="v${RMUX_VERSION}" INSTALL_DIR=/usr/local/bin INSTALL_PREFIX=/usr/local \
+        curl -fsSL https://rmux.io/install.sh | sh
+    rmux list-commands >/dev/null 2>&1 || { echo "ERROR: rmux install incomplete (private helper missing)" >&2; exit 1; }
+    [ "$(rmux -V 2>/dev/null | awk '{print $2}')" = "$RMUX_VERSION" ] || { echo "ERROR: rmux version mismatch" >&2; exit 1; }
 fi
 
 # Write systemd unit

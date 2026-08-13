@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### rmux 0.10 升级
+- **rmux-sdk 0.9.1 → 0.10.0**：wire protocol 5→8（硬切断），daemon 与 bridge 必须同步升级；升级会重启 daemon，**所有 rmux session 丢失**。
+- **stream_pane 迁移 recover_output**：lag/resize/清屏/parser 过期后自动 in-band rebase 修复，不再丢输出。
+- **collect_until_exit**：0.10 内部输出采集机制增强（代码零改动）。
+- **部署脚本固定 RMUX_VERSION=0.10.0** + helper 完整性检测（`rmux list-commands`）+ 版本验证，修复"只拷 bin 二进制缺 libexec helper"导致的 term 连上即退问题。
+
 ## [0.12.0] — 2026-08-13
 
 ### Added

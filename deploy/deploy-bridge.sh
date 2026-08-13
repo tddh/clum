@@ -48,8 +48,20 @@ if [ -f /etc/profile.d/yunying.sh ] && [ ! -f /etc/profile.d/clum.sh ]; then
 fi
 MIGRATE_EOF
 
-# 1. Install rmux if needed
-ssh "$REMOTE" 'command -v rmux >/dev/null 2>&1 || curl -fsSL https://rmux.io/install.sh | sh'
+# 1. Install rmux if needed (helper completeness + version pin 0.10.0)
+#    `command -v rmux` alone misses partial installs (bin copied but libexec helper missing,
+#    symptom: term connects then immediately exits / "private rmux helper not found").
+ssh "$REMOTE" 'RMUX_VERSION=0.10.0
+if command -v rmux >/dev/null 2>&1 && rmux list-commands >/dev/null 2>&1 \
+    && [ "$(rmux -V 2>/dev/null | awk "{print \$2}")" = "$RMUX_VERSION" ]; then
+    echo "rmux ${RMUX_VERSION} already installed and complete"
+else
+    echo "Installing rmux ${RMUX_VERSION} (complete package: bin + daemon + libexec helper)..."
+    RMUX_VERSION="v${RMUX_VERSION}" INSTALL_DIR=/usr/local/bin INSTALL_PREFIX=/usr/local \
+        curl -fsSL https://rmux.io/install.sh | sh
+    rmux list-commands >/dev/null 2>&1 || { echo "ERROR: rmux install incomplete (private helper missing)" >&2; exit 1; }
+    [ "$(rmux -V 2>/dev/null | awk "{print \$2}")" = "$RMUX_VERSION" ] || { echo "ERROR: rmux version mismatch (expected ${RMUX_VERSION})" >&2; exit 1; }
+fi'
 
 # 2. Write profile.d for RMUX_TMPDIR
 ssh "$REMOTE" "echo 'export RMUX_TMPDIR=\$HOME/.rmux' | sudo tee /etc/profile.d/clum.sh > /dev/null" 2>/dev/null || true
