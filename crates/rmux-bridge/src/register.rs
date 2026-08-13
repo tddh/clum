@@ -4,12 +4,53 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
+use tokio::sync::watch;
 
 use crate::bridge_audit::BridgeAuditDb;
 use crate::cast_recorder;
 use crate::interactive::InteractiveSession;
 use crate::protocol::ProtocolProxy;
 use clum_core::backoff::FullJitterBackoff;
+
+/// 优雅关闭信号：SIGTERM 触发一次，供注册循环与连接处理任务等待。
+///
+/// 内部用 `watch` 保证竞态安全：`trigger` 后值持久为 `true`，
+/// 后续 `wait` 立即返回，不存在丢失唤醒。
+pub struct Shutdown {
+    sender: watch::Sender<bool>,
+    // 持有 receiver 保持 channel 打开；否则全部 receiver drop 后
+    // channel 关闭，trigger 的 send 会失败、值无法更新。
+    _receiver: watch::Receiver<bool>,
+}
+
+impl Shutdown {
+    pub fn new() -> Arc<Self> {
+        let (sender, receiver) = watch::channel(false);
+        Arc::new(Self {
+            sender,
+            _receiver: receiver,
+        })
+    }
+
+    /// 触发关闭：置位并唤醒所有等待者。多次调用幂等。
+    pub fn trigger(&self) {
+        let _ = self.sender.send(true);
+    }
+
+    /// 是否已触发（同步查询，供循环条件使用）。
+    pub fn is_triggered(&self) -> bool {
+        *self.sender.borrow()
+    }
+
+    /// 异步等待触发。若已触发则立即返回。
+    pub async fn wait(&self) {
+        let mut rx = self.sender.subscribe();
+        if *rx.borrow() {
+            return;
+        }
+        let _ = rx.changed().await;
+    }
+}
 
 pub struct RegisterConfig {
     pub server_addr: String,
@@ -23,25 +64,38 @@ pub struct RegisterConfig {
     pub recording_fsync_interval_secs: u64,
     pub idle_timeout_secs: u64,
     pub audit_db: Arc<BridgeAuditDb>,
+    /// SIGTERM 优雅关闭信号。
+    pub shutdown: Arc<Shutdown>,
 }
 
 pub async fn run_registration_loop(config: RegisterConfig) {
     let mut backoff = FullJitterBackoff::new(Duration::from_millis(500), Duration::from_secs(30));
 
-    loop {
+    while !config.shutdown.is_triggered() {
         match connect_and_register(&config).await {
             Ok(()) => {
                 tracing::info!("registration session ended, reconnecting");
                 backoff.reset();
-                tokio::time::sleep(backoff.next_delay()).await;
+                tokio::select! {
+                    _ = config.shutdown.wait() => break,
+                    _ = tokio::time::sleep(backoff.next_delay()) => {}
+                }
             }
             Err(e) => {
+                if config.shutdown.is_triggered() {
+                    break;
+                }
                 let delay = backoff.next_delay();
                 tracing::warn!("registration failed: {e:#}, retrying in {delay:?}");
-                tokio::time::sleep(delay).await;
+                tokio::select! {
+                    _ = config.shutdown.wait() => break,
+                    _ = tokio::time::sleep(delay) => {}
+                }
             }
         }
     }
+
+    tracing::info!("registration loop exited");
 }
 
 async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
@@ -214,40 +268,53 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
 
     // Accept incoming streams from Server (tool execution requests)
     loop {
-        match conn.accept_bi().await {
-            Ok((stream_send, stream_recv)) => {
-                let proxy = protocol_proxy.clone();
-                let state = session_state.clone();
-                let counts = session_counts.clone();
-                let rec_dir = config.recording_dir.clone();
-                let rec_enabled = config.recording_enabled;
-                let rec_fsync = config.recording_fsync_interval_secs;
-                let audit_db = config.audit_db.clone();
-                let idle_timeout = config.idle_timeout_secs;
-                tokio::spawn(async move {
-                    if let Err(e) = crate::files::handle_quic_stream(
-                        stream_send,
-                        stream_recv,
-                        proxy,
-                        state,
-                        counts,
-                        rec_enabled,
-                        rec_dir,
-                        rec_fsync,
-                        audit_db,
-                        idle_timeout,
-                    )
-                    .await
-                    {
-                        tracing::debug!("server stream handler ended: {e}");
-                    }
-                });
+        tokio::select! {
+            _ = config.shutdown.wait() => {
+                conn.close(quinn::VarInt::from_u32(0), b"shutdown");
+                // close() 只设置关闭标志，CONNECTION_CLOSE 帧由 endpoint 的 driver
+                // task 在下一次 drive 时构造并写入 UDP。等待一小段让帧 flush，
+                // 否则进程立即退出会丢弃帧，server 只能等 idle timeout 才 unregister。
+                tokio::time::sleep(Duration::from_millis(500)).await;
+                tracing::info!("graceful shutdown: sent CONNECTION_CLOSE to server");
+                return Ok(());
             }
-            Err(quinn::ConnectionError::ApplicationClosed { .. }) => break,
-            Err(quinn::ConnectionError::LocallyClosed) => break,
-            Err(e) => {
-                tracing::warn!("accept_bi error: {e}");
-                break;
+            r = conn.accept_bi() => {
+                match r {
+                    Ok((stream_send, stream_recv)) => {
+                        let proxy = protocol_proxy.clone();
+                        let state = session_state.clone();
+                        let counts = session_counts.clone();
+                        let rec_dir = config.recording_dir.clone();
+                        let rec_enabled = config.recording_enabled;
+                        let rec_fsync = config.recording_fsync_interval_secs;
+                        let audit_db = config.audit_db.clone();
+                        let idle_timeout = config.idle_timeout_secs;
+                        tokio::spawn(async move {
+                            if let Err(e) = crate::files::handle_quic_stream(
+                                stream_send,
+                                stream_recv,
+                                proxy,
+                                state,
+                                counts,
+                                rec_enabled,
+                                rec_dir,
+                                rec_fsync,
+                                audit_db,
+                                idle_timeout,
+                            )
+                            .await
+                            {
+                                tracing::debug!("server stream handler ended: {e}");
+                            }
+                        });
+                    }
+                    Err(quinn::ConnectionError::ApplicationClosed { .. }) => break,
+                    Err(quinn::ConnectionError::LocallyClosed) => break,
+                    Err(e) => {
+                        tracing::warn!("accept_bi error: {e}");
+                        break;
+                    }
+                }
             }
         }
     }
@@ -392,4 +459,41 @@ async fn write_frame(send: &mut quinn::SendStream, msg: &serde_json::Value) -> a
     send.write_all(&len).await?;
     send.write_all(&data).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn shutdown_wait_returns_after_trigger() {
+        let s = Shutdown::new();
+        assert!(!s.is_triggered());
+
+        let s2 = s.clone();
+        let handle = tokio::spawn(async move { s2.wait().await });
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        s.trigger();
+
+        handle.await.unwrap();
+        assert!(s.is_triggered());
+    }
+
+    #[tokio::test]
+    async fn shutdown_wait_returns_immediately_if_already_triggered() {
+        let s = Shutdown::new();
+        s.trigger();
+        tokio::time::timeout(Duration::from_secs(1), s.wait())
+            .await
+            .expect("wait should return immediately after trigger");
+        assert!(s.is_triggered());
+    }
+
+    #[tokio::test]
+    async fn shutdown_trigger_is_idempotent() {
+        let s = Shutdown::new();
+        s.trigger();
+        s.trigger();
+        assert!(s.is_triggered());
+    }
 }

@@ -242,6 +242,22 @@ async fn main() -> anyhow::Result<()> {
 
     // ─── Central server registration ───
     if let Some(server_addr) = &config.server_addr {
+        let shutdown = register::Shutdown::new();
+
+        // SIGTERM 监听：触发优雅关闭，主动断开到 server 的 QUIC 连接，
+        // 让 server 立即 unregister，新进程重启后无需等待 idle timeout。
+        {
+            let shutdown = shutdown.clone();
+            tokio::spawn(async move {
+                let mut sigterm =
+                    tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                        .expect("failed to install SIGTERM handler");
+                sigterm.recv().await;
+                tracing::info!("SIGTERM received, triggering graceful shutdown");
+                shutdown.trigger();
+            });
+        }
+
         let token = load_registration_token(&config.auth_token);
         let reg_config = register::RegisterConfig {
             server_addr: server_addr.clone(),
@@ -256,8 +272,17 @@ async fn main() -> anyhow::Result<()> {
             recording_fsync_interval_secs: config.recording_fsync_interval_secs,
             idle_timeout_secs: config.idle_timeout_secs,
             audit_db: audit_db.clone(),
+            shutdown: shutdown.clone(),
         };
-        tokio::spawn(register::run_registration_loop(reg_config));
+        let reg_handle = tokio::spawn(register::run_registration_loop(reg_config));
+
+        shutdown.wait().await;
+        // 等注册循环完成优雅关闭（close + flush CONNECTION_CLOSE 帧）。
+        // main 若立即返回会打断循环里的 sleep，导致 close 帧发不出去，
+        // server 只能等 idle timeout 才 unregister。
+        let _ = reg_handle.await;
+        tracing::info!("bridge exited");
+        return Ok(());
     }
     // ─── end registration ───
 
