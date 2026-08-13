@@ -90,6 +90,24 @@ pub async fn find_lowest_pane(
         .as_deref()
         .context("bridge_token not configured")?;
     let conn = connect_to_bridge_quic(addr, token, ca_cert_path).await?;
+    lowest_pane_on_conn(&conn, session_name).await
+}
+
+/// Central Server 模式下通过 server 中转解析 window 0 的最小 pane_id。
+/// 与直连版共享 pane 解析逻辑，避免 term 硬编码 %0 在 pane 编号非 0 时
+/// 报 "pane %0 was not found"（例如 %0 曾被 exit 关闭、重建后编号递增）。
+pub async fn find_lowest_pane_via_server(
+    server_addr: &str,
+    ca_cert_path: Option<&str>,
+    host: &str,
+    api_key: Option<&str>,
+    session_name: &str,
+) -> Result<String> {
+    let conn = connect_via_server(server_addr, ca_cert_path, host, api_key, "term").await?;
+    lowest_pane_on_conn(&conn, session_name).await
+}
+
+async fn lowest_pane_on_conn(conn: &quinn::Connection, session_name: &str) -> Result<String> {
     let (mut send, mut recv) = conn.open_bi().await?;
     send.write_all(&[0x01]).await?;
 

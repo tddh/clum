@@ -198,7 +198,21 @@ async fn main() -> anyhow::Result<()> {
             opencode_dir,
         } => {
             if let Some(server_addr) = &cli.server_addr {
-                let pane = pane.unwrap_or_else(|| "%0".to_string());
+                let pane = match pane {
+                    Some(p) => p,
+                    None => {
+                        // Central Server 模式下动态解析 window 0 最小 pane，
+                        // 避免硬编码 %0 在 pane 编号非 0（%0 曾 exit/重建）时报错
+                        term::find_lowest_pane_via_server(
+                            server_addr,
+                            cli.ca_cert.as_deref(),
+                            &host,
+                            cli.api_key.as_deref(),
+                            &session,
+                        )
+                        .await?
+                    }
+                };
                 crate::tui::run_connect_with_ai(
                     None,
                     cli.ca_cert.as_deref(),

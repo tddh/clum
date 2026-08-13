@@ -100,9 +100,10 @@ async fn handle_report(
     json_send: &Arc<Mutex<quinn::SendStream>>,
     json_recv: &Arc<Mutex<quinn::RecvStream>>,
     session_name: &str,
+    pane_id: &str,
     ai_panel: &AiPanel,
 ) -> Result<()> {
-    let ctx = capture_pane(json_send, json_recv, session_name, "%0", 50).await?;
+    let ctx = capture_pane(json_send, json_recv, session_name, pane_id, 50).await?;
     ai_panel.set_thinking(true).await;
 
     let prompt = format!(
@@ -152,6 +153,7 @@ async fn ai_loop(
     _pty_buffer: &Arc<Mutex<Vec<String>>>,
     ai_panel: &AiPanel,
     session_name: &str,
+    pane_id: &str,
 ) -> Result<()> {
     let mut stdout = std::io::stdout();
     stdout.execute(crossterm::terminal::EnterAlternateScreen)?;
@@ -248,7 +250,7 @@ async fn ai_loop(
                             }
 
                             if cmd.starts_with("@analyze") {
-                                handle_report(json_send, json_recv, session_name, ai_panel)
+                                handle_report(json_send, json_recv, session_name, pane_id, ai_panel)
                                     .await
                                     .ok();
                             } else if cmd.starts_with("@clear") {
@@ -556,7 +558,7 @@ async fn run_session(
         if is_ai_mode.load(Ordering::Relaxed) {
             // AI 模式——备用屏（ai_loop 期间由它自己的 crossterm 接管 stdin）
             tokio::io::stdout().flush().await.ok();
-            let result = ai_loop(&json_send, &json_recv, &pty_buffer, ai, session_name).await;
+            let result = ai_loop(&json_send, &json_recv, &pty_buffer, ai, session_name, pane_id).await;
             is_ai_mode.store(false, Ordering::Relaxed);
             if result.is_err() {
                 break SessionOutcome::Exit;

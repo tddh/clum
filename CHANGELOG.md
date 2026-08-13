@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.13.0] — 2026-08-13
 
 ### rmux 0.10 升级
 - **rmux-sdk 0.9.1 → 0.10.0**：wire protocol 5→8（硬切断），daemon 与 bridge 必须同步升级；升级会重启 daemon，**所有 rmux session 丢失**。
