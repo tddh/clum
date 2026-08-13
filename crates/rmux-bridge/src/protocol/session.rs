@@ -23,7 +23,7 @@ impl ProtocolProxy {
             Err(e) => return json!({"ok": false, "error": e.to_string()}),
         };
 
-        let (env_vars, login_cmd) = match system_user() {
+        let (env_vars, login_cmd, working_dir) = match system_user() {
             Some((home, user, shell)) => {
                 let envs = vec![
                     format!("HOME={}", home),
@@ -32,19 +32,22 @@ impl ProtocolProxy {
                     format!("SHELL={}", shell),
                 ];
                 let cmd = format!("exec {} -l", shell);
-                (envs, cmd)
+                (envs, cmd, Some(home))
             }
-            None => (vec![], String::from("exec /bin/sh -l")),
+            None => (vec![], String::from("exec /bin/sh -l"), None),
         };
 
-        let ensure = EnsureSession::named(session_name.clone())
+        let mut ensure = EnsureSession::named(session_name.clone())
             .policy(EnsureSessionPolicy::CreateOrReuse)
-            .detached(detached)
-            .process(ProcessSpec {
-                environment: Some(env_vars),
-                process_command: Some(ProcessCommandSpec::Shell(login_cmd)),
-                ..Default::default()
-            });
+            .detached(detached);
+        if let Some(dir) = working_dir {
+            ensure = ensure.working_directory(dir);
+        }
+        let ensure = ensure.process(ProcessSpec {
+            environment: Some(env_vars),
+            process_command: Some(ProcessCommandSpec::Shell(login_cmd)),
+            ..Default::default()
+        });
 
         match self.rmux.ensure_session(ensure).await {
             Ok(session) => {
