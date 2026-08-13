@@ -37,157 +37,166 @@ async fn main() -> anyhow::Result<()> {
             .expect("failed to open bridge audit db"),
     );
 
-    tracing::info!("rmux-bridge starting on {}", config.quic_listen_addr);
+    // 直连模式（未配置 server_addr）下才启动本地 QUIC 监听器。
+    // 注册模式（Central Server）下所有请求都走注册连接，无需监听本地端口，
+    // 也无需加载 bridge 自身的 TLS 服务端证书（certs/bridge.crt）。
+    if config.server_addr.is_none() {
+        tracing::info!("rmux-bridge starting on {}", config.quic_listen_addr);
 
-    let conn_limit = if config.max_connections > 0 {
-        Some(Arc::new(Semaphore::new(config.max_connections)))
-    } else {
-        None
-    };
-
-    // ─── QUIC file transfer listener ───
-    let quic_config = config.clone();
-    let quic_conn_limit_pre = conn_limit.clone();
-    let recording_enabled = config.recording_enabled;
-    let recording_dir = config.resolve_recording_dir();
-    let fsync_interval_secs = config.recording_fsync_interval_secs;
-    let idle_timeout_secs = config.idle_timeout_secs;
-    let quic_audit_db = audit_db.clone();
-    tokio::spawn(async move {
-        let conn_limit = quic_conn_limit_pre;
-        let tls_cfg =
-            match tls::load_quic_server_config(&quic_config.tls_cert, &quic_config.tls_key) {
-                Ok(c) => c,
-                Err(e) => {
-                    tracing::error!("failed to load QUIC TLS config: {}", e);
-                    return;
-                }
-            };
-        let quic_addr: SocketAddr = match quic_config.quic_listen_addr.parse() {
-            Ok(a) => a,
-            Err(e) => {
-                tracing::error!("invalid QUIC listen addr: {}", e);
-                return;
-            }
+        let conn_limit = if config.max_connections > 0 {
+            Some(Arc::new(Semaphore::new(config.max_connections)))
+        } else {
+            None
         };
-        let endpoint = match quinn::Endpoint::server(tls_cfg, quic_addr) {
-            Ok(ep) => ep,
-            Err(e) => {
-                tracing::error!("failed to create QUIC endpoint: {}", e);
-                return;
-            }
-        };
-        tracing::info!("QUIC file transfer listening on {}", quic_addr);
 
-        let auth_token = std::sync::Arc::new(quic_config.auth_token.clone());
-        let quic_rmux_socket = Arc::new(quic_config.rmux_socket.clone());
-        let quic_conn_limit = conn_limit.clone();
-
-        while let Some(incoming) = endpoint.accept().await {
-            let _permit = if let Some(ref lim) = quic_conn_limit {
-                match lim.clone().acquire_owned().await {
-                    Ok(p) => Some(p),
-                    Err(_) => break,
-                }
-            } else {
-                None
-            };
-
-            let token = auth_token.clone();
-            let rmux_socket = quic_rmux_socket.clone();
-            let conn_recording_dir = recording_dir.clone();
-            let conn_audit_db = quic_audit_db.clone();
-            tokio::spawn(async move {
-                let _permit = _permit;
-                let conn = match incoming.await {
+        // ─── QUIC file transfer listener ───
+        let quic_config = config.clone();
+        let quic_conn_limit_pre = conn_limit.clone();
+        let recording_enabled = config.recording_enabled;
+        let recording_dir = config.resolve_recording_dir();
+        let fsync_interval_secs = config.recording_fsync_interval_secs;
+        let idle_timeout_secs = config.idle_timeout_secs;
+        let quic_audit_db = audit_db.clone();
+        tokio::spawn(async move {
+            let conn_limit = quic_conn_limit_pre;
+            let tls_cfg =
+                match tls::load_quic_server_config(&quic_config.tls_cert, &quic_config.tls_key) {
                     Ok(c) => c,
                     Err(e) => {
-                        tracing::warn!("QUIC connection failed: {}", e);
+                        tracing::error!("failed to load QUIC TLS config: {}", e);
                         return;
                     }
                 };
-
-                let (mut auth_send, mut auth_recv) = match conn.accept_bi().await {
-                    Ok(s) => s,
-                    Err(e) => {
-                        tracing::warn!("QUIC accept_bi failed: {}", e);
-                        return;
-                    }
-                };
-
-                let client_addr = conn.remote_address().to_string();
-
-                if let Err(e) = auth::authenticate_quic(
-                    &mut auth_send,
-                    &mut auth_recv,
-                    &token,
-                    conn_audit_db.clone(),
-                    client_addr,
-                )
-                .await
-                {
-                    tracing::warn!("QUIC auth failed: {}", e);
+            let quic_addr: SocketAddr = match quic_config.quic_listen_addr.parse() {
+                Ok(a) => a,
+                Err(e) => {
+                    tracing::error!("invalid QUIC listen addr: {}", e);
                     return;
                 }
+            };
+            let endpoint = match quinn::Endpoint::server(tls_cfg, quic_addr) {
+                Ok(ep) => ep,
+                Err(e) => {
+                    tracing::error!("failed to create QUIC endpoint: {}", e);
+                    return;
+                }
+            };
+            tracing::info!("QUIC file transfer listening on {}", quic_addr);
 
-                let protocol_proxy = Arc::new(tokio::sync::RwLock::new(
-                    match ProtocolProxy::connect(&rmux_socket).await {
-                        Ok(p) => p,
+            let auth_token = std::sync::Arc::new(quic_config.auth_token.clone());
+            let quic_rmux_socket = Arc::new(quic_config.rmux_socket.clone());
+            let quic_conn_limit = conn_limit.clone();
+
+            while let Some(incoming) = endpoint.accept().await {
+                let _permit = if let Some(ref lim) = quic_conn_limit {
+                    match lim.clone().acquire_owned().await {
+                        Ok(p) => Some(p),
+                        Err(_) => break,
+                    }
+                } else {
+                    None
+                };
+
+                let token = auth_token.clone();
+                let rmux_socket = quic_rmux_socket.clone();
+                let conn_recording_dir = recording_dir.clone();
+                let conn_audit_db = quic_audit_db.clone();
+                tokio::spawn(async move {
+                    let _permit = _permit;
+                    let conn = match incoming.await {
+                        Ok(c) => c,
                         Err(e) => {
-                            tracing::error!("QUIC rmux connect failed: {}", e);
+                            tracing::warn!("QUIC connection failed: {}", e);
                             return;
                         }
-                    },
-                ));
+                    };
 
-                let session_state: std::sync::Arc<
-                    tokio::sync::Mutex<std::collections::HashMap<String, InteractiveSession>>,
-                > = std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()));
-                let session_counts: std::sync::Arc<
-                    std::sync::Mutex<std::collections::HashMap<String, usize>>,
-                > = std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
-
-                loop {
-                    match conn.accept_bi().await {
-                        Ok((send, recv)) => {
-                            let proxy = protocol_proxy.clone();
-                            let state = session_state.clone();
-                            let counts = session_counts.clone();
-                            let rec_dir = conn_recording_dir.clone();
-                            let rec_enabled = recording_enabled;
-                            let rec_fsync = fsync_interval_secs;
-                            let stream_audit_db = conn_audit_db.clone();
-                            tokio::spawn(async move {
-                                if let Err(e) = files::handle_quic_stream(
-                                    send,
-                                    recv,
-                                    proxy,
-                                    state,
-                                    counts,
-                                    rec_enabled,
-                                    rec_dir,
-                                    rec_fsync,
-                                    stream_audit_db,
-                                    idle_timeout_secs,
-                                )
-                                .await
-                                {
-                                    tracing::warn!("QUIC stream error: {}", e);
-                                }
-                            });
-                        }
-                        Err(quinn::ConnectionError::ApplicationClosed { .. }) => break,
-                        Err(quinn::ConnectionError::LocallyClosed) => break,
+                    let (mut auth_send, mut auth_recv) = match conn.accept_bi().await {
+                        Ok(s) => s,
                         Err(e) => {
-                            tracing::warn!("QUIC accept_bi error: {}", e);
-                            break;
+                            tracing::warn!("QUIC accept_bi failed: {}", e);
+                            return;
+                        }
+                    };
+
+                    let client_addr = conn.remote_address().to_string();
+
+                    if let Err(e) = auth::authenticate_quic(
+                        &mut auth_send,
+                        &mut auth_recv,
+                        &token,
+                        conn_audit_db.clone(),
+                        client_addr,
+                    )
+                    .await
+                    {
+                        tracing::warn!("QUIC auth failed: {}", e);
+                        return;
+                    }
+
+                    let protocol_proxy = Arc::new(tokio::sync::RwLock::new(
+                        match ProtocolProxy::connect(&rmux_socket).await {
+                            Ok(p) => p,
+                            Err(e) => {
+                                tracing::error!("QUIC rmux connect failed: {}", e);
+                                return;
+                            }
+                        },
+                    ));
+
+                    let session_state: std::sync::Arc<
+                        tokio::sync::Mutex<std::collections::HashMap<String, InteractiveSession>>,
+                    > = std::sync::Arc::new(tokio::sync::Mutex::new(
+                        std::collections::HashMap::new(),
+                    ));
+                    let session_counts: std::sync::Arc<
+                        std::sync::Mutex<std::collections::HashMap<String, usize>>,
+                    > = std::sync::Arc::new(
+                        std::sync::Mutex::new(std::collections::HashMap::new()),
+                    );
+
+                    loop {
+                        match conn.accept_bi().await {
+                            Ok((send, recv)) => {
+                                let proxy = protocol_proxy.clone();
+                                let state = session_state.clone();
+                                let counts = session_counts.clone();
+                                let rec_dir = conn_recording_dir.clone();
+                                let rec_enabled = recording_enabled;
+                                let rec_fsync = fsync_interval_secs;
+                                let stream_audit_db = conn_audit_db.clone();
+                                tokio::spawn(async move {
+                                    if let Err(e) = files::handle_quic_stream(
+                                        send,
+                                        recv,
+                                        proxy,
+                                        state,
+                                        counts,
+                                        rec_enabled,
+                                        rec_dir,
+                                        rec_fsync,
+                                        stream_audit_db,
+                                        idle_timeout_secs,
+                                    )
+                                    .await
+                                    {
+                                        tracing::warn!("QUIC stream error: {}", e);
+                                    }
+                                });
+                            }
+                            Err(quinn::ConnectionError::ApplicationClosed { .. }) => break,
+                            Err(quinn::ConnectionError::LocallyClosed) => break,
+                            Err(e) => {
+                                tracing::warn!("QUIC accept_bi error: {}", e);
+                                break;
+                            }
                         }
                     }
-                }
-            });
-        }
-    });
-    // ─── end QUIC listener ───
+                });
+            }
+        });
+        // ─── end QUIC listener ───
+    }
 
     // ─── Periodic recording cleanup ───
     if config.recording_enabled {
