@@ -370,15 +370,35 @@ async fn scan_cast_files(dir: &std::path::Path) -> anyhow::Result<Vec<std::path:
             let mut sub = tokio::fs::read_dir(&path).await?;
             while let Some(sub_entry) = sub.next_entry().await? {
                 let sub_path = sub_entry.path();
-                if sub_path.extension().map(|e| e == "cast").unwrap_or(false) {
+                if sub_path.extension().map(|e| e == "cast").unwrap_or(false)
+                    && is_unsynced_completed(&sub_path).await
+                {
                     files.push(sub_path);
                 }
             }
-        } else if path.extension().map(|e| e == "cast").unwrap_or(false) {
+        } else if path.extension().map(|e| e == "cast").unwrap_or(false)
+            && is_unsynced_completed(&path).await
+        {
             files.push(path);
         }
     }
     Ok(files)
+}
+
+/// 只推送「已完成且未同步」的录制：`.meta` 只在 finalize 时生成，
+/// `synced: false` 表示尚未被 push 或 pull 拿走。正在录制的文件没有
+/// `.meta`，永远不会被扫到——避免把半成品推给 server。
+async fn is_unsynced_completed(cast_path: &std::path::Path) -> bool {
+    let meta_path = cast_path.with_extension("meta");
+    match tokio::fs::read_to_string(&meta_path).await {
+        Ok(content) => {
+            serde_json::from_str::<serde_json::Value>(&content)
+                .ok()
+                .and_then(|m| m["synced"].as_bool())
+                == Some(false)
+        }
+        Err(_) => false,
+    }
 }
 
 async fn push_recording(conn: &quinn::Connection, path: &std::path::Path) -> anyhow::Result<()> {
@@ -476,5 +496,54 @@ mod tests {
         s.trigger();
         s.trigger();
         assert!(s.is_triggered());
+    }
+
+    #[tokio::test]
+    async fn scan_cast_files_only_returns_unsynced_completed() {
+        let dir = tempfile::tempdir().unwrap();
+        let date_dir = dir.path().join("2026-08-14");
+        tokio::fs::create_dir_all(&date_dir).await.unwrap();
+
+        // 已完成且未同步 → 应被返回
+        let done = date_dir.join("done.cast");
+        tokio::fs::write(&done, "[1, \"o\", \"x\"]\n")
+            .await
+            .unwrap();
+        tokio::fs::write(
+            date_dir.join("done.meta"),
+            r#"{"synced": false, "sha256": "abc"}"#,
+        )
+        .await
+        .unwrap();
+
+        // 已完成且已同步 → 不应被返回
+        let synced = date_dir.join("synced.cast");
+        tokio::fs::write(&synced, "[1, \"o\", \"y\"]\n")
+            .await
+            .unwrap();
+        tokio::fs::write(
+            date_dir.join("synced.meta"),
+            r#"{"synced": true, "sha256": "def"}"#,
+        )
+        .await
+        .unwrap();
+
+        // 正在录制（无 .meta）→ 不应被返回
+        let in_progress = date_dir.join("in_progress.cast");
+        tokio::fs::write(&in_progress, "[0.5, \"o\", \"z\"]\n")
+            .await
+            .unwrap();
+
+        let files = scan_cast_files(dir.path()).await.unwrap();
+        let names: Vec<String> = files
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
+            .collect();
+
+        assert_eq!(
+            names,
+            vec!["done.cast"],
+            "only unsynced completed should be pushed"
+        );
     }
 }
