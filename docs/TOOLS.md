@@ -835,7 +835,7 @@
 
 ### `file_upload`
 
-上传文件或目录到远程主机（通过 bridge QUIC 通道）。目标目录不存在时自动创建。支持覆盖策略和 glob 排除。Bridge 端会拒绝包含 `..` 的路径（防路径穿越攻击）。
+上传文件或目录到远程主机（通过 bridge QUIC 通道）。目标目录不存在时自动创建。支持覆盖策略和 glob 排除。Bridge 端会拒绝包含 `..` 的路径（防路径穿越攻击）；Server 端同样校验 `local_path` 参数（拒绝包含 `..` 或 null byte 的路径，触发 `PATH_TRAVERSAL`）。
 
 > ⚠️ **Central Server 模式（推荐部署方式）**：`local_path` 指的是 **SERVER 文件系统**，不是客户端/AI 本地机器。客户端本地文件传远程请用 `clum-cli push <host> <local> <remote>`（通过 Bash 工具调用）。
 
@@ -855,7 +855,7 @@
 
 ### `file_download`
 
-从远程主机下载文件或目录（通过 bridge QUIC 通道）。自动检测远程路径类型：单文件直接下载；目录则递归下载所有文件，保持目录结构。返回文件大小和 SHA256 校验值。Bridge 端会拒绝包含 `..` 的路径（防路径穿越攻击）；MCP 端会验证远端返回的相对路径不含 `..` 且非绝对路径。
+从远程主机下载文件或目录（通过 bridge QUIC 通道）。自动检测远程路径类型：单文件直接下载；目录则递归下载所有文件，保持目录结构。返回文件大小和 SHA256 校验值。Bridge 端会拒绝包含 `..` 的路径（防路径穿越攻击）；MCP 端会验证远端返回的相对路径不含 `..` 且非绝对路径，同时校验 Server 侧 `local_path` 参数（拒绝包含 `..` 或 null byte 的路径，触发 `PATH_TRAVERSAL`）。
 
 > ⚠️ **Central Server 模式（推荐部署方式）**：`local_path` 写入的是 **SERVER 文件系统**，不是客户端/AI 本地机器。下载到客户端本地请用 `clum-cli pull <host> <remote> <local>`（通过 Bash 工具调用）。
 
@@ -1020,6 +1020,8 @@ Upload a file or directory to multiple hosts concurrently.
 
 > ⚠️ **Central Server 模式（推荐部署方式）**：`local_path` 指的是 **SERVER 文件系统**，不是客户端/AI 本地机器。客户端本地文件批量上传请先 `clum-cli push` 到 Server 或用单机循环 `clum-cli push`。
 
+> 🔒 **路径校验**：Server 端校验 `local_path` 参数（拒绝包含 `..` 或 null byte，触发 `PATH_TRAVERSAL`）；Bridge 端校验 `remote_path`（同上）。
+
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `hosts` | string[] | ✅ | 主机名列表 |
@@ -1057,6 +1059,8 @@ Upload a file or directory to multiple hosts concurrently.
 Download a file from multiple hosts concurrently. Each host's file is saved to `local_dir/<hostname>/<filename>`. ⚠️ Multiple runs to the same `local_dir` WILL overwrite previous downloads — use different `local_dir` per run to preserve history.
 
 > ⚠️ **Central Server 模式（推荐部署方式）**：`local_dir` 写入的是 **SERVER 文件系统**，不是客户端/AI 本地机器。下载到客户端本地请逐台 `clum-cli pull`。
+
+> 🔒 **路径校验**：Server 端校验 `local_dir` 参数（拒绝包含 `..` 或 null byte，触发 `PATH_TRAVERSAL`）；Bridge 端校验 `remote_path`（同上）。
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|

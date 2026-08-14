@@ -214,7 +214,7 @@ json!({"ok": false, "error": ...})
 | `PANE_BUSY` | pane 非空闲 | false | bridge `pane still active` |
 | `WINDOW_NOT_FOUND` | 窗口不存在 | false | bridge `window not found in info snapshot` |
 | `FORWARD_NOT_FOUND` | 隧道不存在 | false | ForwardManager |
-| `PATH_TRAVERSAL` | 路径穿越/不安全路径 | false | bridge sanitize_path + null byte + directory too deep |
+| `PATH_TRAVERSAL` | 路径穿越/不安全路径 | false | bridge `sanitize_path` + MCP `sanitize_local_path`（Server 侧 local_path 校验）+ null byte + directory too deep |
 | `FORWARD_DENIED` | 隧道目标不在白名单 | false | forward.rs allowed_forward_targets |
 | `AUTH_FAILED` | 直连认证失败 | false | bridge auth.rs（direct 模式） |
 | `FORBIDDEN` | 分组隔离拒绝 | false | authorize() |
@@ -222,7 +222,7 @@ json!({"ok": false, "error": ...})
 | `CONNECTION_LOST` | 连接中断 | true | exec.rs / transport.rs |
 | `CONNECT_TIMEOUT` | 连接超时 | **true** | transport.rs / bridge files.rs（**新增**） |
 | `TIMEOUT` | 命令执行/等待超时 | false | exec sentinel / output 等待系列 |
-| `REFUSED_STATE` | exec 安全检查拒绝 | false | exec.rs precheck（refused 标记） |
+| `REFUSED_STATE` | exec 安全检查拒绝 | false | MCP `exec` precheck（refused 标记）——**非共享分类器常量**，MCP 侧 `error.rs` 硬编码注入 |
 | `CLI_FAILED` | rmux CLI 回退失败 | false | bridge CLI 回退 9 处（**新增**） |
 | `PROTOCOL_ERROR` | 帧协议错误 | false | bridge proxy.rs（**新增**） |
 | `UNKNOWN` | 未分类兜底 | false | 其余 |
@@ -307,7 +307,8 @@ async fn send_response(writer: &..., response: &mut serde_json::Value) -> Result
 
 - 签名 `&Value` → `&mut Value`，9 处调用点同步改 `&mut`
 - 覆盖：protocol handler 返回的 `{"ok": false, "error": ...}`、proxy 本地构造的 `frame too large` / `mark_synced failed` / stream_subscribe 错误
-- **不覆盖**：stream_subscribe 二进制流（0x02）、interactive 控制流（0x06）、file transfer 流——这些非 JSON 信封链路，MCP 侧各自处理，不在本次范围
+- **不覆盖**：stream_subscribe 二进制流（0x02）、interactive 控制流（0x06）——这些非 JSON 信封链路，MCP 侧各自处理，不在本次范围
+- **file transfer 流特殊处理（修复 b6cf470）**：文件传输走二进制流而非 JSON 信封，bridge 侧 `sanitize_path`/`stat`/no-clobber 等失败时**主动发送错误信封**：`[0x02][msg_len: u16 LE][msg: UTF-8 bytes]`（1 字节状态码 0x02 + 2 字节小端长度 + 消息体）。MCP 侧 `upload_single`/`upload_dir`/`download` 读到 0x02 后读长度与消息并 `bail`，错误码经 `classify_error_message` 正确归类（如 PATH_TRAVERSAL）。触发点：上传 sanitize 失败、下载 sanitize 失败、下载 stat 失败、no-clobber 文件已存在、list stat 失败（bridge 侧 5 处）；消费点：上传单文件、上传目录、下载（MCP 侧 3 处）。
 
 ### 8.3 MCP 侧采用策略
 
@@ -330,4 +331,4 @@ async fn send_response(writer: &..., response: &mut serde_json::Value) -> Result
 | 6 | 文档同步 | `docs/TOOLS.md` |
 | 7 | 验证 | `just check && just test && just lint` |
 
-> 原"后续演进"章节内容已并入本节，作为本次实施的最终方案。错误码契约见 §4 表（19 码）。
+> 原"后续演进"章节内容已并入本节，作为本次实施的最终方案。错误码契约见 §4 表：**19 个共享分类器常量**（`clum_core::error_code.rs`）+ 1 个 MCP 侧特例 `REFUSED_STATE`（`error.rs` 硬编码，不走分类器）。

@@ -1,6 +1,6 @@
 # clum
 
-> *clum* — remote reach for AI agents: one central server, every host within command. (Renamed from yunying in 0.10.0; lineage: agent-ops → yunying → clum.)
+> *clum* — safe, reliable remote terminals for AI agents. (Renamed from yunying in 0.10.0; lineage: agent-ops → yunying → clum.)
 
 > Secure infrastructure for AI agents and human operators managing Linux hosts — persistent terminal sessions powered by rmux, full-chain audit logging, MCP-native interface for AI clients + CLI PTY passthrough for humans, with file transfer and multi-host orchestration.
 
@@ -72,7 +72,7 @@ graph LR
 ```
 
 - **clum-mcp (Central Server)** — Central MCP Server: HTTP :9788 for AI clients (MCP protocol) + QUIC :9788 for Bridge registration and CLI data plane. Provides 69 tools, centralized audit, API Key auth, and static file serving.
-- **clum-cli** — CLI for humans: PTY passthrough (`term`), file transfer (`push`/`pull` — files or directories, chunked streaming with SHA-256, `--exclude` globs for directories), port forwarding (`forward` — auto-reconnects on network loss, `--give-up-after`), session listing (`list`), recording playback (`replay`). Built-in AI chat panel (Ctrl+G).
+- **clum-cli** — CLI for humans: PTY passthrough (`term`), file transfer (`push`/`pull` — files or directories, chunked streaming with SHA-256; `push` supports `--exclude` globs for directories), port forwarding (`forward` — auto-reconnects on network loss, `--give-up-after`), session listing (`list`), recording playback (`replay`). Built-in AI chat panel (Ctrl+G).
 - **rmux-bridge** — Agent deployed on each Linux host. Reverse-connects to the Central Server, handles tool execution, file I/O, PTY sessions, and recording push.
 - **RMUX daemon** — Terminal multiplexer on each Linux host (rmux-based).
 
@@ -93,10 +93,10 @@ graph LR
 
 | Feature | Description |
 |---------|-------------|
-| **Interactive terminal** | `clum-cli term` — PTY-passthrough to remote rmux sessions + built-in AI chat panel (Ctrl+G) with real-time SSE streaming, supports vim/htop/TUI |
+| **Interactive terminal** | `clum-cli term` — PTY-passthrough to remote rmux sessions (auto-creates the session if it doesn't exist) + built-in AI chat panel (Ctrl+G) with real-time SSE streaming, supports vim/htop/TUI |
 | **Session management** | Create/destroy/list sessions, multi-pane splits, window layouts |
 | **Command execution** | `exec` one-shot execution (sentinel detection + exit code, full scrollback capture for large outputs, auto-reconnect on connection drop), interactive programs via send_keys + capture_pane |
-| **Output waiting** | `wait_for_text` for terminal text, `wait_exit` for process exit |
+| **Output waiting** | `wait_for_text` for terminal text, `wait_exit` for process exit, `wait_stable` for output quiescence, `wait_for_bytes` for raw byte sequences |
 | **File transfer** | Upload/download over QUIC (`clum-cli` and MCP tools), recursive directory transfer with concurrency and `--exclude` globs, chunked streaming with SHA-256 verification |
 | **Port forwarding** | Local port forwarding forwards through QUIC to access remote internal services |
 | **Multi-host orchestration** | Host registry with group/tag/label filtering, broadcast_keys for multi-pane |

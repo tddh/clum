@@ -135,7 +135,7 @@ bash deploy/deploy-bridge.sh root@<your-bridge-ip>
 部署脚本自动完成：
 - 上传 `rmux-bridge` 二进制到 `/usr/local/bin/rmux-bridge`
 - 下载 CA 证书到 `/etc/clum/ca.crt`
-- 写入配置到 `/etc/clum/bridge.env`（权限 600）：`BRIDGE_AUTH_TOKEN`、`RMUX_SOCKET`（自动检测）、`RECORDING_ENABLED`、`RECORDING_DIR`、`BRIDGE_AUDIT_DB`、`CLUM_SERVER_ADDR`、`CLUM_CA_CERT`；direct 模式另含 `QUIC_LISTEN_ADDR`、`BRIDGE_TLS_CERT`、`BRIDGE_TLS_KEY`
+- 写入配置到 `/etc/clum/bridge.env`（权限 600）：`BRIDGE_AUTH_TOKEN`、`RMUX_SOCKET`（自动检测）、`RECORDING_ENABLED`、`RECORDING_DIR`、`BRIDGE_AUDIT_DB`、`CLUM_SERVER_ADDR`、`CLUM_CA_CERT`；direct 模式另含 `QUIC_LISTEN_ADDR`、`BRIDGE_TLS_CERT`、`BRIDGE_TLS_KEY`（enrolled 模式即配置了 `CLUM_SERVER_ADDR` 时不监听本地 QUIC 端口，无需这些参数，消除多余端口占用与攻击面）
 - 创建 `rmux-bridge.service`（`systemctl enable --now`）
 
 **其他 Justfile 命令：**

@@ -1,6 +1,6 @@
 # clum
 
-> clum —— AI Agent 的远程触达：一台中央服务器，所有主机尽在掌握。（0.10.0 起由 yunying 改名；沿革：agent-ops → yunying → clum）
+> clum —— 让 AI 安全、可靠地操作远程终端。（0.10.0 起由 yunying 改名；沿革：agent-ops → yunying → clum）
 
 > AI Agent 与人类运维远程操作 Linux 主机的安全基础设施 —— 基于 rmux 提供持久化终端会话与全链路审计日志，AI 端通过 MCP 协议调用，人类端通过 CLI PTY 透传直连，支持文件传输、端口转发与多主机编排。
 
@@ -20,7 +20,7 @@ AI Agent 的推理和工具调用能力已经足够强，正在从「帮你生�
 
 ### clum 能做什么
 
-clum 提供**安全、可靠、可审计的远程 Linux 操作通道**——终端访问、文件传输、端口转发、操作审计。它不是 SSH（传输层）或 Ansible（配置管理）的替代品，而是一个新的品类：**远程操作平台**，将终端会话同时转化为 AI Agent（MCP）和人类（CLI PTY 透传）都能操作的可编程资源。
+clum 提供**安全、可靠、可审计的远程 Linux 操作通道**——终端访问、文件传输、端口转发、操作审计。它不是 SSH（传输层）、Ansible（配置管理）或 tmux（终端多路复用器）的替代品，而是一个新的品类：**远程操作平台**，将终端会话同时转化为 AI Agent（MCP）和人类（CLI PTY 透传）都能操作的可编程资源。
 
 clum 不关心终端里跑什么 —— 裸 shell 命令、Ansible Playbook、编译脚本、交互式排错，都可以。它提供的是**持久化会话 + 审计追踪 + 多主机操作**，工具由你来选。
 
@@ -72,7 +72,7 @@ graph LR
 ```
 
 - **clum-mcp（Central Server）** — 中央 MCP Server：HTTP :9788 面向 AI 客户端（MCP 协议）+ QUIC :9788 面向 Bridge 注册和 CLI 数据平面。提供 69 个工具、集中审计、API Key 认证、静态文件服务。
-- **clum-cli** — 命令行工具：PTY 透传（`term`）、文件传输（`push`/`pull`，支持文件与目录、分块流式传输 + SHA-256 校验、目录 `--exclude` 过滤）、端口转发（`forward`，断网自动重连，`--give-up-after` 控制放弃时限）、会话列表（`list`）、录制回放（`replay`）。内置 AI 对话面板（Ctrl+G）。
+- **clum-cli** — 命令行工具：PTY 透传（`term`）、文件传输（`push`/`pull`，支持文件与目录、分块流式传输 + SHA-256 校验；`push` 支持目录 `--exclude` 过滤）、端口转发（`forward`，断网自动重连，`--give-up-after` 控制放弃时限）、会话列表（`list`）、录制回放（`replay`）。内置 AI 对话面板（Ctrl+G）。
 - **rmux-bridge** — 部署在每台 Linux 主机的 Agent。主动连接 Central Server 注册，处理工具执行、文件 I/O、PTY 会话、录制推送。
 - **RMUX daemon** — 每台 Linux 主机上的终端多路复用器（基于 rmux）。
 
@@ -93,10 +93,10 @@ graph LR
 
 | 能力          | 说明                                                                         |
 | ----------- | -------------------------------------------------------------------------- |
-| **交互式终端直连** | `clum-cli term` CLI 命令，PTY 透传至远程 rmux 会话 + 内置 AI 对话面板（Ctrl+G），SSE 实时流式输出，支持 vim/htop 等 TUI 程序 |
+| **交互式终端直连** | `clum-cli term` CLI 命令，PTY 透传至远程 rmux 会话（会话不存在时自动创建）+ 内置 AI 对话面板（Ctrl+G），SSE 实时流式输出，支持 vim/htop 等 TUI 程序 |
 | **交互式会话管理** | 创建/销毁/列举会话，多窗格分屏，窗口布局                                                      |
 | **命令执行**    | `exec` 一站式执行（sentinel 检测 + exit code 提取，scrollback 全量捕获大输出，断连自动重连恢复），支持交互式程序（send_keys + capture_pane） |
-| **输出等待**    | `wait_for_text` 等待终端出现指定文本，`wait_exit` 等待进程退出                              |
+| **输出等待**    | `wait_for_text` 等待终端出现指定文本，`wait_exit` 等待进程退出，`wait_stable` 等待输出稳定，`wait_for_bytes` 等待原始字节序列 |
 | **文件传输**    | QUIC 通道上传/下载（`clum-cli` 与 MCP 工具），目录递归传输 + 并发 + `--exclude` glob 过滤，分块流式 + SHA-256 校验 |
 | **端口转发**    | 通过 QUIC 隧道访问远程内网服务（数据库、API 等）                                              |
 | **多主机编排**   | 主机注册表 + 分组/标签/模式过滤，broadcast_keys 多窗格广播                                    |
