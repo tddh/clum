@@ -11,7 +11,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
 
 use crate::bridge_audit::BridgeAuditDb;
 use crate::protocol::ProtocolProxy;
-use clum_core::MAX_FRAME_SIZE;
+use clum_core::{DEFAULT_COLLECT_TIMEOUT_MS, DEFAULT_WAIT_TIMEOUT_MS, MAX_FRAME_SIZE};
 
 /// Main event loop: reads length-prefixed JSON frames from `tls_stream`,
 /// dispatches each request to `protocol_proxy`, and writes back the response.
@@ -262,7 +262,9 @@ where
                 let sn = request["session_name"].as_str().unwrap_or("");
                 let pane_id = request["pane_id"].as_str().unwrap_or("");
                 let text = request["text"].as_str().unwrap_or("");
-                let timeout = request["timeout_ms"].as_u64().unwrap_or(30000);
+                let timeout = request["timeout_ms"]
+                    .as_u64()
+                    .unwrap_or(DEFAULT_WAIT_TIMEOUT_MS);
                 protocol_proxy
                     .handle_wait_for_text(sn, pane_id, text, timeout)
                     .await
@@ -270,7 +272,9 @@ where
             "wait_exit" => {
                 let sn = request["session_name"].as_str().unwrap_or("");
                 let pane_id = request["pane_id"].as_str().unwrap_or("");
-                let timeout = request["timeout_ms"].as_u64().unwrap_or(30000);
+                let timeout = request["timeout_ms"]
+                    .as_u64()
+                    .unwrap_or(DEFAULT_WAIT_TIMEOUT_MS);
                 protocol_proxy.handle_wait_exit(sn, pane_id, timeout).await
             }
             "split_window" => {
@@ -533,7 +537,9 @@ where
                 let sn = request["session_name"].as_str().unwrap_or("");
                 let pane_id = request["pane_id"].as_str().unwrap_or("");
                 let max_bytes = request["max_bytes"].as_u64().unwrap_or(1048576) as usize;
-                let timeout_ms = request["timeout_ms"].as_u64().unwrap_or(60000);
+                let timeout_ms = request["timeout_ms"]
+                    .as_u64()
+                    .unwrap_or(DEFAULT_COLLECT_TIMEOUT_MS);
                 let starting_at = request["starting_at"].as_str().unwrap_or("now");
                 protocol_proxy
                     .handle_collect_until_exit(sn, pane_id, max_bytes, timeout_ms, starting_at)
@@ -588,7 +594,9 @@ where
                 let pane_id = request["pane_id"].as_str().unwrap_or("");
                 let bytes_b64 = request["bytes"].as_str().unwrap_or("");
                 let only_new = request["only_new"].as_bool().unwrap_or(false);
-                let timeout_ms = request["timeout_ms"].as_u64().unwrap_or(30000);
+                let timeout_ms = request["timeout_ms"]
+                    .as_u64()
+                    .unwrap_or(DEFAULT_WAIT_TIMEOUT_MS);
                 protocol_proxy
                     .handle_wait_for_bytes(sn, pane_id, bytes_b64, only_new, timeout_ms)
                     .await
@@ -597,7 +605,9 @@ where
                 let sn = request["session_name"].as_str().unwrap_or("");
                 let pane_id = request["pane_id"].as_str().unwrap_or("");
                 let stable_ms = request["stable_ms"].as_u64().unwrap_or(500);
-                let timeout_ms = request["timeout_ms"].as_u64().unwrap_or(30000);
+                let timeout_ms = request["timeout_ms"]
+                    .as_u64()
+                    .unwrap_or(DEFAULT_WAIT_TIMEOUT_MS);
                 protocol_proxy
                     .handle_wait_stable(sn, pane_id, stable_ms, timeout_ms)
                     .await

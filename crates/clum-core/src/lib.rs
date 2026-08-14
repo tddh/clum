@@ -15,6 +15,19 @@ pub use types::*;
 /// Maximum allowed JSON frame size (64 MB)
 pub const MAX_FRAME_SIZE: usize = 64 * 1024 * 1024;
 
+/// 1 MB 传输缓冲区。所有 crate 的文件传输/中继缓冲统一使用此常量，
+/// 避免跨 crate 重复定义导致缓冲区边界不对齐。
+pub const COPY_BUF_SIZE: usize = 1024 * 1024;
+
+/// 输出等待类工具（wait_for_text / wait_stable / wait_exit / wait_for_bytes）的默认超时。
+pub const DEFAULT_WAIT_TIMEOUT_MS: u64 = 30_000;
+
+/// collect_until_exit 的默认收集超时。
+pub const DEFAULT_COLLECT_TIMEOUT_MS: u64 = 60_000;
+
+/// 命令执行类工具（exec / batch_exec）的默认超时。
+pub const DEFAULT_EXEC_TIMEOUT_MS: u64 = 600_000;
+
 /// Build a TLS root certificate store. When `ca_cert_path` is provided, load
 /// the custom CA file (self-signed / private PKI). When `None`, fall back to
 /// the system WebPKI roots so public-CA certificates (Let's Encrypt, etc.) are

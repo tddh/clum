@@ -955,7 +955,7 @@ clum-mcp audit cleanup [--db <path>] [--older-than <days>] [--max-size <mb>]
 | 能力检测 | `host_capabilities` / `wait_stable` |
 | 审计查询 | `clum-mcp audit query --host tf01 --action exec --format table` |
 | 审计统计 | `clum-mcp audit stats` |
-| 多机并发执行 | `batch_exec` |
+| 多机并发执行 | `batch_exec`（同步等待）/ `batch_send_keys`（发完不等） |
 
 ---
 
@@ -1084,6 +1084,38 @@ Download a file from multiple hosts concurrently. Each host's file is saved to `
   }
 }
 ```
+
+### `batch_send_keys`
+
+Send the same keystrokes to a single pane on multiple hosts concurrently. Fire-and-forget (delivery confirmation): returns once the keys are written into each host's pane — it does NOT wait for the command to finish and returns no output/exit_code. Use this to trigger the same interactive/non-terminating command (or any fire-and-forget operation like restarting a service) across many machines in one round.
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `hosts` | string[] | ✅ | 主机名列表 |
+| `keys` | string | ✅ | 按键序列（支持 `\n`、`\t`、`\x03`、`\xNN` 等转义） |
+| `session_name` | string | | 会话名（默认 `clum`） |
+| `pane_id` | string | | Pane ID（省略时自动探测 window 0 中编号最小的 pane） |
+| `concurrency` | integer | | 最大并发连接数（默认 5，0=不限制） |
+
+**返回**
+
+```json
+{
+  "ok": true,
+  "total": 2,
+  "success": 2,
+  "failed": 0,
+  "total_duration_ms": 45,
+  "results": {
+    "tf01": {"ok": true, "pane_id": "%0"},
+    "tf02": {"ok": false, "error": "connect: connection refused"}
+  }
+}
+```
+
+- **投递确认语义**：`ok:true` 只表示按键已写入 pane 输入，不代表命令执行成功；无 output/exit_code
+- 命令在远端 rmux session 里继续执行，结果用 `capture_pane` / `wait_for_text` / `wait_exit` 逐台查
+- 适合批量 restart 服务等会断连的场景：发完即返回，不受断连影响，之后用 `host_list` 确认上线
 
 ---
 

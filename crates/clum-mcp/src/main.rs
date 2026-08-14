@@ -456,7 +456,7 @@ async fn run_bridge_command(args: &[String]) -> anyhow::Result<()> {
             let config = server_config::ServerConfig::load(&config_path)?;
             let server_addr = &config.server_addr;
 
-            let token = bridge_store::generate_bridge_token();
+            let token = bridge_store::generate_bridge_token()?;
             store.add(hostname, &token, &tags, group).await?;
 
             println!("Bridge: {hostname}");

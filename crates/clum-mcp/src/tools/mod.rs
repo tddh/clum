@@ -200,6 +200,7 @@ pub async fn execute_tool(
         "batch_exec" => batch::batch_exec(ctx, args, progress).await,
         "batch_upload" => batch::batch_upload(ctx, args, progress).await,
         "batch_download" => batch::batch_download(ctx, args, progress).await,
+        "batch_send_keys" => batch::batch_send_keys(ctx, args, progress).await,
         "forward_create" => forward::forward_create(ctx, args).await,
         "forward_list" => forward::forward_list(ctx).await,
         "forward_close" => forward::forward_close(ctx, args).await,

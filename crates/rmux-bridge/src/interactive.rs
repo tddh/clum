@@ -29,6 +29,22 @@ pub struct InteractiveSession {
     pub exit_notify: Arc<Notify>,
 }
 
+/// 会话状态 + 连接计数的组合。main（直连）与 register（注册）两处各自创建，
+/// 避免两处重复声明相同的 Arc<Mutex<HashMap>> 类型。
+pub struct SessionTracker {
+    pub state: Arc<Mutex<std::collections::HashMap<String, InteractiveSession>>>,
+    pub counts: Arc<std::sync::Mutex<std::collections::HashMap<String, usize>>>,
+}
+
+impl SessionTracker {
+    pub fn new() -> Self {
+        Self {
+            state: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            counts: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+        }
+    }
+}
+
 /// 会话级活跃连接计数（跨 connection 共享，main/register 创建）。
 /// 用于判断某连接断开时该会话是否还有其它活跃 client：
 /// 若还有则跳过 layout restore，避免 even-vertical 重排误伤其它连接的显示。
@@ -472,9 +488,16 @@ pub async fn handle_interactive_data(
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
-                let _ =
+                if let Err(e) =
                     tokio::fs::set_permissions(&date_dir, std::fs::Permissions::from_mode(0o700))
-                        .await;
+                        .await
+                {
+                    tracing::warn!(
+                        "failed to set recording dir permissions {:?}: {}",
+                        date_dir,
+                        e
+                    );
+                }
             }
             let epoch = now.timestamp();
             // Generate a 4-hex client id from SystemTime hash (no rand crate).

@@ -15,7 +15,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
-use crate::interactive::InteractiveSession;
+use crate::interactive::SessionTracker;
 use crate::protocol::ProtocolProxy;
 
 #[tokio::main]
@@ -144,23 +144,14 @@ async fn main() -> anyhow::Result<()> {
                         },
                     ));
 
-                    let session_state: std::sync::Arc<
-                        tokio::sync::Mutex<std::collections::HashMap<String, InteractiveSession>>,
-                    > = std::sync::Arc::new(tokio::sync::Mutex::new(
-                        std::collections::HashMap::new(),
-                    ));
-                    let session_counts: std::sync::Arc<
-                        std::sync::Mutex<std::collections::HashMap<String, usize>>,
-                    > = std::sync::Arc::new(
-                        std::sync::Mutex::new(std::collections::HashMap::new()),
-                    );
+                    let sessions = SessionTracker::new();
 
                     loop {
                         match conn.accept_bi().await {
                             Ok((send, recv)) => {
                                 let proxy = protocol_proxy.clone();
-                                let state = session_state.clone();
-                                let counts = session_counts.clone();
+                                let state = sessions.state.clone();
+                                let counts = sessions.counts.clone();
                                 let rec_dir = conn_recording_dir.clone();
                                 let rec_enabled = recording_enabled;
                                 let rec_fsync = fsync_interval_secs;
@@ -289,7 +280,9 @@ async fn main() -> anyhow::Result<()> {
         // 等注册循环完成优雅关闭（close + flush CONNECTION_CLOSE 帧）。
         // main 若立即返回会打断循环里的 sleep，导致 close 帧发不出去，
         // server 只能等 idle timeout 才 unregister。
-        let _ = reg_handle.await;
+        if let Err(e) = reg_handle.await {
+            tracing::error!("registration loop failed: {e}");
+        }
         tracing::info!("bridge exited");
         return Ok(());
     }

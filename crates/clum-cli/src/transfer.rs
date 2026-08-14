@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::{bail, Context, Result};
 use clum_core::rate_limiter::BandwidthLimiter;
+use clum_core::COPY_BUF_SIZE;
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -10,7 +11,6 @@ const STREAM_UPLOAD: u8 = 0x02;
 const STREAM_DOWNLOAD: u8 = 0x03;
 const STREAM_LIST: u8 = 0x08;
 const MODE_OVERWRITE: u8 = 0x01;
-const CHUNK_SIZE: usize = 1024 * 1024;
 const MAX_UPLOAD_CONCURRENCY: usize = 16;
 const MAX_DIR_DEPTH: u32 = 64;
 
@@ -264,7 +264,7 @@ async fn upload_one(
     let mut file = tokio::fs::File::open(local)
         .await
         .with_context(|| format!("open {}", local.display()))?;
-    let mut buf = vec![0u8; CHUNK_SIZE];
+    let mut buf = vec![0u8; COPY_BUF_SIZE];
     loop {
         let n = file.read(&mut buf).await?;
         if n == 0 {
@@ -421,7 +421,13 @@ pub async fn upload(
                 }
                 eprintln!("  FAIL {remote}: {e}");
             }
-            _ => unreachable!("upload_one only returns status 0x00/0x01 or Err"),
+            _ => {
+                failed += 1;
+                if let Ok(b) = bar.lock() {
+                    b.clear();
+                }
+                eprintln!("  FAIL {remote}: unexpected upload status code");
+            }
         }
     }
     let secs = bar.lock().map(|b| b.elapsed_secs()).unwrap_or(0.0);
@@ -458,10 +464,10 @@ async fn recv_to_file(
         .await
         .with_context(|| format!("create {}", path.display()))?;
     let mut hasher = Sha256::new();
-    let mut buf = vec![0u8; CHUNK_SIZE];
+    let mut buf = vec![0u8; COPY_BUF_SIZE];
     let mut remaining = size;
     while remaining > 0 {
-        let want = CHUNK_SIZE.min(remaining as usize);
+        let want = COPY_BUF_SIZE.min(remaining as usize);
         let n = recv.read(&mut buf[..want]).await?.unwrap_or(0);
         if n == 0 {
             bail!(

@@ -6,6 +6,7 @@ use super::ToolContext;
 use crate::transport::{connect_to_host, recv_json_frame, send_json_frame};
 use clum_core::backoff::FullJitterBackoff;
 use clum_core::types::AuditAction;
+use clum_core::{DEFAULT_COLLECT_TIMEOUT_MS, DEFAULT_EXEC_TIMEOUT_MS};
 
 /// 将字面量转义序列转为实际控制字符。
 /// 兜底处理 OpenCode 等 MCP 客户端未正确 JSON-转义的情况。
@@ -652,7 +653,9 @@ pub(crate) async fn exec(
     let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id_arg = args["pane_id"].as_str();
     let command = args["command"].as_str().context("missing 'command'")?;
-    let timeout_ms = args["timeout_ms"].as_u64().unwrap_or(600000);
+    let timeout_ms = args["timeout_ms"]
+        .as_u64()
+        .unwrap_or(DEFAULT_EXEC_TIMEOUT_MS);
     let max_lines = args["max_lines"]
         .as_u64()
         .map(|v| v as usize)
@@ -760,7 +763,9 @@ pub(crate) async fn collect_until_exit(ctx: &ToolContext, args: Value) -> Result
     let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id_arg = args["pane_id"].as_str();
     let max_bytes = args["max_bytes"].as_u64().unwrap_or(1048576);
-    let timeout_ms = args["timeout_ms"].as_u64().unwrap_or(60000);
+    let timeout_ms = args["timeout_ms"]
+        .as_u64()
+        .unwrap_or(DEFAULT_COLLECT_TIMEOUT_MS);
     let starting_at = args["starting_at"].as_str().unwrap_or("now");
     let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;

@@ -6,6 +6,7 @@ use std::sync::Arc;
 use anyhow::{bail, Context, Result};
 use clum_core::rate_limiter::BandwidthLimiter;
 use clum_core::types::HostConfig;
+use clum_core::COPY_BUF_SIZE;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -14,7 +15,6 @@ use tokio::sync::Semaphore;
 use crate::registry::BridgeRegistry;
 
 const MAX_UPLOAD_CONCURRENCY: usize = 16;
-const COPY_BUF_SIZE: usize = 1024 * 1024; // 1 MB — 与 bridge CHUNK_SIZE 对齐
 
 const STREAM_UPLOAD: u8 = 0x02;
 const STREAM_DOWNLOAD: u8 = 0x03;

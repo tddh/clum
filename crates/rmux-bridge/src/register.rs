@@ -8,9 +8,10 @@ use tokio::sync::watch;
 
 use crate::bridge_audit::BridgeAuditDb;
 use crate::cast_recorder;
-use crate::interactive::InteractiveSession;
+use crate::interactive::SessionTracker;
 use crate::protocol::ProtocolProxy;
 use clum_core::backoff::FullJitterBackoff;
+use clum_core::quic::{read_frame, write_frame};
 
 /// 优雅关闭信号：SIGTERM 触发一次，供注册循环与连接处理任务等待。
 ///
@@ -160,11 +161,7 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
         },
     ));
 
-    let session_state: Arc<
-        tokio::sync::Mutex<std::collections::HashMap<String, InteractiveSession>>,
-    > = Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()));
-    let session_counts: Arc<std::sync::Mutex<std::collections::HashMap<String, usize>>> =
-        Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    let sessions = SessionTracker::new();
 
     // Heartbeat task: send pings on the control stream
     let heartbeat_conn = conn.clone();
@@ -226,7 +223,9 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
                     pushed.remove(p);
                 }
                 if !stale.is_empty() {
-                    let _ = save_pushed(&push_dir, &pushed).await;
+                    if let Err(e) = save_pushed(&push_dir, &pushed).await {
+                        tracing::warn!("failed to save pushed state: {e}");
+                    }
                 }
                 for path in files {
                     if pushed.contains(&path) {
@@ -235,7 +234,9 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
                     match push_recording(&push_conn, &path).await {
                         Ok(()) => {
                             pushed.insert(path.clone());
-                            let _ = save_pushed(&push_dir, &pushed).await;
+                            if let Err(e) = save_pushed(&push_dir, &pushed).await {
+                                tracing::warn!("failed to save pushed state: {e}");
+                            }
                             tracing::info!(file = %path.display(), "recording pushed to server");
                             // Mark synced to prevent redundant Pull transfer
                             if let Some(date) = path
@@ -282,8 +283,8 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
                 match r {
                     Ok((stream_send, stream_recv)) => {
                         let proxy = protocol_proxy.clone();
-                        let state = session_state.clone();
-                        let counts = session_counts.clone();
+                        let state = sessions.state.clone();
+                        let counts = sessions.counts.clone();
                         let rec_dir = config.recording_dir.clone();
                         let rec_enabled = config.recording_enabled;
                         let rec_fsync = config.recording_fsync_interval_secs;
@@ -438,26 +439,6 @@ async fn save_pushed(dir: &Path, pushed: &HashSet<PathBuf>) -> anyhow::Result<()
         .collect();
     let json = serde_json::to_string(&entries)?;
     tokio::fs::write(&path, json).await?;
-    Ok(())
-}
-
-async fn read_frame(recv: &mut quinn::RecvStream) -> anyhow::Result<Vec<u8>> {
-    let mut len_buf = [0u8; 4];
-    recv.read_exact(&mut len_buf).await?;
-    let len = u32::from_le_bytes(len_buf) as usize;
-    if len > 1024 * 1024 {
-        anyhow::bail!("frame too large: {len}");
-    }
-    let mut buf = vec![0u8; len];
-    recv.read_exact(&mut buf).await?;
-    Ok(buf)
-}
-
-async fn write_frame(send: &mut quinn::SendStream, msg: &serde_json::Value) -> anyhow::Result<()> {
-    let data = serde_json::to_vec(msg)?;
-    let len = (data.len() as u32).to_le_bytes();
-    send.write_all(&len).await?;
-    send.write_all(&data).await?;
     Ok(())
 }
 

@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
+use clum_core::COPY_BUF_SIZE;
+
 use anyhow::Context;
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::bridge_audit::BridgeAuditDb;
 use crate::interactive::InteractiveSession;
-
-const CHUNK_SIZE: usize = 1024 * 1024; // 1 MB pipeline buffer
 
 /// 检查文件路径安全性：拒绝 null byte 和路径穿越（`..`）。
 /// 合法路径直接放行，不做规范化 — 运维工具需要完整文件系统访问。
@@ -173,7 +173,7 @@ async fn handle_upload_quic(
     let tmp_path = format!("{}.tmp.{}", remote_path, std::process::id());
     let mut file = tokio::fs::File::create(&tmp_path).await?;
     let mut hasher = Sha256::new();
-    let mut buf = vec![0u8; CHUNK_SIZE];
+    let mut buf = vec![0u8; COPY_BUF_SIZE];
     let mut total: u64 = 0;
 
     loop {
@@ -395,7 +395,7 @@ async fn handle_forward_quic(
     let (mut tcp_read, mut tcp_write) = tcp.into_split();
 
     let tcp_to_quic = async {
-        let mut buf = vec![0u8; CHUNK_SIZE];
+        let mut buf = vec![0u8; COPY_BUF_SIZE];
         loop {
             let n = tcp_read.read(&mut buf).await?;
             if n == 0 {
@@ -408,7 +408,7 @@ async fn handle_forward_quic(
     };
 
     let quic_to_tcp = async {
-        let mut buf = vec![0u8; CHUNK_SIZE];
+        let mut buf = vec![0u8; COPY_BUF_SIZE];
         loop {
             match recv.read(&mut buf).await? {
                 Some(0) | None => {
@@ -431,7 +431,7 @@ async fn copy_with_buf(
     reader: &mut (impl AsyncReadExt + Unpin),
     writer: &mut (impl AsyncWriteExt + Unpin),
 ) -> std::io::Result<u64> {
-    let mut buf = vec![0u8; CHUNK_SIZE];
+    let mut buf = vec![0u8; COPY_BUF_SIZE];
     let mut total = 0u64;
     loop {
         let n = reader.read(&mut buf).await?;
@@ -519,7 +519,7 @@ mod tests {
         let src = dir.path().join("small.bin");
         let dst = dir.path().join("out.bin");
 
-        let data = vec![0xAB; 4096]; // 4 KB ≪ CHUNK_SIZE (1 MB)
+        let data = vec![0xAB; 4096]; // 4 KB ≪ COPY_BUF_SIZE (1 MB)
         tokio::fs::write(&src, &data).await.unwrap();
 
         let mut reader = tokio::fs::File::open(&src).await.unwrap();
@@ -538,7 +538,7 @@ mod tests {
         let src = dir.path().join("exact.bin");
         let dst = dir.path().join("out.bin");
 
-        let data = vec![0xCD; CHUNK_SIZE]; // exactly 1 MB
+        let data = vec![0xCD; COPY_BUF_SIZE]; // exactly 1 MB
         tokio::fs::write(&src, &data).await.unwrap();
 
         let mut reader = tokio::fs::File::open(&src).await.unwrap();
@@ -547,7 +547,7 @@ mod tests {
         let total = copy_with_buf(&mut reader, &mut writer).await.unwrap();
         drop(writer);
 
-        assert_eq!(total, CHUNK_SIZE as u64);
+        assert_eq!(total, COPY_BUF_SIZE as u64);
         assert_eq!(std::fs::read(&dst).unwrap(), data);
     }
 }

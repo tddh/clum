@@ -3,12 +3,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
-use super::common::{collect_batch_results, make_semaphore, resolve_hosts};
-use super::exec::exec_in_session;
+use super::common::{collect_batch_results, make_semaphore, resolve_hosts, resolve_pane_id};
+use super::exec::{exec_in_session, unescape_keys};
 use super::ToolContext;
 use crate::files::OverwriteMode;
-use crate::transport::connect_via_registry;
+use crate::transport::{connect_via_registry, recv_json_frame, send_json_frame};
 use clum_core::types::AuditAction;
+use clum_core::DEFAULT_EXEC_TIMEOUT_MS;
 
 pub(crate) async fn batch_exec(
     ctx: &ToolContext,
@@ -30,7 +31,9 @@ pub(crate) async fn batch_exec(
     }
 
     let command = args["command"].as_str().context("missing 'command'")?;
-    let timeout_ms = args["timeout_ms"].as_u64().unwrap_or(600000);
+    let timeout_ms = args["timeout_ms"]
+        .as_u64()
+        .unwrap_or(DEFAULT_EXEC_TIMEOUT_MS);
     let max_lines = args["max_lines"]
         .as_u64()
         .map(|v| v as usize)
@@ -436,5 +439,173 @@ pub(crate) async fn batch_download(
         "ok": failed_count == 0, "total": hosts_arg.len(),
         "success": success_count, "failed": failed_count,
         "total_duration_ms": total_duration_ms, "results": results_map,
+    }))
+}
+
+pub(crate) async fn batch_send_keys(
+    ctx: &ToolContext,
+    args: Value,
+    progress: &crate::progress::ProgressReporter,
+) -> Result<Value> {
+    let hosts_arg: Vec<String> = args["hosts"]
+        .as_array()
+        .context("missing 'hosts'")?
+        .iter()
+        .filter_map(|v| v.as_str().map(String::from))
+        .collect();
+
+    if hosts_arg.is_empty() {
+        return Ok(json!({"ok": true, "total": 0, "success": 0, "failed": 0,
+            "total_duration_ms": 0, "results": {}, "error": "empty hosts list"}));
+    }
+
+    let session_name = args["session_name"].as_str().unwrap_or("clum").to_string();
+    let pane_id_arg = args["pane_id"].as_str().map(String::from);
+    let keys = unescape_keys(args["keys"].as_str().context("missing 'keys'")?);
+    let concurrency_limit = args["concurrency"].as_u64().unwrap_or(5) as usize;
+
+    let targets = resolve_hosts(ctx, &hosts_arg).await;
+    let semaphore = make_semaphore(concurrency_limit);
+    let ca_cert = ctx.ca_cert_path.clone();
+    let registry = std::sync::Arc::clone(&ctx.bridge_registry);
+    let start = std::time::Instant::now();
+    let total_hosts = targets.len();
+    let completed = std::sync::Arc::new(AtomicUsize::new(0));
+
+    let mut handles: Vec<tokio::task::JoinHandle<(String, Value)>> = Vec::new();
+
+    for (host_name, host_opt) in targets {
+        let ca_cert = ca_cert.clone();
+        let registry = registry.clone();
+        let session_name = session_name.clone();
+        let pane_id_arg = pane_id_arg.clone();
+        let keys = keys.clone();
+        let sem = semaphore.clone();
+        let completed = completed.clone();
+        let mut task_progress = progress.clone();
+
+        let handle = tokio::spawn(async move {
+            let _permit = if let Some(s) = &sem {
+                s.acquire().await.ok()
+            } else {
+                None
+            };
+
+            let host = match host_opt {
+                Some(h) => h,
+                None => {
+                    let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
+                    task_progress
+                        .report(done as u64, total_hosts as u64, &host_name)
+                        .await;
+                    return (
+                        host_name,
+                        json!({"ok": false, "error": "host not found in registry"}),
+                    );
+                }
+            };
+
+            let mut stream = match connect_via_registry(&registry, &host, ca_cert.as_deref()).await
+            {
+                Ok(s) => s,
+                Err(e) => {
+                    let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
+                    task_progress
+                        .report(done as u64, total_hosts as u64, &host_name)
+                        .await;
+                    return (
+                        host_name,
+                        json!({"ok": false, "error": format!("connect: {e}")}),
+                    );
+                }
+            };
+
+            let (pane_id, _auto_resolved) =
+                match resolve_pane_id(&mut stream, &session_name, pane_id_arg.as_deref()).await {
+                    Ok(v) => v,
+                    Err(e) => {
+                        let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
+                        task_progress
+                            .report(done as u64, total_hosts as u64, &host_name)
+                            .await;
+                        return (
+                            host_name,
+                            json!({"ok": false, "error": format!("resolve_pane: {e}")}),
+                        );
+                    }
+                };
+
+            // 投递确认语义（与 send_keys 一致）：发完即返回，不等待命令执行结果。
+            if let Err(e) = send_json_frame(
+                &mut stream,
+                &json!({"type": "send_keys", "session_name": session_name, "pane_id": pane_id.clone(), "keys": keys}),
+            )
+            .await
+            {
+                let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
+                task_progress
+                    .report(done as u64, total_hosts as u64, &host_name)
+                    .await;
+                return (
+                    host_name,
+                    json!({"ok": false, "error": format!("send_keys: {e}")}),
+                );
+            }
+            let result = match recv_json_frame(&mut stream).await {
+                Ok(resp) => resp,
+                Err(e) => {
+                    let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
+                    task_progress
+                        .report(done as u64, total_hosts as u64, &host_name)
+                        .await;
+                    return (
+                        host_name,
+                        json!({"ok": false, "error": format!("send_keys: {e}")}),
+                    );
+                }
+            };
+
+            let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
+            task_progress
+                .report(done as u64, total_hosts as u64, &host_name)
+                .await;
+
+            if result["ok"].as_bool().unwrap_or(false) {
+                (host_name, json!({"ok": true, "pane_id": pane_id}))
+            } else {
+                (
+                    host_name,
+                    json!({"ok": false, "error": result["error"].clone()}),
+                )
+            }
+        });
+
+        handles.push(handle);
+    }
+
+    let (results_map, success_count, failed_count) = collect_batch_results(handles).await;
+    let total_duration_ms = start.elapsed().as_millis() as u64;
+
+    super::audit(
+        ctx,
+        AuditAction::BatchSendKeys,
+        "",
+        "",
+        None,
+        &format!("hosts:{:?} keys:{}", hosts_arg, keys),
+        None,
+        failed_count == 0,
+        total_duration_ms,
+        None,
+    )
+    .await;
+
+    Ok(json!({
+        "ok": failed_count == 0,
+        "total": hosts_arg.len(),
+        "success": success_count,
+        "failed": failed_count,
+        "total_duration_ms": total_duration_ms,
+        "results": results_map,
     }))
 }

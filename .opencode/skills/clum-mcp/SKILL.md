@@ -394,7 +394,8 @@ wait_stable(host, session_name, pane_id)
 ├── 大输出命令（find, du）→ `send_keys` + `collect_until_exit`
 │   ⚠️ 超时后收集被取消，远端进程继续运行
 ├── 需要实时监控输出 → `send_keys` + `stream_pane` 循环
-├── 多台主机 → `batch_exec`
+├── 多台主机 → `batch_exec`（同步等待每台结果）
+├── 多台主机发按键、发完不等结果 → `batch_send_keys`
 ├── 需要分屏并行 → `split_pane_with`
 └── 发送含 \n \t 字面量的文本 → `send_text`（不解释转义，区别于 send_keys）
 
@@ -476,6 +477,16 @@ TUI 弹窗（debconf、needrestart、whiptail 等），导致 exec 超时或终�
 ```
 batch_exec(hosts=["k8s-n1","k8s-n2","k8s-n3"], command="DEBIAN_FRONTEND=noninteractive apt-get install -y nginx")
 ```
+
+### batch_send_keys（多主机投递确认，fire-and-forget）
+
+`batch_exec` 同步等待每台主机的输出和退出码；若只需「多台主机同时发按键、发完即返回、不等结果」（批量触发交互式命令、批量下发长任务、批量 restart 服务），用 `batch_send_keys`：
+
+```
+batch_send_keys(hosts=["k8s-n1","k8s-n2"], keys="systemctl restart nginx\n")
+```
+
+返回每台 `{ok, pane_id}` 或 `{ok:false, error}`（投递确认），**无 output/exit_code**。命令在远端 rmux 里继续执行，结果用 `capture_pane` / `wait_for_text` 逐台查。注意：批量 restart bridge 这类会断连的操作，`batch_send_keys` 发完即返回，不受断连影响，之后用 `host_list` 确认重新上线。
 
 ## 录制回放
 

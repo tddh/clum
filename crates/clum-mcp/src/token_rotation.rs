@@ -49,7 +49,13 @@ async fn rotate_expired_tokens(
             }
         };
 
-        let new_token = crate::bridge_store::generate_bridge_token();
+        let new_token = match crate::bridge_store::generate_bridge_token() {
+            Ok(t) => t,
+            Err(e) => {
+                tracing::error!("failed to generate bridge token: {e}");
+                continue;
+            }
+        };
         let msg = serde_json::json!({
             "type": "token_rotate",
             "new_token": new_token,

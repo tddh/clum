@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **`batch_send_keys` 工具**：多主机并发发送按键（投递确认语义，fire-and-forget），发完即返回、不等待命令执行结果。补齐「跨主机 + fire-and-forget」空缺（`batch_exec` 同步等待、`broadcast_keys` 仅单主机多 pane）。结果用 `capture_pane` / `wait_for_text` 逐台查。
+
+### Fixed
+- **录制链路静默失败**：`cast_recorder` 的 fsync/flush、`register` 的 save_pushed、`interactive` 的录制目录权限设置，失败从 `let _ =` 静默忽略改为 `tracing::warn` 记录，避免录制数据丢失、重启重复推送、目录权限过宽。
+- **多处 panic 风险消除**：`build_transport_config` 的 idle_timeout VarInt 溢出 expect 改返回 `Result`；MCP `router` 锁中毒 expect 改为 `into_inner()` 恢复；`getrandom` CSPRNG 失败从 expect 改为错误传播（`generate_bridge_token`/`generate_key` 返回 `Result`）；bridge 注册循环 `reg_handle.await` 不再忽略；CLI `transfer` 的 `unreachable!` 改为优雅降级。
+
+### Refactored
+- **帧协议收敛**：`read_frame`/`write_frame`（LE32 长度前缀 JSON 帧）从 clum-mcp 与 rmux-bridge 两处逐字节相同的实现提取到 `clum_core::quic`，wire 协议不变。
+- **`SessionTracker` 封装**：`session_state`/`session_counts` 的类型重复在 main（直连）与 register（注册）两处收敛为单一 struct。
+- **常量统一**：1MB 传输缓冲（`COPY_BUF_SIZE`）4 处重复定义收敛到 `clum-core`；30s/60s/10min 超时默认值 13 处 magic number 改为 `DEFAULT_WAIT/COLLECT/EXEC_TIMEOUT_MS` 命名常量。
+
 ## [0.13.0] — 2026-08-13
 
 ### rmux 0.10 升级

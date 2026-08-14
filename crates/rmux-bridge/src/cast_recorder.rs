@@ -167,7 +167,9 @@ async fn writer_task(
     loop {
         // Check time-based fsync.
         if last_sync.elapsed() >= sync_interval && bytes_since_sync > 0 {
-            let _ = file.sync_all().await;
+            if let Err(e) = file.sync_all().await {
+                tracing::warn!("recording fsync failed: {e}");
+            }
             bytes_since_sync = 0;
             last_sync = Instant::now();
         }
@@ -231,15 +233,21 @@ async fn writer_task(
 
         // Byte-threshold fsync.
         if bytes_since_sync >= FSYNC_BYTE_THRESHOLD {
-            let _ = file.sync_all().await;
+            if let Err(e) = file.sync_all().await {
+                tracing::warn!("recording fsync failed: {e}");
+            }
             bytes_since_sync = 0;
             last_sync = Instant::now();
         }
     }
 
     // Final flush and sync.
-    let _ = file.flush().await;
-    let _ = file.sync_all().await;
+    if let Err(e) = file.flush().await {
+        tracing::warn!("recording final flush failed: {e}");
+    }
+    if let Err(e) = file.sync_all().await {
+        tracing::warn!("recording final sync failed: {e}");
+    }
 
     let duration_secs = start.elapsed().as_secs_f64();
     let hash = hasher.finalize();

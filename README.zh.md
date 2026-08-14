@@ -329,7 +329,7 @@ echo "$(cat)" >> knowledge.jsonl && git commit -am "新增排障经验条目"
 
 ## 工具列表
 
-共 68 个 MCP 工具，覆盖完整终端生命周期；另有 `audit query/stats/cleanup` CLI 子命令供人类直接查询审计日志：
+共 69 个 MCP 工具，覆盖完整终端生命周期；另有 `audit query/stats/cleanup` CLI 子命令供人类直接查询审计日志：
 
 | 类别 | 工具 |
 |------|------|
@@ -343,7 +343,7 @@ echo "$(cat)" >> knowledge.jsonl && git commit -am "新增排障经验条目"
 | 发现与查询 | `find_panes`, `find_sessions`, `get_pane_by_title`, `host_capabilities` |
 | 粘贴板 | `list_buffers`, `paste_buffer`, `delete_buffer` |
 | 文件传输 | `file_upload`, `file_download` |
-| 批量操作 | `batch_exec`, `batch_upload`, `batch_download` |
+| 批量操作 | `batch_exec`, `batch_send_keys`, `batch_upload`, `batch_download` |
 | 端口转发 | `forward_create`, `forward_list`, `forward_close` |
 | 部署升级 | `deploy_bridge` |
 | 审计录制 | `audit_query`, `query_bridge_audit`, `list_recordings`, `get_recording`, `search_recordings` |

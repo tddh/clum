@@ -614,6 +614,21 @@ pub fn tools_definition() -> Value {
                 }
             },
             {
+                "name": "batch_send_keys",
+                "description": "Send the same keystrokes to a single pane on multiple hosts concurrently. Fire-and-forget (delivery confirmation): returns once the keys are written into each host's pane — it does NOT wait for the command to finish and returns no output/exit_code. Use this to trigger the same interactive/non-terminating command (or any fire-and-forget operation) across many machines in one round. To read results later, use capture_pane / wait_for_text / wait_exit per host. Default session 'clum', default concurrency 5.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "hosts": { "type": "array", "items": { "type": "string" }, "description": "Hostname list, e.g. [\"tf01\", \"dns-backup\"]" },
+                        "keys": { "type": "string", "description": "Key sequence to send (supports \\n, \\t, \\x03, \\xNN, etc.)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
+                        "concurrency": { "type": "integer", "description": "Max concurrent connections (default: 5, 0=unlimited)" }
+                    },
+                    "required": ["hosts", "keys"]
+                }
+            },
+            {
                 "name": "forward_create",
                 "description": "Create a port forwarding through an encrypted QUIC channel. Central server mode: the TCP listener is created on the SERVER side, not the client machine. For client-side local port forwarding use clum-cli forward. Opens a TCP listener on the specified port that forwards all connections to a remote host:port via the bridge. The remote_host can be an internal address (e.g., 127.0.0.1, 10.x.x.x) not directly reachable from your machine. If the host has 'allowed_forward_targets' configured in hosts.yaml, only matching targets are allowed (glob patterns supported). Returns a forward_id that can be used with forward_close. Tunnels persist until explicitly closed or the MCP server restarts.",
                 "inputSchema": {

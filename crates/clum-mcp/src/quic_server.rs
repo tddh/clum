@@ -6,10 +6,8 @@ use anyhow::Context;
 use sha2::{Digest, Sha256};
 
 use crate::registry::{BridgeConn, BridgeRegistry};
-
-/// Relay buffer size for CLI file transfer streams through central server.
-/// Must align with bridge CHUNK_SIZE and MCP COPY_BUF_SIZE (both 1 MB).
-const RELAY_BUF_SIZE: usize = 1024 * 1024; // 1 MB
+use clum_core::quic::{read_frame, write_frame};
+use clum_core::COPY_BUF_SIZE;
 
 /// Maximum size of a single recording file accepted via Push path.
 /// Rejecting oversized recordings prevents OOM from a compromised bridge.
@@ -70,7 +68,7 @@ pub async fn run_quic_server(
     let mut transport = clum_core::quic::build_transport_config(
         std::time::Duration::from_secs(120),
         clum_core::quic::DEFAULT_KEEPALIVE,
-    );
+    )?;
     transport.max_concurrent_bidi_streams(256u32.into());
     *Arc::get_mut(&mut server_config.transport).context("transport Arc is shared")? = transport;
 
@@ -558,7 +556,7 @@ async fn relay_stream(
     let mut cli_send = cli_send;
 
     let c2b = async {
-        let mut buf = vec![0u8; RELAY_BUF_SIZE];
+        let mut buf = vec![0u8; COPY_BUF_SIZE];
         while let Ok(Some(n)) = cli_recv.read(&mut buf).await {
             if bridge_send.write_all(&buf[..n]).await.is_err() {
                 break;
@@ -568,7 +566,7 @@ async fn relay_stream(
     };
 
     let b2c = async {
-        let mut buf = vec![0u8; RELAY_BUF_SIZE];
+        let mut buf = vec![0u8; COPY_BUF_SIZE];
         while let Ok(Some(n)) = bridge_recv.read(&mut buf).await {
             if cli_send.write_all(&buf[..n]).await.is_err() {
                 break;
@@ -578,26 +576,6 @@ async fn relay_stream(
     };
 
     tokio::join!(c2b, b2c);
-    Ok(())
-}
-
-async fn read_frame(recv: &mut quinn::RecvStream) -> anyhow::Result<Vec<u8>> {
-    let mut len_buf = [0u8; 4];
-    recv.read_exact(&mut len_buf).await?;
-    let len = u32::from_le_bytes(len_buf) as usize;
-    if len > 1024 * 1024 {
-        anyhow::bail!("frame too large: {len}");
-    }
-    let mut buf = vec![0u8; len];
-    recv.read_exact(&mut buf).await?;
-    Ok(buf)
-}
-
-async fn write_frame(send: &mut quinn::SendStream, msg: &serde_json::Value) -> anyhow::Result<()> {
-    let data = serde_json::to_vec(msg)?;
-    let len = (data.len() as u32).to_le_bytes();
-    send.write_all(&len).await?;
-    send.write_all(&data).await?;
     Ok(())
 }
 

@@ -330,7 +330,7 @@ This design keeps clum focused on operations while enabling teams to build their
 
 ## Tools
 
-68 MCP tools covering the full terminal lifecycle, plus `audit query/stats/cleanup` CLI subcommands for human operators:
+69 MCP tools covering the full terminal lifecycle, plus `audit query/stats/cleanup` CLI subcommands for human operators:
 
 | Category | Tools |
 |----------|-------|
@@ -344,7 +344,7 @@ This design keeps clum focused on operations while enabling teams to build their
 | Discovery | `find_panes`, `find_sessions`, `get_pane_by_title`, `host_capabilities` |
 | Buffer | `list_buffers`, `paste_buffer`, `delete_buffer` |
 | File | `file_upload`, `file_download` |
-| Batch | `batch_exec`, `batch_upload`, `batch_download` |
+| Batch | `batch_exec`, `batch_send_keys`, `batch_upload`, `batch_download` |
 | Tunnel | `forward_create`, `forward_list`, `forward_close` |
 | Deploy | `deploy_bridge` |
 | Audit | `audit_query`, `query_bridge_audit`, `list_recordings`, `get_recording`, `search_recordings` |
@@ -392,7 +392,7 @@ just release-linux  # cross-compile Linux x86_64 musl
 
 ## Docs
 
-- [Tool Reference](docs/TOOLS.md) — 68 MCP tools with parameters and return values
+- [Tool Reference](docs/TOOLS.md) — 69 MCP tools with parameters and return values
 - [Deployment Guide](docs/DEPLOY.md) — Architecture, build, deploy, operations, security
 - [Terminal State Design](docs/terminal-state-design.md) — Terminal state awareness heuristic engine
 - [Contributing](CONTRIBUTING.md)

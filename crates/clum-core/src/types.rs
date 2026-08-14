@@ -117,6 +117,7 @@ pub enum AuditAction {
     BatchExec,
     BatchUpload,
     BatchDownload,
+    BatchSendKeys,
     ForwardCreate,
     ForwardList,
     ForwardClose,
@@ -285,6 +286,7 @@ mod tests {
             (AuditAction::FileDownload, r#""FileDownload""#),
             (AuditAction::DeployBridge, r#""DeployBridge""#),
             (AuditAction::BatchExec, r#""BatchExec""#),
+            (AuditAction::BatchSendKeys, r#""BatchSendKeys""#),
             (AuditAction::ForwardCreate, r#""ForwardCreate""#),
         ];
 
@@ -637,6 +639,7 @@ mod tests {
             ("BatchExec", AuditAction::BatchExec),
             ("BatchUpload", AuditAction::BatchUpload),
             ("BatchDownload", AuditAction::BatchDownload),
+            ("BatchSendKeys", AuditAction::BatchSendKeys),
             ("ForwardCreate", AuditAction::ForwardCreate),
             ("ForwardList", AuditAction::ForwardList),
             ("ForwardClose", AuditAction::ForwardClose),

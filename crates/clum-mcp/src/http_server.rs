@@ -272,13 +272,20 @@ fn build_download_routes(
             async move {
                 use sha2::{Digest, Sha256};
                 let mut bytes = [0u8; 16];
-                getrandom::getrandom(&mut bytes).expect("CSPRNG failed");
+                getrandom::getrandom(&mut bytes).map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("CSPRNG failed: {e}"),
+                    )
+                })?;
                 let token = format!("dl_{}", hex::encode(bytes));
                 let hash = hex::encode(Sha256::digest(token.as_bytes()));
                 let ttl_secs = token_ttl_hours * 3600;
                 let expires = std::time::Instant::now() + std::time::Duration::from_secs(ttl_secs);
                 tokens.write().await.insert(hash, expires);
-                axum::Json(serde_json::json!({"token": token, "expires_in_secs": ttl_secs}))
+                Ok::<_, (StatusCode, String)>(axum::Json(
+                    serde_json::json!({"token": token, "expires_in_secs": ttl_secs}),
+                ))
             }
         }),
     )
@@ -434,7 +441,7 @@ mod tests {
         let bridge_store = Arc::new(
             crate::bridge_store::BridgeStore::open(&tmp.path().join("bridges.db")).unwrap(),
         );
-        let bridge_token = crate::bridge_store::generate_bridge_token();
+        let bridge_token = crate::bridge_store::generate_bridge_token().unwrap();
         bridge_store
             .add("testhost", &bridge_token, &[], None)
             .await

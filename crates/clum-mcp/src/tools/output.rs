@@ -4,12 +4,15 @@ use serde_json::{json, Value};
 use super::ToolContext;
 use crate::transport::{connect_to_host, recv_json_frame, send_json_frame};
 use clum_core::types::AuditAction;
+use clum_core::DEFAULT_WAIT_TIMEOUT_MS;
 
 pub(crate) async fn wait_exit(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
     let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id_arg = args["pane_id"].as_str();
-    let timeout_ms = args["timeout_ms"].as_u64().unwrap_or(30000);
+    let timeout_ms = args["timeout_ms"]
+        .as_u64()
+        .unwrap_or(DEFAULT_WAIT_TIMEOUT_MS);
     let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =
@@ -38,7 +41,9 @@ pub(crate) async fn wait_for_text(ctx: &ToolContext, args: Value) -> Result<Valu
     let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id_arg = args["pane_id"].as_str();
     let text = args["text"].as_str().context("missing 'text'")?;
-    let timeout_ms = args["timeout_ms"].as_u64().unwrap_or(30000);
+    let timeout_ms = args["timeout_ms"]
+        .as_u64()
+        .unwrap_or(DEFAULT_WAIT_TIMEOUT_MS);
     let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =
@@ -107,7 +112,9 @@ pub(crate) async fn wait_for_bytes(ctx: &ToolContext, args: Value) -> Result<Val
     let pane_id_arg = args["pane_id"].as_str();
     let bytes_b64 = args["bytes"].as_str().context("missing 'bytes'")?;
     let only_new = args["only_new"].as_bool().unwrap_or(false);
-    let timeout_ms = args["timeout_ms"].as_u64().unwrap_or(30000);
+    let timeout_ms = args["timeout_ms"]
+        .as_u64()
+        .unwrap_or(DEFAULT_WAIT_TIMEOUT_MS);
     let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =
@@ -148,7 +155,9 @@ pub(crate) async fn wait_stable(ctx: &ToolContext, args: Value) -> Result<Value>
     let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id_arg = args["pane_id"].as_str();
     let stable_ms = args["stable_ms"].as_u64().unwrap_or(500);
-    let timeout_ms = args["timeout_ms"].as_u64().unwrap_or(30000);
+    let timeout_ms = args["timeout_ms"]
+        .as_u64()
+        .unwrap_or(DEFAULT_WAIT_TIMEOUT_MS);
     let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =

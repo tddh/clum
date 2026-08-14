@@ -23,19 +23,19 @@ const AUTH_OK: &[u8; 3] = b"OK\n";
 pub fn build_transport_config(
     idle_timeout: Duration,
     keepalive: Duration,
-) -> quinn::TransportConfig {
+) -> anyhow::Result<quinn::TransportConfig> {
     let mut transport = quinn::TransportConfig::default();
     transport.max_idle_timeout(Some(
         idle_timeout
             .try_into()
-            .expect("idle timeout exceeds QUIC VarInt limit"),
+            .map_err(|_| anyhow::anyhow!("idle timeout exceeds QUIC VarInt limit"))?,
     ));
     transport.keep_alive_interval(Some(keepalive));
     transport.stream_receive_window(quinn::VarInt::from_u32(WINDOW_SIZE));
     transport.send_window(WINDOW_SIZE as u64);
     transport.receive_window(quinn::VarInt::from_u32(WINDOW_SIZE));
     transport.congestion_controller_factory(Arc::new(quinn::congestion::BbrConfig::default()));
-    transport
+    Ok(transport)
 }
 
 /// 构建 QUIC 客户端 TLS 加密层。`alpn` 为空时不设置 ALPN（bridge 直连）。
@@ -62,7 +62,7 @@ pub fn client_endpoint(
 ) -> anyhow::Result<quinn::Endpoint> {
     let mut endpoint = quinn::Endpoint::client("[::]:0".parse()?)?;
     let mut client_config = quinn::ClientConfig::new(build_client_crypto(ca_cert_path, alpn)?);
-    client_config.transport_config(Arc::new(build_transport_config(idle_timeout, keepalive)));
+    client_config.transport_config(Arc::new(build_transport_config(idle_timeout, keepalive)?));
     endpoint.set_default_client_config(client_config);
     Ok(endpoint)
 }
@@ -112,6 +112,34 @@ pub async fn connect_bridge(
     Ok(conn)
 }
 
+/// 从 QUIC 双向流读取长度前缀（LE32）的 JSON 控制帧。
+///
+/// 控制帧（注册、心跳、工具指令、token 轮换）不应超过 1 MB，
+/// 防止异常长度声明导致的内存浪费。
+pub async fn read_frame(recv: &mut quinn::RecvStream) -> anyhow::Result<Vec<u8>> {
+    let mut len_buf = [0u8; 4];
+    recv.read_exact(&mut len_buf).await?;
+    let len = u32::from_le_bytes(len_buf) as usize;
+    if len > 1024 * 1024 {
+        anyhow::bail!("frame too large: {len}");
+    }
+    let mut buf = vec![0u8; len];
+    recv.read_exact(&mut buf).await?;
+    Ok(buf)
+}
+
+/// 向 QUIC 双向流写入长度前缀（LE32）的 JSON 控制帧。
+pub async fn write_frame(
+    send: &mut quinn::SendStream,
+    msg: &serde_json::Value,
+) -> anyhow::Result<()> {
+    let data = serde_json::to_vec(msg)?;
+    let len = (data.len() as u32).to_le_bytes();
+    send.write_all(&len).await?;
+    send.write_all(&data).await?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -128,22 +156,26 @@ mod tests {
 
     #[test]
     fn build_transport_config_does_not_panic_standard_params() {
-        let _config = build_transport_config(Duration::from_secs(30), Duration::from_secs(15));
+        let _config =
+            build_transport_config(Duration::from_secs(30), Duration::from_secs(15)).unwrap();
     }
 
     #[test]
     fn build_transport_config_does_not_panic_zero_timeout() {
-        let _config = build_transport_config(Duration::from_secs(0), Duration::from_secs(5));
+        let _config =
+            build_transport_config(Duration::from_secs(0), Duration::from_secs(5)).unwrap();
     }
 
     #[test]
     fn build_transport_config_does_not_panic_large_timeout() {
-        let _config = build_transport_config(Duration::from_secs(3600), Duration::from_secs(60));
+        let _config =
+            build_transport_config(Duration::from_secs(3600), Duration::from_secs(60)).unwrap();
     }
 
     #[test]
     fn build_transport_config_does_not_panic_zero_keepalive() {
-        let _config = build_transport_config(Duration::from_secs(30), Duration::from_secs(0));
+        let _config =
+            build_transport_config(Duration::from_secs(30), Duration::from_secs(0)).unwrap();
     }
 
     #[test]

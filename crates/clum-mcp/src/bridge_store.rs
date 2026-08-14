@@ -82,7 +82,7 @@ impl BridgeStore {
     }
 
     pub async fn join(&self, hostname: &str) -> Result<String> {
-        let token = generate_bridge_token();
+        let token = generate_bridge_token()?;
         let hash = hex::encode(Sha256::digest(token.as_bytes()));
         let prefix = token[..8].to_string();
 
@@ -288,10 +288,10 @@ impl BridgeStore {
     }
 }
 
-pub fn generate_bridge_token() -> String {
+pub fn generate_bridge_token() -> Result<String> {
     let mut bytes = [0u8; 32];
-    getrandom::getrandom(&mut bytes).expect("CSPRNG failed");
-    hex::encode(bytes)
+    getrandom::getrandom(&mut bytes).map_err(|e| anyhow::anyhow!("CSPRNG failed: {e}"))?;
+    Ok(hex::encode(bytes))
 }
 
 #[cfg(test)]

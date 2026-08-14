@@ -77,7 +77,7 @@ impl ApiKeyStore {
     }
 
     pub async fn add(&self, name: &str, group: Option<&str>) -> Result<String> {
-        let raw = generate_key(name);
+        let raw = generate_key(name)?;
         let hash = hex::encode(Sha256::digest(raw.as_bytes()));
         let prefix = raw[..raw.len().min(16)].to_string();
         let id = uuid::Uuid::new_v4().to_string();
@@ -248,15 +248,15 @@ impl ApiKeyStore {
     }
 }
 
-fn generate_key(name: &str) -> String {
+fn generate_key(name: &str) -> Result<String> {
     use std::fmt::Write;
     let mut bytes = [0u8; 32];
-    getrandom::getrandom(&mut bytes).expect("CSPRNG failed");
+    getrandom::getrandom(&mut bytes).map_err(|e| anyhow::anyhow!("CSPRNG failed: {e}"))?;
     let mut hex_str = String::with_capacity(64);
     for b in bytes {
         write!(hex_str, "{b:02x}").unwrap();
     }
-    format!("yk_{name}_{hex_str}")
+    Ok(format!("yk_{name}_{hex_str}"))
 }
 
 #[cfg(test)]
