@@ -10,9 +10,11 @@ Instead, email the maintainer directly. We will respond within 48 hours and work
 
 | Version | Supported          |
 |---------|--------------------|
-| 0.10.x  | ✅ Supported       |
-| 0.9.x   | ⚠️ Legacy (rename transition, compat shims only) |
-| < 0.8   | ❌ Not supported   |
+| 0.14.x  | ✅ Supported       |
+| 0.13.x  | ✅ Supported       |
+| 0.11.x-0.12.x | ⚠️ Legacy       |
+| 0.10.x  | ⚠️ Legacy (rename transition, compat shims only) |
+| < 0.10  | ❌ Not supported   |
 
 ## Security Model
 

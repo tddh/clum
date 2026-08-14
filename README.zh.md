@@ -71,7 +71,7 @@ graph LR
     C3 <-->|Unix Socket| D3[RMUX daemon]
 ```
 
-- **clum-mcp（Central Server）** — 中央 MCP Server：HTTP :9788 面向 AI 客户端（MCP 协议）+ QUIC :9788 面向 Bridge 注册和 CLI 数据平面。提供 68 个工具、集中审计、API Key 认证、静态文件服务。
+- **clum-mcp（Central Server）** — 中央 MCP Server：HTTP :9788 面向 AI 客户端（MCP 协议）+ QUIC :9788 面向 Bridge 注册和 CLI 数据平面。提供 69 个工具、集中审计、API Key 认证、静态文件服务。
 - **clum-cli** — 命令行工具：PTY 透传（`term`）、文件传输（`push`/`pull`，支持文件与目录、分块流式传输 + SHA-256 校验、目录 `--exclude` 过滤）、端口转发（`forward`，断网自动重连，`--give-up-after` 控制放弃时限）、会话列表（`list`）、录制回放（`replay`）。内置 AI 对话面板（Ctrl+G）。
 - **rmux-bridge** — 部署在每台 Linux 主机的 Agent。主动连接 Central Server 注册，处理工具执行、文件 I/O、PTY 会话、录制推送。
 - **RMUX daemon** — 每台 Linux 主机上的终端多路复用器（基于 rmux）。
@@ -391,7 +391,7 @@ just release-linux  # 交叉编译 Linux x86_64 musl
 
 ## 文档
 
-- [工具文档](docs/TOOLS.md) — 68 个 MCP 工具的完整参数与返回值
+- [工具文档](docs/TOOLS.md) — 69 个 MCP 工具的完整参数与返回值
 - [部署文档](docs/DEPLOY.md) — 架构、构建、部署、运维、安全
 - [终端状态感知设计](docs/terminal-state-design.md) — 终端状态启发式检测引擎
 - [贡献指南](CONTRIBUTING.md)

@@ -1,11 +1,28 @@
 # Changelog
 
-## [Unreleased]
+## [0.14.0] — 2026-08-14
 
 ### Added
-- **`batch_send_keys` 工具**：多主机并发发送按键（投递确认语义，fire-and-forget），发完即返回、不等待命令执行结果。补齐「跨主机 + fire-and-forget」空缺（`batch_exec` 同步等待、`broadcast_keys` 仅单主机多 pane）。结果用 `capture_pane` / `wait_for_text` 逐台查。
+- **`batch_send_keys` MCP 工具**：多主机并发发送按键（投递确认语义，fire-and-forget），发完即返回、不等待命令执行结果。补齐「跨主机 + fire-and-forget」空缺（`batch_exec` 同步等待、`broadcast_keys` 仅单主机多 pane）。结果用 `capture_pane` / `wait_for_text` 逐台查。
+- **`clum-cli term` 自动创建会话**：`term <host> --session <name>` 在会话缺失时自动创建 detached 会话（原报错退出），中央 server 与直连模式均支持。
+- **移除文件传输 2GB 硬上限**：clum-mcp 的 `file_upload` / `file_download` 不再限制单文件大小（删除 `MAX_FILE_SIZE` 常量与检查）。
+
+### Changed
+- **错误码系统重构（治本）**：
+  - 分类逻辑下沉到 `clum_core::error_code` 共享（19 个稳定错误码），MCP 与 bridge 两端分类永远一致。
+  - bridge 响应出口（`send_response`）自动注入 `error_code`；MCP 侧 `enrich_error` 优先采用桥侧码并补齐 `recovery_hint` / `retryable`——所有错误信封三件套保证完整，双向协议兼容（旧 MCP 忽略新字段，旧 bridge 由消息分类兜底）。
+  - 新增错误码：`CONNECT_TIMEOUT`（连接超时，可重试）、`CLI_FAILED`（bridge rmux CLI 回退失败）、`PROTOCOL_ERROR`（帧协议错误）；错误码只增不改。
+  - 修复 `invalid pane_id` / `invalid source_pane_id` / `invalid target_pane_id` 等 30+ 处高频错误从 `UNKNOWN` 归入 `PANE_NOT_FOUND`。
+  - 修复 `host 'x' not found in enrolled bridges` 归入 `HOST_NOT_FOUND`、`path contains null byte` / `directory too deep` 归入 `PATH_TRAVERSAL` 等漏匹配。
+  - 修复 `batch_*` / `deploy_bridge` 空 hosts 返回 `ok:true + error` 的语义矛盾，改为 `ok:false`（`INVALID_PARAMS`）。
+  - 修复 `resolve_pane_id` 假透传（`[UNKNOWN]` 前缀包装实为重分类），直接透传原始消息。
+  - 参数值域错误采用锚定匹配（`must be 0-65535` 等），避免误伤状态类消息。
+  - 文档：`docs/TOOLS.md` 错误码表同步（+3 码、AUTH_FAILED/TIMEOUT 描述修正、deploy status 说明）；新增 `docs/error-code-design.md` 方案文档。
+- **bridge 会话默认工作目录**：新建 session 的默认 cwd 从 `/` 改为用户家目录（HOME），覆盖 MCP `session_create` 与 CLI `term` 全部入口。
 
 ### Fixed
+- **bridge SIGTERM 优雅关闭**：收到 SIGTERM 主动向 server 发送 CONNECTION_CLOSE 帧并 flush，server 立即 unregister——`systemctl restart rmux-bridge` 不再因旧连接等待 120s idle timeout 而出现 duplicate 注册窗口。
+- **bridge enrolled 模式不再启动本地 QUIC listener**：仅直连模式（未配置 server_addr）监听 9778，消除多余端口占用与攻击面。
 - **录制链路静默失败**：`cast_recorder` 的 fsync/flush、`register` 的 save_pushed、`interactive` 的录制目录权限设置，失败从 `let _ =` 静默忽略改为 `tracing::warn` 记录，避免录制数据丢失、重启重复推送、目录权限过宽。
 - **多处 panic 风险消除**：`build_transport_config` 的 idle_timeout VarInt 溢出 expect 改返回 `Result`；MCP `router` 锁中毒 expect 改为 `into_inner()` 恢复；`getrandom` CSPRNG 失败从 expect 改为错误传播（`generate_bridge_token`/`generate_key` 返回 `Result`）；bridge 注册循环 `reg_handle.await` 不再忽略；CLI `transfer` 的 `unreachable!` 改为优雅降级。
 

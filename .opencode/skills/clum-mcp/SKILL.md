@@ -366,8 +366,8 @@ wait_stable(host, session_name, pane_id)
 | `PANE_NOT_FOUND` | `pane id %X was not found` | pane_id 错误或 pane 已关闭 | `list_window_panes` 确认当前 pane_id |
 | `SESSION_NOT_FOUND` | `session not found` | 会话不存在 | `session_create` 创建会话 |
 | `BRIDGE_UNREACHABLE` | `connection refused` | bridge 未运行 | 检查 `systemctl status rmux-bridge` |
-| `TIMEOUT`（连接类） | `TCP connect timeout` | 主机离线或网络不通 | 确认主机在线、bridge 端口可达 |
-| `AUTH_FAILED` | `authentication failed` | token 不匹配 | 检查 `hosts.yaml` 中的 `bridge_token` |
+| `CONNECT_TIMEOUT` | `QUIC connect timeout` | 连接超时（可重试） | 确认主机在线、Server 9788 端口可达 |
+| `AUTH_FAILED` | `authentication failed` | 直连（direct）模式 token 认证失败；enrolled 模式 token 校验失败表现为 `CONNECT_TIMEOUT`/`BRIDGE_UNREACHABLE` | 检查 `hosts.yaml` 中的 `bridge_token` |
 | `FORBIDDEN` | `host ... not in your group` | API Key 分组隔离：主机不在该 key 可访问的分组 | 联系管理员确认分组分配，不可重试 |
 | `CONNECTION_LOST` | `recv: connection lost` | bridge 重启或网络中断 | 等待后重试 |
 | `PANE_BUSY` | `pane still active` | spawn/shell_command 时 pane 非空闲 | `respawn_pane(kill=true)` 重启，或换用其他 pane（`close_pane` 需用户明确同意） |
@@ -380,6 +380,8 @@ wait_stable(host, session_name, pane_id)
 | `SESSION_EXISTS` | `session already exists` | 同名会话已存在 | 直接 `session_attach` 或换个名称 |
 | `WINDOW_NOT_FOUND` | `window not found` | 窗口不存在 | `window_info` / `select_window` 确认窗口 |
 | `FORWARD_NOT_FOUND` | `forward not found` | 隧道 ID 不存在 | `forward_list` 确认隧道 ID |
+| `CLI_FAILED` | `rmux CLI failed` | bridge 端 rmux CLI 回退失败 | 检查 rmux 安装完整性（`rmux list-commands`） |
+| `PROTOCOL_ERROR` | `unknown request type` | 帧协议错误（不应发生） | 检查 bridge 版本是否过旧，考虑升级 |
 | `UNKNOWN` | （未分类错误） | 无法归类的失败 | 看 `error` 详情判断，不要盲目重试 |
 | — | 修改 `hosts.yaml` 后主机不生效 | 未重载配置 | 调用 `reload_config` 工具或 `kill -HUP <pid>` |
 

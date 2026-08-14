@@ -1,6 +1,6 @@
 //! 交互式终端处理器：处理 QUIC 0x06（控制流）和 0x07（数据流）
 //!
-//! 参考：docs/connect-design.md
+//! 设计参考：docs/terminal-state-design.md（终端状态感知与交互会话模型）
 
 use anyhow::{Context, Result};
 use quinn::{RecvStream, SendStream};

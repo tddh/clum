@@ -598,7 +598,7 @@ mod tests {
     /// （注：AuditAction 当前未实现 Display trait，通过 serde 验证变体名一致性）
     #[test]
     fn test_audit_action_display() {
-        // 覆盖所有变体（共 68 个）
+        // 覆盖所有变体（共 69 个）
         let all_actions: Vec<(&str, AuditAction)> = vec![
             ("SessionCreate", AuditAction::SessionCreate),
             ("SessionAttach", AuditAction::SessionAttach),
