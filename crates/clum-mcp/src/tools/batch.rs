@@ -24,10 +24,7 @@ pub(crate) async fn batch_exec(
         .collect();
 
     if hosts_arg.is_empty() {
-        return Ok(
-            json!({ "ok": true, "command": "", "total": 0, "success": 0, "failed": 0,
-            "total_duration_ms": 0, "results": {}, "error": "empty hosts list" }),
-        );
+        return Ok(json!({"ok": false, "error": "empty hosts list"}));
     }
 
     let command = args["command"].as_str().context("missing 'command'")?;
@@ -208,8 +205,7 @@ pub(crate) async fn batch_upload(
         .collect();
 
     if hosts_arg.is_empty() {
-        return Ok(json!({"ok": true, "total": 0, "success": 0, "failed": 0,
-            "total_duration_ms": 0, "results": {}, "error": "empty hosts list"}));
+        return Ok(json!({"ok": false, "error": "empty hosts list"}));
     }
 
     let local_path = args["local_path"]
@@ -327,8 +323,7 @@ pub(crate) async fn batch_download(
         .collect();
 
     if hosts_arg.is_empty() {
-        return Ok(json!({"ok": true, "total": 0, "success": 0, "failed": 0,
-            "total_duration_ms": 0, "results": {}, "error": "empty hosts list"}));
+        return Ok(json!({"ok": false, "error": "empty hosts list"}));
     }
 
     let remote_path = args["remote_path"]
@@ -455,8 +450,7 @@ pub(crate) async fn batch_send_keys(
         .collect();
 
     if hosts_arg.is_empty() {
-        return Ok(json!({"ok": true, "total": 0, "success": 0, "failed": 0,
-            "total_duration_ms": 0, "results": {}, "error": "empty hosts list"}));
+        return Ok(json!({"ok": false, "error": "empty hosts list"}));
     }
 
     let session_name = args["session_name"].as_str().unwrap_or("clum").to_string();

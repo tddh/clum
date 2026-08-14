@@ -42,8 +42,8 @@ where
         }
         let len = u32::from_le_bytes(len_buf) as usize;
         if len > MAX_FRAME_SIZE {
-            let err = json!({"ok": false, "error": format!("frame too large: {} bytes (max {})", len, MAX_FRAME_SIZE)});
-            send_response(&writer, &err).await?;
+            let mut err = json!({"ok": false, "error": format!("frame too large: {} bytes (max {})", len, MAX_FRAME_SIZE)});
+            send_response(&writer, &mut err).await?;
             continue;
         }
 
@@ -63,8 +63,8 @@ where
         let request: serde_json::Value = match serde_json::from_slice(&buf) {
             Ok(v) => v,
             Err(e) => {
-                let err_resp = json!({"error": format!("invalid json: {}", e)});
-                send_response(&writer, &err_resp).await?;
+                let mut err_resp = json!({"ok": false, "error": format!("invalid json: {}", e)});
+                send_response(&writer, &mut err_resp).await?;
                 continue;
             }
         };
@@ -92,14 +92,14 @@ where
             let until = params["until"].as_str();
             let limit = (params["limit"].as_u64().unwrap_or(50) as usize).min(10_000);
 
-            let response = match audit_db
+            let mut response = match audit_db
                 .query(event_type, session_name, since, until, limit)
                 .await
             {
                 Ok(events) => json!({"events": events}),
-                Err(e) => json!({"error": format!("audit query failed: {}", e)}),
+                Err(e) => json!({"ok": false, "error": format!("audit query failed: {}", e)}),
             };
-            send_response(&writer, &response).await?;
+            send_response(&writer, &mut response).await?;
             handled = true;
             continue;
         }
@@ -109,24 +109,24 @@ where
             let params = &request["params"];
             let since = params["since"].as_str();
 
-            let response = match audit_db.stats(since).await {
+            let mut response = match audit_db.stats(since).await {
                 Ok((total, events_by_type)) => {
                     json!({"total": total, "events_by_type": events_by_type})
                 }
-                Err(e) => json!({"error": format!("audit stats failed: {}", e)}),
+                Err(e) => json!({"ok": false, "error": format!("audit stats failed: {}", e)}),
             };
-            send_response(&writer, &response).await?;
+            send_response(&writer, &mut response).await?;
             handled = true;
             continue;
         }
 
         // list_unsynced_recordings: handle locally (not forwarded to rmux)
         if request["command"].as_str() == Some("list_unsynced_recordings") {
-            let response = match crate::cast_recorder::list_unsynced(&recording_dir).await {
+            let mut response = match crate::cast_recorder::list_unsynced(&recording_dir).await {
                 Ok(files) => json!({"files": files}),
-                Err(e) => json!({"error": format!("list_unsynced failed: {}", e)}),
+                Err(e) => json!({"ok": false, "error": format!("list_unsynced failed: {}", e)}),
             };
-            send_response(&writer, &response).await?;
+            send_response(&writer, &mut response).await?;
             handled = true;
             continue;
         }
@@ -136,12 +136,12 @@ where
             let params = &request["params"];
             let file = params["file"].as_str().unwrap_or("");
             let date = params["date"].as_str().unwrap_or("");
-            let response = match crate::cast_recorder::mark_synced(&recording_dir, file, date).await
-            {
-                Ok(()) => json!({"ok": true}),
-                Err(e) => json!({"ok": false, "error": format!("mark_synced failed: {}", e)}),
-            };
-            send_response(&writer, &response).await?;
+            let mut response =
+                match crate::cast_recorder::mark_synced(&recording_dir, file, date).await {
+                    Ok(()) => json!({"ok": true}),
+                    Err(e) => json!({"ok": false, "error": format!("mark_synced failed: {}", e)}),
+                };
+            send_response(&writer, &mut response).await?;
             handled = true;
             continue;
         }
@@ -154,12 +154,12 @@ where
             match protocol_proxy.subscribe_pane_output(sn, pane_id).await {
                 Ok(mut out_stream) => {
                     tracing::info!("stream_subscribe: subscribe_pane_output succeeded");
-                    let resp = json!({
+                    let mut resp = json!({
                         "ok": true,
                         "stream_subscribed": true,
                         "pane_id": pane_id,
                     });
-                    send_response(&writer, &resp).await?;
+                    send_response(&writer, &mut resp).await?;
                     tracing::info!("stream_subscribe: sent ack response");
 
                     let writer_clone = writer.clone();
@@ -203,15 +203,15 @@ where
                     });
                 }
                 Err(e) => {
-                    let err_resp = json!({"ok": false, "error": e.to_string()});
-                    send_response(&writer, &err_resp).await?;
+                    let mut err_resp = json!({"ok": false, "error": e.to_string()});
+                    send_response(&writer, &mut err_resp).await?;
                 }
             }
             handled = true;
             continue;
         }
 
-        let response = match req_type {
+        let mut response = match req_type {
             "new_session" => {
                 let name = request["name"].as_str().unwrap_or("clum");
                 let detached = request["detached"].as_bool().unwrap_or(true);
@@ -612,7 +612,7 @@ where
                     .handle_wait_stable(sn, pane_id, stable_ms, timeout_ms)
                     .await
             }
-            _ => json!({"error": format!("unknown request type: {}", req_type)}),
+            _ => json!({"ok": false, "error": format!("unknown request type: {}", req_type)}),
         };
 
         let elapsed = start.elapsed();
@@ -636,7 +636,7 @@ where
             "response sent"
         );
 
-        send_response(&writer, &response).await?;
+        send_response(&writer, &mut response).await?;
         handled = true;
     }
 
@@ -645,8 +645,15 @@ where
 
 async fn send_response(
     writer: &Arc<tokio::sync::Mutex<impl AsyncWriteExt + Unpin>>,
-    response: &serde_json::Value,
+    response: &mut serde_json::Value,
 ) -> Result<()> {
+    // 注入 error_code：ok:false 且未携带时，基于 error 文本分类（与 MCP 侧共用
+    // clum_core::error_code，保证两侧分类一致）。旧 MCP 忽略未知字段，向后兼容。
+    if response["ok"].as_bool() == Some(false) && response.get("error_code").is_none() {
+        let msg = response["error"].as_str().unwrap_or("");
+        response["error_code"] =
+            serde_json::json!(clum_core::error_code::classify_error_message(msg));
+    }
     let resp_json = serde_json::to_string(response)?;
     let mut w = writer.lock().await;
     w.write_all(&(resp_json.len() as u32).to_le_bytes()).await?;

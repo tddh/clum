@@ -57,8 +57,7 @@ pub(crate) async fn deploy_bridge(
         .collect();
 
     if hosts_arg.is_empty() {
-        return Ok(json!({"ok": true, "total": 0, "success": 0, "failed": 0,
-            "total_duration_ms": 0, "results": {}, "error": "empty hosts list"}));
+        return Ok(json!({"ok": false, "error": "empty hosts list"}));
     }
 
     let binary_path = args["binary_path"]

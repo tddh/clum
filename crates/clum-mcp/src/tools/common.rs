@@ -119,13 +119,13 @@ pub(crate) async fn resolve_pane_id(
     .await?;
     let resp = recv_json_frame(stream).await?;
     if resp["ok"].as_bool() == Some(false) {
-        // 透传 bridge 原始错误（SESSION_NOT_FOUND 等）
-        let code = resp["error_code"].as_str().unwrap_or("UNKNOWN");
+        // 透传原始错误消息，由上层 enrich_error 基于共享分类器重新分类
+        //（与 bridge 出口注入的 error_code 一致，两侧共用 clum_core::error_code）
         let msg = resp["error"]
             .as_str()
             .map(String::from)
             .unwrap_or_else(|| resp["error"].to_string());
-        anyhow::bail!("[{}] {}", code, msg);
+        anyhow::bail!("{}", msg);
     }
     let min = resp["panes"]
         .as_array()

@@ -3,8 +3,10 @@
 //!
 //! 设计原则：只增不改。`error` 保留原始字符串（向后兼容），新增三个字段，
 //! Agent 可凭 error_code 可靠分支，凭 recovery_hint 决定下一步动作。
-//! 分类基于消息子串匹配（bridge 暂不带错误码，后续桥侧升级后此处优先采用桥侧码）。
+//! 错误码分类逻辑下沉到 clum_core::error_code（与 bridge 出口注入共用），
+//! 本模块只负责为每个 code 补充 recovery_hint / retryable。
 
+use clum_core::error_code::*;
 use serde_json::{json, Value};
 
 pub struct Classified {
@@ -21,109 +23,102 @@ const fn c(code: &'static str, hint: &'static str, retryable: bool) -> Classifie
     }
 }
 
-/// 按错误消息分类。匹配顺序即优先级：更具体的模式在前。
-pub fn classify_message(msg: &str) -> Classified {
-    let m = msg.to_lowercase();
-    let has = |p: &str| m.contains(p);
-
-    if has("not in your group") || has("forbidden") {
-        return c(
+/// code → (recovery_hint, retryable)。code 由 clum_core::error_code::classify_error_message
+/// 产生（与 bridge 侧注入一致），此处补充 UX 字段。
+fn lookup(code: &str) -> Classified {
+    match code {
+        CODE_FORBIDDEN => c(
             "FORBIDDEN",
             "该主机不在你的分组内，联系管理员确认分组分配",
             false,
-        );
-    }
-    if has("host not found") {
-        return c("HOST_NOT_FOUND", "host_list 检查可用主机名", false);
-    }
-    if has("missing '") {
-        return c(
+        ),
+        CODE_HOST_NOT_FOUND => c("HOST_NOT_FOUND", "host_list 检查可用主机名", false),
+        CODE_INVALID_PARAMS => c(
             "INVALID_PARAMS",
-            "缺少必填参数，对照 tools/list 中该工具的 inputSchema.required",
+            "缺少或非法参数，对照 tools/list 中该工具的 inputSchema.required",
             false,
-        );
-    }
-    if has("pane id") && has("not found") || has("can't find pane") || has("pane not found") {
-        return c(
+        ),
+        CODE_PANE_NOT_FOUND => c(
             "PANE_NOT_FOUND",
             "list_window_panes 确认当前 pane_id（pane 可能已关闭）",
             false,
-        );
-    }
-    if has("session already exists") || has("duplicate session") {
-        return c(
+        ),
+        CODE_SESSION_EXISTS => c(
             "SESSION_EXISTS",
             "会话已存在，直接 session_attach 或换个名称",
             false,
-        );
-    }
-    if has("session not found") || has("can't find session") || has("no such session") {
-        return c("SESSION_NOT_FOUND", "session_create 创建会话", false);
-    }
-    if has("window not found") || has("can't find window") {
-        return c(
+        ),
+        CODE_SESSION_NOT_FOUND => c("SESSION_NOT_FOUND", "session_create 创建会话", false),
+        CODE_WINDOW_NOT_FOUND => c(
             "WINDOW_NOT_FOUND",
             "window_info / select_window 确认窗口存在",
             false,
-        );
-    }
-    if has("forward not found") {
-        return c("FORWARD_NOT_FOUND", "forward_list 确认转发 ID", false);
-    }
-    if has("pane still active") {
-        return c(
+        ),
+        CODE_FORWARD_NOT_FOUND => c("FORWARD_NOT_FOUND", "forward_list 确认转发 ID", false),
+        CODE_PANE_BUSY => c(
             "PANE_BUSY",
             "pane 非空闲：先 close_pane 或换 pane，或 respawn_pane(kill=true)",
             false,
-        );
-    }
-    if has("path traversal") || has("unsafe relative path") {
-        return c(
+        ),
+        CODE_PATH_TRAVERSAL => c(
             "PATH_TRAVERSAL",
             "路径不能包含 '..' 且下载需相对路径：修正路径后重试",
             false,
-        );
-    }
-    if has("not in allowed list") {
-        return c(
+        ),
+        CODE_FORWARD_DENIED => c(
             "FORWARD_DENIED",
             "转发目标不在白名单：检查 hosts.yaml 的 allowed_forward_targets",
             false,
-        );
-    }
-    if has("authentication failed") || has("auth failed") {
-        return c(
+        ),
+        CODE_AUTH_FAILED => c(
             "AUTH_FAILED",
-            "检查 hosts.yaml 的 bridge_token 与 bridge 一致",
+            "检查 hosts.yaml 的 bridge_token 与 bridge 一致（direct 模式）",
             false,
-        );
-    }
-    if has("connection refused") {
-        return c(
+        ),
+        CODE_BRIDGE_UNREACHABLE => c(
             "BRIDGE_UNREACHABLE",
             "bridge 未运行：systemctl status rmux-bridge 确认后重试",
             true,
-        );
-    }
-    if has("connection lost") || has("connection reset") {
-        return c(
+        ),
+        CODE_CONNECTION_LOST => c(
             "CONNECTION_LOST",
             "bridge 重启或网络中断，等待几秒后重试",
             true,
-        );
-    }
-    if has("timeout") || has("timed out") {
-        return c(
+        ),
+        CODE_CONNECT_TIMEOUT => c(
+            "CONNECT_TIMEOUT",
+            "连接超时：确认主机在线、Server 9788 端口可达后重试",
+            true,
+        ),
+        CODE_TIMEOUT => c(
             "TIMEOUT",
             "exec 超时不杀进程：capture_pane 查看进度、wait_for_text 等完成，不要盲目重跑；若是连接超时则确认主机在线、Server 9788 端口可达",
             false,
-        );
+        ),
+        CODE_CLI_FAILED => c(
+            "CLI_FAILED",
+            "bridge 端 rmux CLI 回退失败：检查 rmux 安装完整性（rmux list-commands）",
+            false,
+        ),
+        CODE_PROTOCOL_ERROR => c(
+            "PROTOCOL_ERROR",
+            "桥侧帧协议错误：检查 bridge 版本是否过旧，考虑升级",
+            false,
+        ),
+        // 兜底：未知 code（如新 bridge 注入旧 MCP 不认识的码）。error_code 原值保留
+        // （or_insert 不覆盖），retryable 按不可重试处理——版本偏差时可能丢失重试信号。
+        _ => c(
+            "UNKNOWN",
+            "查看 error 详情；必要时 capture_pane 检查终端状态后重试",
+            false,
+        ),
     }
-    c(
-        "UNKNOWN",
-        "查看 error 详情；必要时 capture_pane 检查终端状态后重试",
-        false,
-    )
+}
+
+/// 按错误消息分类。匹配逻辑在 clum_core::error_code（与 bridge 出口注入共用），
+/// 此处补充 recovery_hint / retryable。
+pub fn classify_message(msg: &str) -> Classified {
+    lookup(classify_error_message(msg))
 }
 
 /// 业务失败增强：工具返回 ok:false 时补齐结构化字段（幂等）。
@@ -135,7 +130,20 @@ pub fn enrich_error(result: &mut Value) {
     if obj.get("ok").and_then(Value::as_bool) != Some(false) {
         return;
     }
-    if obj.contains_key("error_code") {
+    let code_owned = obj
+        .get("error_code")
+        .and_then(Value::as_str)
+        .map(String::from);
+    if let Some(code) = code_owned {
+        // error_code 已存在（bridge 出口注入或工具内联）：补齐缺失的 UX 字段。
+        // bridge 只注入 error_code，recovery_hint/retryable 由本层 lookup 提供，
+        // 保证所有错误信封字段完整。
+        if !obj.contains_key("recovery_hint") || !obj.contains_key("retryable") {
+            let classified = lookup(&code);
+            obj.entry("recovery_hint").or_insert(json!(classified.hint));
+            obj.entry("retryable")
+                .or_insert(json!(classified.retryable));
+        }
         return;
     }
     let msg = obj
@@ -271,10 +279,28 @@ mod tests {
         enrich_error(&mut ok);
         assert!(!ok.as_object().unwrap().contains_key("error_code"));
 
+        // 已带 error_code（bridge 注入或工具内联）时不覆盖 code，但补齐缺失的 UX 字段
         let mut tagged = json!({"ok": false, "error": "x", "error_code": "CUSTOM"});
         enrich_error(&mut tagged);
         assert_eq!(tagged["error_code"], "CUSTOM");
-        assert!(!tagged.as_object().unwrap().contains_key("recovery_hint"));
+        assert!(tagged.as_object().unwrap().contains_key("recovery_hint"));
+        assert_eq!(tagged["retryable"], false);
+        // 幂等：再次调用不改变已有字段
+        let hint = tagged["recovery_hint"].clone();
+        enrich_error(&mut tagged);
+        assert_eq!(tagged["error_code"], "CUSTOM");
+        assert_eq!(tagged["recovery_hint"], hint);
+    }
+
+    #[test]
+    fn enrich_fills_ux_fields_for_bridge_injected_code() {
+        // bridge 出口只注入 error_code，本层补齐 hint/retryable
+        let mut v =
+            json!({"ok": false, "error": "recv: connection lost", "error_code": "CONNECTION_LOST"});
+        enrich_error(&mut v);
+        assert_eq!(v["error_code"], "CONNECTION_LOST");
+        assert!(v["recovery_hint"].as_str().unwrap().contains("重试"));
+        assert_eq!(v["retryable"], true);
     }
 
     #[test]

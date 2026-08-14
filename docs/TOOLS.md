@@ -35,18 +35,25 @@
 | error_code | 含义 |
 |-----------|------|
 | `HOST_NOT_FOUND` | 主机名不在注册表，用 `host_list` 核对 |
-| `INVALID_PARAMS` | 缺少必填参数，对照该工具的 inputSchema |
+| `INVALID_PARAMS` | 缺少/非法参数（`missing 'x'`、`invalid direction`、`must be`、`unknown layout` 等），对照该工具的 inputSchema |
 | `SESSION_NOT_FOUND` / `SESSION_EXISTS` | 会话不存在 / 已存在 |
-| `PANE_NOT_FOUND` / `PANE_BUSY` | pane 不存在 / 非空闲 |
+| `PANE_NOT_FOUND` / `PANE_BUSY` | pane 无效/不存在（含 `invalid pane_id`）/ 非空闲 |
 | `WINDOW_NOT_FOUND` / `FORWARD_NOT_FOUND` | 窗口 / 隧道不存在 |
-| `PATH_TRAVERSAL` | 路径含 `..` 被拒绝 |
+| `PATH_TRAVERSAL` | 路径含 `..` / null 字节 / 目录过深被拒绝 |
 | `FORWARD_DENIED` | 隧道目标不在 `allowed_forward_targets` 白名单 |
-| `AUTH_FAILED` | bridge token 不匹配 |
+| `AUTH_FAILED` | 直连（direct）模式 bridge token 认证失败；enrolled 模式 token 校验失败表现为连接建立失败（`BRIDGE_UNREACHABLE` / `CONNECT_TIMEOUT`） |
 | `FORBIDDEN` | API Key 分组隔离：主机不在该 key 可访问的分组内 |
-| `BRIDGE_UNREACHABLE` / `CONNECTION_LOST` | bridge 未运行 / 连接中断（可重试） |
-| `TIMEOUT` | 超时（exec 超时不杀进程，先 capture_pane 看进度再决定，勿盲目重跑） |
+| `BRIDGE_UNREACHABLE` / `CONNECTION_LOST` | bridge 未运行/注册失败 / 连接中断（可重试） |
+| `CONNECT_TIMEOUT` | 连接超时（可重试）：确认主机在线、Server 9788 端口可达 |
+| `TIMEOUT` | 命令执行/等待超时（exec 超时不杀进程，先 capture_pane 看进度再决定，勿盲目重跑；连接超时见 `CONNECT_TIMEOUT`） |
 | `REFUSED_STATE` | exec 安全检查拒绝（终端非 ready），`error` 含具体恢复建议 |
+| `CLI_FAILED` | bridge 端 rmux CLI 回退失败：检查 rmux 安装完整性（`rmux list-commands`） |
+| `PROTOCOL_ERROR` | 桥侧帧协议错误（不应发生）：检查 bridge 版本是否过旧，考虑升级 |
 | `UNKNOWN` | 未分类错误，看 `error` 详情 |
+
+> 错误码由 MCP 与 bridge 共用 `clum_core::error_code` 分类器产生：bridge 响应出口自动注入 `error_code`，旧 bridge（无注入）由 MCP 侧消息分类兜底，两者结果一致。
+>
+> `deploy_bridge` 使用独立的 `status` 字段（`first_time_deploy` / `path_mismatch` 等 8 种，见部署章节状态表）表达部署子状态，其 `error_code` 由通用分类器补充——调用部署工具时优先看 `status`，其余工具看 `error_code`。
 
 未知工具名按 MCP 规范返回 JSON-RPC `-32602`；未知方法返回 `-32601`。
 
