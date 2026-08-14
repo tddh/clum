@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.14.1] — 2026-08-14
+
+### Fixed
+- **录制 push 通道推送半成品**（`rmux-bridge/register.rs`）：`scan_cast_files` 仅按 `*.cast` 后缀扫描，不区分录制是否完成——录制中的文件（无 `.meta`，`.meta` 仅 finalize 时生成）会在 30s push 周期内被当作已完成推送给 server，推过即记录不再重推，完整版只能依赖 pull 兜底。实测 server 端 97 个录制中 49 个缺 `exit` 事件（半成品）。修复：只推送「有 `.meta` 且 `synced=false`」的已完成文件，与 `list_unsynced` 语义对齐。
+- **录制 pull 兜底通道空转**（`clum-mcp/recording_sync.rs`）：`sync_all_hosts` 只遍历 `router.list()`（hosts.yaml 静态主机），纯 enrolled 部署（`hosts.yaml: []`，桥全部动态注册）时遍历空列表，pull 通道从未拉取，半成品对应的完整版永远无法补拉。修复：`merge_sync_hosts` 合并 enrolled bridges（`registry.list()`）与静态主机并集，静态配置优先、按主机名去重；enrolled 合成主机无 `bridge_addr/token`，走已注册 QUIC 连接。
+- **录制下载协议错位**（`clum-mcp/recording_sync.rs`）：`download_recording` 按 `[status][8B size][32B sha256][data]` 解析，但 bridge 端 `download_file_quic` 响应**不含** 32B sha256——每个文件前 32 字节被当作 sha 吞掉，`read_exact(file_size)` 读不满报 `stream finished early`，下载全部失败。修复：去掉 sha 读取，文件完整性由调用方按 `list_unsynced` 返回的 `expected_sha` 校验（`sha256` 不匹配仍会跳过）。
+- **recording sync 周期错过时背靠背补发**（`clum-mcp/recording_sync.rs`）：`run_sync_loop` 的 `interval` 未设置 `MissedTickBehavior`（默认 `Burst`）——单轮 `sync_all_hosts` 执行超过周期（300s）时 tick 立即连续补发，大量 unsynced 下载会把多轮 sync 挤在一起背靠背运行。修复：改为 `Skip`（错过即跳过，等下一个周期），与 `interactive.rs` / `tui` 的既有处理一致。
+
 ## [0.14.0] — 2026-08-14
 
 ### Added
