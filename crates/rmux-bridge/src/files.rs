@@ -263,7 +263,14 @@ async fn download_file_quic(mut send: quinn::SendStream, remote_path: &str) -> a
     copy_with_buf(&mut file, &mut send).await?;
     send.finish()?;
 
-    tracing::info!("QUIC downloaded {} ({} bytes)", remote_path, file_size);
+    // 注意：此日志只表示文件已全部写入 bridge→server 的 QUIC 发送队列，
+    // 不代表 server 已转发、更不代表 client 已收到（端到端未确认）。
+    // 链路带宽不对称或 server→client 段停滞时，此日志会先于实际完成出现。
+    tracing::info!(
+        "QUIC download sent to server: {} ({} bytes, end-to-end unconfirmed)",
+        remote_path,
+        file_size
+    );
     Ok(())
 }
 
@@ -290,8 +297,9 @@ async fn download_dir_quic(mut send: quinn::SendStream, remote_path: &str) -> an
 
     send.finish()?;
 
+    // 同 download_file_quic：仅表示所有文件已写入发送队列，端到端未确认。
     tracing::info!(
-        "QUIC downloaded directory {} ({} files)",
+        "QUIC download sent to server: {} ({} files, end-to-end unconfirmed)",
         remote_path,
         files.len()
     );
