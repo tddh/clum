@@ -25,6 +25,8 @@
 - **bridge enrolled 模式不再启动本地 QUIC listener**：仅直连模式（未配置 server_addr）监听 9778，消除多余端口占用与攻击面。
 - **录制链路静默失败**：`cast_recorder` 的 fsync/flush、`register` 的 save_pushed、`interactive` 的录制目录权限设置，失败从 `let _ =` 静默忽略改为 `tracing::warn` 记录，避免录制数据丢失、重启重复推送、目录权限过宽。
 - **多处 panic 风险消除**：`build_transport_config` 的 idle_timeout VarInt 溢出 expect 改返回 `Result`；MCP `router` 锁中毒 expect 改为 `into_inner()` 恢复；`getrandom` CSPRNG 失败从 expect 改为错误传播（`generate_bridge_token`/`generate_key` 返回 `Result`）；bridge 注册循环 `reg_handle.await` 不再忽略；CLI `transfer` 的 `unreachable!` 改为优雅降级。
+- **文件传输错误信封缺失**：bridge `handle_upload_quic` / `handle_download_quic` 在 `sanitize_path` 拒绝（路径穿越等）时直接 bail 不发送错误响应，MCP 端读到 EOF 归为 `UNKNOWN`。改为发送错误信封（0x02 + 消息），MCP 端 `upload_single`/`upload_dir` 解析 0x02 分支，`PATH_TRAVERSAL` 等错误码正确传播。
+- **下载 local_path 未校验路径穿越**：MCP `download_file`/`upload_file` 的本地路径（server 侧）含 `..` 未拒绝（可写入任意路径）。新增 `sanitize_local_path`（拒绝 `..`/null byte，规则与 bridge `sanitize_path` 一致）并在入口校验。
 
 ### Refactored
 - **帧协议收敛**：`read_frame`/`write_frame`（LE32 长度前缀 JSON 帧）从 clum-mcp 与 rmux-bridge 两处逐字节相同的实现提取到 `clum_core::quic`，wire 协议不变。

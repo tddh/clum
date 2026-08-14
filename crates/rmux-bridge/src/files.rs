@@ -128,7 +128,19 @@ async fn handle_upload_quic(
     let path_len = u16::from_le_bytes(path_len_buf) as usize;
     let mut path = vec![0u8; path_len];
     recv.read_exact(&mut path).await?;
-    let mut remote_path = sanitize_path(&String::from_utf8_lossy(&path))?;
+    let mut remote_path = match sanitize_path(&String::from_utf8_lossy(&path)) {
+        Ok(p) => p,
+        Err(e) => {
+            // 发送错误信封（0x02 + 消息），与下载侧一致；直接 bail 会导致 MCP 端读到 EOF 归为 UNKNOWN
+            let msg = e.to_string();
+            send.write_all(&[0x02]).await?;
+            let msg_len = (msg.len() as u16).to_le_bytes();
+            send.write_all(&msg_len).await?;
+            send.write_all(msg.as_bytes()).await?;
+            send.finish()?;
+            return Ok(());
+        }
+    };
 
     let mut size_buf = [0u8; 8];
     recv.read_exact(&mut size_buf).await?;
@@ -208,7 +220,18 @@ async fn handle_download_quic(
     let path_len = u16::from_le_bytes(path_len_buf) as usize;
     let mut path = vec![0u8; path_len];
     recv.read_exact(&mut path).await?;
-    let remote_path = sanitize_path(&String::from_utf8_lossy(&path))?;
+    let remote_path = match sanitize_path(&String::from_utf8_lossy(&path)) {
+        Ok(p) => p,
+        Err(e) => {
+            let msg = e.to_string();
+            send.write_all(&[0x02]).await?;
+            let msg_len = (msg.len() as u16).to_le_bytes();
+            send.write_all(&msg_len).await?;
+            send.write_all(msg.as_bytes()).await?;
+            send.finish()?;
+            return Ok(());
+        }
+    };
 
     let meta = match tokio::fs::metadata(&remote_path).await {
         Ok(m) => m,

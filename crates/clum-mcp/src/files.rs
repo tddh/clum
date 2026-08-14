@@ -19,6 +19,18 @@ const MAX_UPLOAD_CONCURRENCY: usize = 16;
 const STREAM_UPLOAD: u8 = 0x02;
 const STREAM_DOWNLOAD: u8 = 0x03;
 
+/// 校验本地文件系统路径（server 侧）：拒绝 null byte 和路径穿越（`..`）。
+/// 与 bridge 侧 sanitize_path 规则一致，防止经 MCP 写入/读取任意路径。
+fn sanitize_local_path(raw: &str) -> Result<String> {
+    if raw.contains('\0') {
+        bail!("path contains null byte");
+    }
+    if raw.contains("..") {
+        bail!("path traversal rejected: '{}'", raw);
+    }
+    Ok(raw.to_string())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum OverwriteMode {
@@ -75,14 +87,15 @@ pub async fn upload_file(
     registry: &Arc<BridgeRegistry>,
     limiter: Option<&BandwidthLimiter>,
 ) -> Result<Vec<FileResult>> {
-    let meta = tokio::fs::metadata(local_path)
+    let local_path = sanitize_local_path(local_path)?;
+    let meta = tokio::fs::metadata(&local_path)
         .await
         .with_context(|| format!("failed to access: {}", local_path))?;
 
     if meta.is_dir() {
         upload_dir(
             host,
-            local_path,
+            &local_path,
             remote_path,
             ca_cert_path,
             overwrite,
@@ -95,7 +108,7 @@ pub async fn upload_file(
     } else {
         let result = upload_single(
             host,
-            local_path,
+            &local_path,
             remote_path,
             ca_cert_path,
             overwrite,
@@ -138,6 +151,17 @@ async fn upload_single(
 
     let mut code = [0u8; 1];
     recv.read_exact(&mut code).await?;
+
+    // 0x02 = 错误信封：u16 长度 + 错误消息
+    if code[0] == 0x02 {
+        let mut msg_len_buf = [0u8; 2];
+        recv.read_exact(&mut msg_len_buf).await?;
+        let msg_len = u16::from_le_bytes(msg_len_buf) as usize;
+        let mut msg = vec![0u8; msg_len];
+        recv.read_exact(&mut msg).await?;
+        bail!("upload failed: {}", String::from_utf8_lossy(&msg));
+    }
+
     let mut written = [0u8; 8];
     recv.read_exact(&mut written).await?;
     let mut sha256 = [0u8; 32];
@@ -218,6 +242,17 @@ async fn upload_dir(
 
             let mut code = [0u8; 1];
             recv.read_exact(&mut code).await?;
+
+            // 0x02 = 错误信封：u16 长度 + 错误消息
+            if code[0] == 0x02 {
+                let mut msg_len_buf = [0u8; 2];
+                recv.read_exact(&mut msg_len_buf).await?;
+                let msg_len = u16::from_le_bytes(msg_len_buf) as usize;
+                let mut msg = vec![0u8; msg_len];
+                recv.read_exact(&mut msg).await?;
+                bail!("upload failed: {}", String::from_utf8_lossy(&msg));
+            }
+
             let mut written = [0u8; 8];
             recv.read_exact(&mut written).await?;
             let mut sha256 = [0u8; 32];
@@ -271,6 +306,7 @@ pub async fn download_file(
     registry: &Arc<BridgeRegistry>,
     limiter: Option<&BandwidthLimiter>,
 ) -> Result<Vec<FileResult>> {
+    let local_path = sanitize_local_path(local_path)?;
     let conn = get_conn(host, registry, ca_cert_path).await?;
     let (mut send, mut recv) = conn.open_bi().await?;
 
@@ -285,11 +321,11 @@ pub async fn download_file(
 
     match code[0] {
         0x00 => {
-            let result = read_single_file(&mut recv, local_path, progress, limiter).await?;
+            let result = read_single_file(&mut recv, &local_path, progress, limiter).await?;
             Ok(vec![result])
         }
         0x04 => {
-            let results = read_directory(&mut recv, local_path, progress, limiter).await?;
+            let results = read_directory(&mut recv, &local_path, progress, limiter).await?;
             Ok(results)
         }
         0x02 => {
@@ -587,6 +623,31 @@ mod tests {
                 "should accept normal path: {}",
                 p
             );
+        }
+    }
+
+    #[test]
+    fn test_sanitize_local_path_rejects_traversal() {
+        let bad_paths = ["/tmp/../etc/evil", "foo/../../etc/shadow", "..", "a/.."];
+        for p in bad_paths {
+            assert!(
+                sanitize_local_path(p).is_err(),
+                "should reject path traversal: {}",
+                p
+            );
+        }
+    }
+
+    #[test]
+    fn test_sanitize_local_path_rejects_null() {
+        assert!(sanitize_local_path("/tmp/\0evil").is_err());
+    }
+
+    #[test]
+    fn test_sanitize_local_path_accepts_normal() {
+        let good_paths = ["/tmp/file", "/var/log/app.log", "relative/path"];
+        for p in good_paths {
+            assert_eq!(sanitize_local_path(p).unwrap(), p);
         }
     }
 }
