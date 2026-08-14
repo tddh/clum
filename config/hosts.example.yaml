@@ -30,7 +30,7 @@ hosts:
       dc: shanghai
       rack: b1
     # 可选：限制隧道目标（不配置 = 全部允许）
-    # allowed_tunnel_targets:
+    # allowed_forward_targets:
     #   - "127.0.0.1:5432"
     #   - "10.0.1.*:*"
 
