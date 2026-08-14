@@ -265,7 +265,8 @@ async fn download_recording(
     send.write_all(remote_path.as_bytes()).await?;
     send.finish()?;
 
-    // Response: [1B status][8B LE file_size][32B sha256][file_bytes]
+    // Response: [1B status][8B LE file_size][file_bytes]
+    // bridge 端 download_file_quic 响应不含 sha256，完整性由调用方按 expected_sha 校验。
     let mut status = [0u8; 1];
     recv.read_exact(&mut status).await?;
     match status[0] {
@@ -291,9 +292,6 @@ async fn download_recording(
             MAX_RECORDING_SIZE
         );
     }
-
-    let mut sha_buf = [0u8; 32];
-    recv.read_exact(&mut sha_buf).await?;
 
     let mut data = vec![0u8; file_size as usize];
     recv.read_exact(&mut data).await?;
