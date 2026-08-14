@@ -57,6 +57,8 @@ pub async fn run_sync_loop(
     ca_cert_path: Option<String>,
 ) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(config.interval_secs));
+    // 单轮执行超过周期时跳过而非背靠背补发，避免大量 unsynced 下载把多轮 sync 挤在一起
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     // The first tick fires immediately; we still want a pass right away so that
     // freshly started servers begin syncing without waiting a full interval.
     loop {
