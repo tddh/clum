@@ -11,7 +11,7 @@ path = "src/main.rs"
 clum-core.workspace = true
 tokio.workspace = true
 rustls.workspace = true
-rustls-pemfile.workspace = true
+rustls-pki-types.workspace = true
 clap = { workspace = true, features = ["derive", "env"] }
 serde.workspace = true
 serde_json.workspace = true

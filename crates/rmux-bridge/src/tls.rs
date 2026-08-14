@@ -2,16 +2,15 @@
 //! from disk and builds a `rustls::ServerConfig` for the bridge listener.
 
 use anyhow::{Context, Result};
+use rustls::pki_types::pem::PemObject;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
-use std::io::BufReader;
 use std::path::Path;
 
 fn load_certs(path: &Path) -> Result<Vec<CertificateDer<'static>>> {
     let cert_pem = std::fs::read(path)
         .with_context(|| format!("failed to read cert file: {}", path.display()))?;
 
-    let mut reader = BufReader::new(&cert_pem[..]);
-    let certs: Vec<CertificateDer<'static>> = rustls_pemfile::certs(&mut reader)
+    let certs: Vec<CertificateDer<'static>> = CertificateDer::pem_slice_iter(&cert_pem)
         .collect::<std::result::Result<Vec<_>, _>>()
         .context("failed to parse cert PEM")?;
 
@@ -26,10 +25,8 @@ fn load_private_key(path: &Path) -> Result<PrivateKeyDer<'static>> {
     let key_pem = std::fs::read(path)
         .with_context(|| format!("failed to read key file: {}", path.display()))?;
 
-    let mut reader = BufReader::new(&key_pem[..]);
-    let key = rustls_pemfile::private_key(&mut reader)
-        .context("failed to parse key PEM")?
-        .context("no private key found")?;
+    let key = PrivateKeyDer::from_pem_slice(&key_pem)
+        .map_err(|e| anyhow::anyhow!("failed to parse key PEM {}: {e}", path.display()))?;
 
     Ok(key)
 }

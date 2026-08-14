@@ -136,7 +136,7 @@ fn expand_tilde(path: &str) -> String {
 
 fn load_host_config(hosts_file: &str, host_name: &str) -> anyhow::Result<clum_core::HostConfig> {
     let contents = std::fs::read_to_string(hosts_file)?;
-    let registry: clum_core::HostRegistry = serde_yml::from_str(&contents)?;
+    let registry: clum_core::HostRegistry = serde_norway::from_str(&contents)?;
     registry
         .hosts
         .into_iter()

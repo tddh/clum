@@ -23,7 +23,7 @@ impl HostRouter {
             .with_context(|| format!("failed to read hosts file: {}", path.display()))?;
 
         let registry: clum_core::types::HostRegistry =
-            serde_yml::from_str(&content).context("failed to parse hosts YAML")?;
+            serde_norway::from_str(&content).context("failed to parse hosts YAML")?;
 
         let hosts: HashMap<String, HostConfig> = registry
             .hosts
@@ -48,7 +48,7 @@ impl HostRouter {
         })?;
 
         let registry: clum_core::types::HostRegistry =
-            serde_yml::from_str(&content).context("failed to parse hosts YAML")?;
+            serde_norway::from_str(&content).context("failed to parse hosts YAML")?;
 
         let new_hosts: HashMap<String, HostConfig> = registry
             .hosts

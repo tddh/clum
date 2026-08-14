@@ -3,6 +3,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use anyhow::Context;
+use rustls::pki_types::pem::PemObject;
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use sha2::{Digest, Sha256};
 
 use crate::registry::{BridgeConn, BridgeRegistry};
@@ -586,16 +588,15 @@ fn load_server_tls(
     let cert_pem = std::fs::read(cert_path).with_context(|| format!("read cert: {cert_path}"))?;
     let key_pem = std::fs::read(key_path).with_context(|| format!("read key: {key_path}"))?;
 
-    let certs: Vec<_> = rustls_pemfile::certs(&mut &cert_pem[..])
+    let certs: Vec<_> = CertificateDer::pem_slice_iter(&cert_pem)
         .collect::<Result<Vec<_>, _>>()
         .context("parse cert PEM")?;
     if certs.is_empty() {
         anyhow::bail!("no certificates in {cert_path}");
     }
 
-    let key = rustls_pemfile::private_key(&mut &key_pem[..])
-        .context("parse key PEM")?
-        .context("no private key found")?;
+    let key = PrivateKeyDer::from_pem_slice(&key_pem)
+        .map_err(|e| anyhow::anyhow!("no private key found in {key_path}: {e}"))?;
 
     let mut rustls_config = rustls::ServerConfig::builder()
         .with_no_client_auth()

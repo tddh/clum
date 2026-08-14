@@ -11,10 +11,10 @@ path = "src/main.rs"
 clum-core.workspace = true
 tokio.workspace = true
 rustls.workspace = true
-rustls-pemfile.workspace = true
+rustls-pki-types.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-serde_yml = "0.0"
+serde_norway = "0.9"
 clap = { workspace = true, features = ["derive", "env"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true

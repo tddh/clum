@@ -4,6 +4,7 @@
 //! including host configuration, session/panel metadata, and audit event records.
 
 use anyhow::Context;
+use rustls::pki_types::pem::PemObject;
 
 pub mod backoff;
 pub mod error_code;
@@ -38,7 +39,7 @@ pub fn build_root_store(ca_cert_path: Option<&str>) -> anyhow::Result<rustls::Ro
         Some(path) => {
             let pem =
                 std::fs::read(path).with_context(|| format!("failed to read CA cert: {path}"))?;
-            let certs: Vec<_> = rustls_pemfile::certs(&mut pem.as_slice())
+            let certs: Vec<_> = rustls::pki_types::CertificateDer::pem_slice_iter(&pem)
                 .collect::<std::result::Result<Vec<_>, _>>()
                 .context("failed to parse CA cert PEM")?;
             let mut store = rustls::RootCertStore::empty();

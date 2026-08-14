@@ -159,7 +159,7 @@ impl ServerConfig {
     pub fn load(path: &Path) -> anyhow::Result<Self> {
         let content = std::fs::read_to_string(path)
             .map_err(|e| anyhow::anyhow!("read config {}: {e}", path.display()))?;
-        let config: ServerConfig = serde_yml::from_str(&content)
+        let config: ServerConfig = serde_norway::from_str(&content)
             .map_err(|e| anyhow::anyhow!("parse config {}: {e}", path.display()))?;
         Ok(config)
     }
