@@ -9,6 +9,7 @@
 //! been processed, locally stored recordings older than the retention window
 //! (and in excess of the size cap) are pruned.
 
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -17,7 +18,7 @@ use clum_core::HostConfig;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
-use crate::registry::BridgeRegistry;
+use crate::registry::{BridgeInfo, BridgeRegistry};
 use crate::router::HostRouter;
 use crate::transport::{
     connect_to_bridge_hybrid_stream, connect_to_bridge_quic, recv_json_frame, send_json_frame,
@@ -72,7 +73,10 @@ async fn sync_all_hosts(
     registry: &BridgeRegistry,
     ca_cert_path: Option<&str>,
 ) -> anyhow::Result<()> {
-    let hosts = router.list();
+    // 遍历静态 hosts.yaml 主机 + 动态注册的 enrolled bridges 的并集。
+    // 只遍历 router.list() 会漏掉 enrolled bridges（hosts.yaml 可能为空），
+    // 导致 pull 兜底通道完全空转。
+    let hosts = merge_sync_hosts(router.list(), registry.list().await);
 
     for host in hosts {
         match sync_host(config, &host, registry, ca_cert_path).await {
@@ -94,6 +98,28 @@ async fn sync_all_hosts(
     .await?;
 
     Ok(())
+}
+
+/// 合并静态主机与 enrolled bridges，静态配置优先，按主机名去重。
+/// enrolled bridges 没有 bridge_addr/bridge_token，sync_host 会优先走
+/// 已注册的 QUIC 连接（registry），不需要 addr/token。
+fn merge_sync_hosts(static_hosts: Vec<HostConfig>, enrolled: Vec<BridgeInfo>) -> Vec<HostConfig> {
+    let mut hosts = static_hosts;
+    let mut known: HashSet<String> = hosts.iter().map(|h| h.name.clone()).collect();
+    for info in enrolled {
+        if known.insert(info.hostname.clone()) {
+            hosts.push(HostConfig {
+                name: info.hostname.clone(),
+                bridge_addr: None,
+                bridge_token: None,
+                group: String::new(),
+                tags: Vec::new(),
+                labels: HashMap::new(),
+                allowed_forward_targets: None,
+            });
+        }
+    }
+    hosts
 }
 
 fn resolve_bridge_addr_token(host: &HostConfig) -> anyhow::Result<(&str, &str)> {
@@ -547,6 +573,57 @@ mod tests {
         assert!(!is_date_dir("not-a-date"));
         assert!(!is_date_dir("2026_07_22"));
         assert!(!is_date_dir(""));
+    }
+
+    fn make_static_host(name: &str) -> HostConfig {
+        HostConfig {
+            name: name.to_string(),
+            bridge_addr: Some("10.0.0.1:9778".into()),
+            bridge_token: Some("tok".into()),
+            group: "g".into(),
+            tags: Vec::new(),
+            labels: HashMap::new(),
+            allowed_forward_targets: None,
+        }
+    }
+
+    fn make_enrolled(name: &str) -> BridgeInfo {
+        BridgeInfo {
+            hostname: name.to_string(),
+            tags: Vec::new(),
+            labels: HashMap::new(),
+            version: "0.14.0".into(),
+            os_info: "linux".into(),
+            online: true,
+            registered_secs_ago: 1,
+            remote_addr: None,
+        }
+    }
+
+    #[test]
+    fn test_merge_sync_hosts_includes_enrolled_bridges() {
+        // 只有静态主机（hosts.yaml 为空时 router.list() 也是空的）
+        let hosts = merge_sync_hosts(vec![], vec![make_enrolled("tf01"), make_enrolled("k8s-m1")]);
+        let names: Vec<&str> = hosts.iter().map(|h| h.name.as_str()).collect();
+        assert_eq!(names, vec!["tf01", "k8s-m1"]);
+        // enrolled 合成的主机不需要 addr/token（走 registry 连接）
+        assert!(hosts
+            .iter()
+            .all(|h| h.bridge_addr.is_none() && h.bridge_token.is_none()));
+    }
+
+    #[test]
+    fn test_merge_sync_hosts_static_priority_dedup() {
+        // 静态配置优先，同名 enrolled 不重复添加
+        let hosts = merge_sync_hosts(
+            vec![make_static_host("tf01")],
+            vec![make_enrolled("tf01"), make_enrolled("k8s-m1")],
+        );
+        let names: Vec<&str> = hosts.iter().map(|h| h.name.as_str()).collect();
+        assert_eq!(names, vec!["tf01", "k8s-m1"]);
+        // tf01 保留静态配置（带 addr/token），k8s-m1 是 enrolled 合成
+        assert!(hosts[0].bridge_addr.is_some());
+        assert!(hosts[1].bridge_addr.is_none());
     }
 
     #[tokio::test]
