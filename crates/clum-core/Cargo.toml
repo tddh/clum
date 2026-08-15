@@ -13,5 +13,6 @@ rustls-pki-types = "1"
 webpki-roots = "1"
 quinn = { workspace = true, features = ["rustls"] }
 tokio = { workspace = true }
+socket2 = "0.6"
 fastrand.workspace = true
 serde_json = { workspace = true }

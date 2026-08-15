@@ -10,6 +10,7 @@ mod register;
 mod terminal_state;
 mod tls;
 
+use anyhow::Context;
 use clap::Parser;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -74,10 +75,19 @@ async fn main() -> anyhow::Result<()> {
                     return;
                 }
             };
-            let endpoint = match quinn::Endpoint::server(tls_cfg, quic_addr) {
+            let endpoint = match (|| -> anyhow::Result<quinn::Endpoint> {
+                let socket = clum_core::quic::build_udp_socket(quic_addr)?;
+                let runtime = quinn::default_runtime().context("no async runtime found")?;
+                Ok(quinn::Endpoint::new(
+                    quinn::EndpointConfig::default(),
+                    Some(tls_cfg),
+                    socket,
+                    runtime,
+                )?)
+            })() {
                 Ok(ep) => ep,
                 Err(e) => {
-                    tracing::error!("failed to create QUIC endpoint: {}", e);
+                    tracing::error!("failed to create QUIC endpoint: {e:#}");
                     return;
                 }
             };

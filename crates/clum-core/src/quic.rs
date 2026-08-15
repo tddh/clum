@@ -4,6 +4,7 @@
 //! transport parameters (flow-control windows, congestion control, keepalive)
 //! stay consistent instead of drifting across copy-pasted implementations.
 
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -12,6 +13,32 @@ use anyhow::Context;
 /// 16 MB 流控窗口：quinn 默认初始拥塞窗口 ~12 KB，内网千兆链路下
 /// 慢启动要 ~20 个 RTT 才能打满带宽；调大窗口大幅缩短爬坡时间。
 pub const WINDOW_SIZE: u32 = 16 * 1024 * 1024;
+
+/// UDP socket 收发缓冲（SO_SNDBUF/SO_RCVBUF）目标值。
+///
+/// quinn 创建 socket 时**不设置** buffer，用系统默认值（Linux 208KB、
+/// macOS 发送 9KB），高速传输时内核缓冲被打满 → ENOBUFS 丢包 → QUIC
+/// 重传 → 吞吐骤降（表现为大文件下载卡顿）。此值需与内核上限
+/// `net.core.wmem_max/rmem_max` 匹配（Linux 默认 208KB 会 clamp，需
+/// sysctl 调大），否则 setsockopt 无效。
+pub const UDP_BUFFER_SIZE: usize = 16 * 1024 * 1024;
+
+/// 创建带大收发缓冲的 UDP socket。
+///
+/// quinn 的 `Endpoint::client`/`Endpoint::server` 直接用系统默认 socket，
+/// 无法设置 SO_SNDBUF/SO_RCVBUF。本函数用 socket2 创建并配置大缓冲后，
+/// 经 `quinn::Endpoint::new` 交给 quinn，避免高吞吐时内核缓冲溢出丢包。
+pub fn build_udp_socket(addr: SocketAddr) -> anyhow::Result<std::net::UdpSocket> {
+    use socket2::{Domain, Protocol, Socket, Type};
+    let socket = Socket::new(Domain::for_address(addr), Type::DGRAM, Some(Protocol::UDP))?;
+    if addr.is_ipv6() {
+        socket.set_only_v6(false)?;
+    }
+    socket.set_recv_buffer_size(UDP_BUFFER_SIZE)?;
+    socket.set_send_buffer_size(UDP_BUFFER_SIZE)?;
+    socket.bind(&addr.into())?;
+    Ok(socket.into())
+}
 
 /// 所有长连接共用的 keep-alive 间隔。
 pub const DEFAULT_KEEPALIVE: Duration = Duration::from_secs(15);
@@ -60,7 +87,10 @@ pub fn client_endpoint(
     idle_timeout: Duration,
     keepalive: Duration,
 ) -> anyhow::Result<quinn::Endpoint> {
-    let mut endpoint = quinn::Endpoint::client("[::]:0".parse()?)?;
+    let socket = build_udp_socket("[::]:0".parse()?)?;
+    let runtime = quinn::default_runtime().context("no async runtime found")?;
+    let mut endpoint =
+        quinn::Endpoint::new(quinn::EndpointConfig::default(), None, socket, runtime)?;
     let mut client_config = quinn::ClientConfig::new(build_client_crypto(ca_cert_path, alpn)?);
     client_config.transport_config(Arc::new(build_transport_config(idle_timeout, keepalive)?));
     endpoint.set_default_client_config(client_config);
