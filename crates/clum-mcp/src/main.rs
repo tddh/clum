@@ -266,69 +266,72 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.mode.as_str() {
         "http" => {
+            let Some(cert) = server_cert.clone() else {
+                anyhow::bail!(
+                    "http mode requires TLS: set --server-cert (or server_cert in config)"
+                );
+            };
+            let Some(key) = server_key.clone() else {
+                anyhow::bail!("http mode requires TLS: set --server-key (or server_key in config)");
+            };
+
             let mut token_map = file_bridge_tokens;
-            let cert = server_cert;
-            let key = server_key;
 
             tracing::info!(
                 "clum-mcp server starting (http mode on {})",
                 listen.as_deref().unwrap_or("0.0.0.0:9788")
             );
 
-            if let (Some(cert), Some(key)) = (&cert, &key) {
-                for entry in &cli.bridge_tokens {
-                    if let Some((hostname, token)) = entry.split_once('=') {
-                        token_map.insert(hostname.to_string(), token.to_string());
-                    } else {
-                        tracing::warn!("ignoring malformed --bridge entry: {entry}");
-                    }
+            for entry in &cli.bridge_tokens {
+                if let Some((hostname, token)) = entry.split_once('=') {
+                    token_map.insert(hostname.to_string(), token.to_string());
+                } else {
+                    tracing::warn!("ignoring malformed --bridge entry: {entry}");
                 }
-
-                use sha2::{Digest, Sha256};
-                let mut hash_map: std::collections::HashMap<String, String> = token_map
-                    .iter()
-                    .map(|(hostname, token)| {
-                        (
-                            hex::encode(Sha256::digest(token.as_bytes())),
-                            hostname.clone(),
-                        )
-                    })
-                    .collect();
-
-                // File/CLI tokens only — preserved across DB refreshes.
-                let static_hashes = hash_map.clone();
-
-                let db_hashes = bridge_store.token_map().await;
-                hash_map.extend(db_hashes);
-
-                tracing::info!("loaded {} bridge tokens", hash_map.len());
-
-                let quic_config = quic_server::QuicServerConfig {
-                    listen_addr: listen.clone().unwrap_or_else(|| "0.0.0.0:9788".to_string()),
-                    cert_path: cert.clone(),
-                    key_path: key.clone(),
-                    bridge_token_hashes: hash_map,
-                    static_token_hashes: static_hashes,
-                    recordings_dir: ctx.recordings_dir.clone(),
-                    api_key_store: Some(api_keys::ApiKeyStore::open(&db_path)?),
-                    db_path: db_path.clone(),
-                    router: Arc::clone(&ctx.router),
-                    ca_cert_path: ctx.ca_cert_path.clone(),
-                    audit_db: Arc::clone(&audit_db),
-                };
-                let reg = Arc::clone(&bridge_registry);
-                tokio::spawn(async move {
-                    if let Err(e) = quic_server::run_quic_server(quic_config, reg).await {
-                        tracing::error!("QUIC server failed: {e:#}");
-                    }
-                });
-
-                let rot_reg = Arc::clone(&bridge_registry);
-                let rot_db = Arc::clone(&bridge_store);
-                tokio::spawn(token_rotation::run_rotation_loop(rot_reg, rot_db, 24));
-            } else {
-                tracing::warn!("server cert/key not configured, QUIC listener disabled");
             }
+
+            use sha2::{Digest, Sha256};
+            let mut hash_map: std::collections::HashMap<String, String> = token_map
+                .iter()
+                .map(|(hostname, token)| {
+                    (
+                        hex::encode(Sha256::digest(token.as_bytes())),
+                        hostname.clone(),
+                    )
+                })
+                .collect();
+
+            // File/CLI tokens only — preserved across DB refreshes.
+            let static_hashes = hash_map.clone();
+
+            let db_hashes = bridge_store.token_map().await;
+            hash_map.extend(db_hashes);
+
+            tracing::info!("loaded {} bridge tokens", hash_map.len());
+
+            let quic_config = quic_server::QuicServerConfig {
+                listen_addr: listen.clone().unwrap_or_else(|| "0.0.0.0:9788".to_string()),
+                cert_path: cert.clone(),
+                key_path: key.clone(),
+                bridge_token_hashes: hash_map,
+                static_token_hashes: static_hashes,
+                recordings_dir: ctx.recordings_dir.clone(),
+                api_key_store: Some(api_keys::ApiKeyStore::open(&db_path)?),
+                db_path: db_path.clone(),
+                router: Arc::clone(&ctx.router),
+                ca_cert_path: ctx.ca_cert_path.clone(),
+                audit_db: Arc::clone(&audit_db),
+            };
+            let reg = Arc::clone(&bridge_registry);
+            tokio::spawn(async move {
+                if let Err(e) = quic_server::run_quic_server(quic_config, reg).await {
+                    tracing::error!("QUIC server failed: {e:#}");
+                }
+            });
+
+            let rot_reg = Arc::clone(&bridge_registry);
+            let rot_db = Arc::clone(&bridge_store);
+            tokio::spawn(token_rotation::run_rotation_loop(rot_reg, rot_db, 24));
 
             let key_store = api_keys::ApiKeyStore::open(&db_path)?;
             let listen_str = listen.as_deref().unwrap_or("0.0.0.0:9788");
@@ -338,8 +341,8 @@ async fn main() -> anyhow::Result<()> {
                 key_store,
                 Arc::clone(&bridge_store),
                 static_dir,
-                cert,
-                key,
+                Some(cert),
+                Some(key),
                 token_ttl_hours,
             )
             .await

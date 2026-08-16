@@ -336,25 +336,27 @@ pub async fn run_http_server(
     };
     let app = app.layer(middleware::from_fn_with_state(auth_state, auth_middleware));
 
-    match (tls_cert, tls_key) {
-        (Some(cert), Some(key)) => {
-            let rustls_config = axum_server::tls_rustls::RustlsConfig::from_pem_file(
-                std::path::PathBuf::from(&cert),
-                std::path::PathBuf::from(&key),
-            )
-            .await?;
-            let addr: std::net::SocketAddr = listen_addr.parse()?;
-            tracing::info!("clum-mcp HTTPS server listening on {listen_addr}");
-            axum_server::bind_rustls(addr, rustls_config)
-                .serve(app.into_make_service())
-                .await?;
-        }
-        _ => {
-            let listener = tokio::net::TcpListener::bind(listen_addr).await?;
-            tracing::info!("clum-mcp HTTP server listening on {listen_addr} (no TLS)");
-            axum::serve(listener, app).await?;
-        }
-    }
+    let Some(cert) = tls_cert else {
+        anyhow::bail!(
+            "HTTP server requires TLS: set --server-cert/--server-key (or server_cert/server_key in config) — refusing to serve plaintext HTTP"
+        );
+    };
+    let Some(key) = tls_key else {
+        anyhow::bail!(
+            "HTTP server requires TLS: set --server-cert/--server-key (or server_cert/server_key in config) — refusing to serve plaintext HTTP"
+        );
+    };
+
+    let rustls_config = axum_server::tls_rustls::RustlsConfig::from_pem_file(
+        std::path::PathBuf::from(&cert),
+        std::path::PathBuf::from(&key),
+    )
+    .await?;
+    let addr: std::net::SocketAddr = listen_addr.parse()?;
+    tracing::info!("clum-mcp HTTPS server listening on {listen_addr}");
+    axum_server::bind_rustls(addr, rustls_config)
+        .serve(app.into_make_service())
+        .await?;
     Ok(())
 }
 
