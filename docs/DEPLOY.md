@@ -196,6 +196,7 @@ ssh root@<your-bridge-ip> "systemctl status rmux-bridge --no-pager"
 | `--recording-max-size-mb` | `500` | 录制容量上限 MB（`RECORDING_MAX_SIZE_MB` 环境变量） |
 | `--recording-fsync-interval-secs` | `5` | 录制 fsync 间隔秒（`RECORDING_FSYNC_INTERVAL_SECS` 环境变量） |
 | `--bridge-audit-db` | 自动检测 | Bridge 侧审计数据库路径（`BRIDGE_AUDIT_DB` 环境变量） |
+| `BRIDGE_CC` | `auto` | Bridge 侧拥塞控制（环境变量）：`auto`/`bbr`/`cubic`。`auto` 下注册连接按目标地址自动判定，直连监听回退 BBR |
 
 > **QUIC 协议**：所有通信走 QUIC（UDP :9788），内置 TLS 1.3 加密。确保防火墙放行 UDP 9788（Server）和 9778（Bridge 直连回退）端口。
 
@@ -208,6 +209,8 @@ ssh root@<your-bridge-ip> "systemctl status rmux-bridge --no-pager"
 | `--listen` | 无 | HTTP/QUIC 监听地址（http 模式，如 `0.0.0.0:9788`） |
 | `--server-cert` | 无 | TLS 服务器证书路径（http 模式必填） |
 | `--server-key` | 无 | TLS 服务器私钥路径（http 模式必填） |
+
+> **HTTP 模式强制 TLS（fail-closed）**：`--server-cert`/`--server-key` 任一缺失时启动直接失败并退出，**不会**降级为明文 HTTP。QUIC 与 HTTP 共用同一对证书。
 | `--api-keys` | 无 | API Key 列表（逗号分隔，http 模式认证） |
 | `--bridge` | 无 | Bridge token（`HOSTNAME=TOKEN` 格式，可多次指定） |
 | `--static-dir` | 无 | 静态文件服务目录（install.sh、ca.crt、releases 等） |

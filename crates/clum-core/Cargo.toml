@@ -2,6 +2,7 @@
 name = "clum-core"
 version.workspace = true
 edition.workspace = true
+description = "Shared types and QUIC transport for clum (HostConfig, AuditEvent, AuditAction, congestion control)"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

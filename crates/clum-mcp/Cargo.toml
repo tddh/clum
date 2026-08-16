@@ -2,6 +2,7 @@
 name = "clum-mcp"
 version.workspace = true
 edition.workspace = true
+description = "Central MCP Server for clum remote operations platform (AI clients + bridge registry + audit)"
 
 [[bin]]
 name = "clum-mcp"

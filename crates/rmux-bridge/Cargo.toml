@@ -2,6 +2,7 @@
 name = "rmux-bridge"
 version.workspace = true
 edition.workspace = true
+description = "Bridge daemon for clum — deployed on target Linux hosts, reverse-connects to the central server"
 
 [[bin]]
 name = "rmux-bridge"

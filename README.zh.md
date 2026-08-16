@@ -72,7 +72,7 @@ graph LR
 ```
 
 - **clum-mcp（Central Server）** — 中央 MCP Server：HTTP :9788 面向 AI 客户端（MCP 协议）+ QUIC :9788 面向 Bridge 注册和 CLI 数据平面。提供 69 个工具、集中审计、API Key 认证、静态文件服务。
-- **clum-cli** — 命令行工具：PTY 透传（`term`）、文件传输（`push`/`pull`，支持文件与目录、分块流式传输 + SHA-256 校验；`push` 支持目录 `--exclude` 过滤）、端口转发（`forward`，断网自动重连，`--give-up-after` 控制放弃时限）、会话列表（`list`）、录制回放（`replay`）。内置 AI 对话面板（Ctrl+G）。
+- **clum-cli** — 命令行工具：PTY 透传（`term`）、文件传输（`push`/`pull`，支持文件与目录、分块流式传输 + SHA-256 校验；`push` 支持目录 `--exclude` 过滤）、端口转发（`forward`，断网自动重连，`--give-up-after` 控制放弃时限）、会话列表（`list`）、录制回放（`replay`）。内置 AI 对话面板（Ctrl+G）。拥塞控制默认 `auto`：内网目标→BBR，公网目标→CUBIC（丢包退避，避免带宽打满断连）；可用 `--cc bbr|cubic|auto`（或 `CLUM_CC` 环境变量）显式覆盖。
 - **rmux-bridge** — 部署在每台 Linux 主机的 Agent。主动连接 Central Server 注册，处理工具执行、文件 I/O、PTY 会话、录制推送。
 - **RMUX daemon** — 每台 Linux 主机上的终端多路复用器（基于 rmux）。
 
@@ -365,7 +365,8 @@ echo "$(cat)" >> knowledge.jsonl && git commit -am "新增排障经验条目"
 稳态吞吐：**82 Mbps**（1GB 文件，100 Mbps 链路利用率 82%）。
 
 核心设计选择：
-- **BBR 替代 Cubic**：基于带宽和 RTT 模型调速，少量丢包不大幅降窗
+- **BBR 用于内网 / CUBIC 用于公网**：BBR 基于带宽和 RTT 模型调速，少量丢包不大幅降窗——用于内网目标；公网目标用 CUBIC 丢包退避
+- **丢包自适应拥塞控制**：`auto` 模式下内网目标用 BBR（最大吞吐），公网目标用 CUBIC（丢包时主动退避，行为接近 TCP，不再断连）。各组件可显式覆盖：`clum-cli --cc`（或 `CLUM_CC`）、server `CLUM_CC`、bridge `BRIDGE_CC`
 - **接收方算哈希**：发送方单遍流式传输，接收方边收边算 SHA256——发送侧磁盘 I/O 减半
 - **统一 1MB buffer**：MCP 端与 Bridge 端均使用 `COPY_BUF_SIZE = 1MB` 的 `tokio::io::copy_with_buf`，消除跨边界缓冲
 

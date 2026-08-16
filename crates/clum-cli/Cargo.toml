@@ -2,6 +2,7 @@
 name = "clum-cli"
 version.workspace = true
 edition.workspace = true
+description = "CLI for clum — PTY passthrough, file transfer, port forwarding, recording replay"
 
 [[bin]]
 name = "clum-cli"
