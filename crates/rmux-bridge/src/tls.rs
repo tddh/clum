@@ -55,9 +55,8 @@ pub fn load_quic_server_config(
     transport.stream_receive_window(quinn::VarInt::from_u32(16 * 1024 * 1024));
     transport.send_window(16 * 1024 * 1024);
     transport.receive_window(quinn::VarInt::from_u32(16 * 1024 * 1024));
-    transport.congestion_controller_factory(std::sync::Arc::new(
-        quinn::congestion::BbrConfig::default(),
-    ));
+    let cc = clum_core::quic::CcKind::from_env("BRIDGE_CC");
+    transport.congestion_controller_factory(cc.factory());
 
     Ok(server_config)
 }

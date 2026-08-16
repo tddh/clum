@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use clum_core::quic::CcKind;
 use clum_core::HostConfig;
 
 /// 交互式终端连接的 idle timeout：断线检测靠 keepalive，60s 足够。
@@ -12,17 +13,19 @@ pub async fn connect_via_server(
     host: &str,
     api_key: Option<&str>,
     purpose: &str,
+    cc: CcKind,
 ) -> Result<quinn::Connection> {
+    let addr: std::net::SocketAddr = server_addr
+        .parse()
+        .or_else(|_| Ok::<_, anyhow::Error>(format!("{server_addr}:9788").parse()?))?;
+    let cc = cc.resolve(Some(addr));
     let endpoint = clum_core::quic::client_endpoint(
         ca_cert_path,
         &[b"clum"],
         TERM_IDLE_TIMEOUT,
         clum_core::quic::DEFAULT_KEEPALIVE,
+        cc,
     )?;
-
-    let addr: std::net::SocketAddr = server_addr
-        .parse()
-        .or_else(|_| Ok::<_, anyhow::Error>(format!("{server_addr}:9788").parse()?))?;
     let server_name = server_addr.split(':').next().unwrap_or("localhost");
 
     let conn = endpoint
@@ -65,6 +68,7 @@ pub async fn connect_to_bridge_quic(
     bridge_addr: &str,
     bridge_token: &str,
     ca_cert_path: Option<&str>,
+    cc: CcKind,
 ) -> Result<quinn::Connection> {
     clum_core::quic::connect_bridge(
         bridge_addr,
@@ -72,6 +76,7 @@ pub async fn connect_to_bridge_quic(
         ca_cert_path,
         TERM_IDLE_TIMEOUT,
         Duration::from_secs(10),
+        cc,
     )
     .await
 }
@@ -80,6 +85,7 @@ pub async fn find_lowest_pane(
     config: &HostConfig,
     ca_cert_path: Option<&str>,
     session_name: &str,
+    cc: CcKind,
 ) -> Result<String> {
     let addr = config
         .bridge_addr
@@ -89,7 +95,7 @@ pub async fn find_lowest_pane(
         .bridge_token
         .as_deref()
         .context("bridge_token not configured")?;
-    let conn = connect_to_bridge_quic(addr, token, ca_cert_path).await?;
+    let conn = connect_to_bridge_quic(addr, token, ca_cert_path, cc).await?;
     lowest_pane_on_conn(&conn, session_name).await
 }
 
@@ -102,8 +108,9 @@ pub async fn find_lowest_pane_via_server(
     host: &str,
     api_key: Option<&str>,
     session_name: &str,
+    cc: CcKind,
 ) -> Result<String> {
-    let conn = connect_via_server(server_addr, ca_cert_path, host, api_key, "term").await?;
+    let conn = connect_via_server(server_addr, ca_cert_path, host, api_key, "term", cc).await?;
     lowest_pane_on_conn(&conn, session_name).await
 }
 
@@ -116,8 +123,9 @@ pub async fn ensure_session_via_server(
     host: &str,
     api_key: Option<&str>,
     session_name: &str,
+    cc: CcKind,
 ) -> Result<()> {
-    let conn = connect_via_server(server_addr, ca_cert_path, host, api_key, "term").await?;
+    let conn = connect_via_server(server_addr, ca_cert_path, host, api_key, "term", cc).await?;
     let (mut send, mut recv) = conn.open_bi().await?;
     send.write_all(&[0x01]).await?;
 
@@ -151,6 +159,7 @@ pub async fn ensure_session(
     config: &HostConfig,
     ca_cert_path: Option<&str>,
     session_name: &str,
+    cc: CcKind,
 ) -> Result<()> {
     let addr = config
         .bridge_addr
@@ -160,7 +169,7 @@ pub async fn ensure_session(
         .bridge_token
         .as_deref()
         .context("bridge_token not configured")?;
-    let conn = connect_to_bridge_quic(addr, token, ca_cert_path).await?;
+    let conn = connect_to_bridge_quic(addr, token, ca_cert_path, cc).await?;
     let (mut send, mut recv) = conn.open_bi().await?;
     send.write_all(&[0x01]).await?;
 

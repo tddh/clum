@@ -89,11 +89,11 @@ fn default_upload_concurrency() -> usize {
 }
 
 fn default_upload_bw() -> u64 {
-    70
+    0
 }
 
 fn default_download_bw() -> u64 {
-    70
+    0
 }
 
 #[allow(dead_code)]
@@ -200,4 +200,20 @@ fn expand_opt_path(path: &Option<String>) -> Option<PathBuf> {
             PathBuf::from(p)
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_file_transfer_is_unlimited() {
+        let cfg = FileTransferConfig::default();
+        let up = cfg.upload_config();
+        let down = cfg.download_config();
+        assert_eq!(up.per_stream, 0, "default upload should be unlimited");
+        assert_eq!(down.per_stream, 0, "default download should be unlimited");
+        assert_eq!(up.global, 0);
+        assert_eq!(down.global, 0);
+    }
 }

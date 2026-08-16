@@ -72,7 +72,7 @@ graph LR
 ```
 
 - **clum-mcp (Central Server)** — Central MCP Server: HTTP :9788 for AI clients (MCP protocol) + QUIC :9788 for Bridge registration and CLI data plane. Provides 69 tools, centralized audit, API Key auth, and static file serving.
-- **clum-cli** — CLI for humans: PTY passthrough (`term`), file transfer (`push`/`pull` — files or directories, chunked streaming with SHA-256; `push` supports `--exclude` globs for directories), port forwarding (`forward` — auto-reconnects on network loss, `--give-up-after`), session listing (`list`), recording playback (`replay`). Built-in AI chat panel (Ctrl+G).
+- **clum-cli** — CLI for humans: PTY passthrough (`term`), file transfer (`push`/`pull` — files or directories, chunked streaming with SHA-256; `push` supports `--exclude` globs for directories), port forwarding (`forward` — auto-reconnects on network loss, `--give-up-after`), session listing (`list`), recording playback (`replay`). Built-in AI chat panel (Ctrl+G). Congestion control default `auto`: BBR on private targets, CUBIC on public targets (loss-adaptive, avoids disconnects at full bandwidth); override with `--cc bbr|cubic|auto`.
 - **rmux-bridge** — Agent deployed on each Linux host. Reverse-connects to the Central Server, handles tool execution, file I/O, PTY sessions, and recording push.
 - **RMUX daemon** — Terminal multiplexer on each Linux host (rmux-based).
 
@@ -367,6 +367,7 @@ Steady-state throughput: **82 Mbps** (1GB file, 82% link utilization on 100 Mbps
 
 Key design choices:
 - **BBR over Cubic**: Model-based rate control tolerates packet loss without drastic window reduction
+- **Loss-adaptive congestion control**: `auto` mode picks BBR for private-network targets (max throughput) and CUBIC for public targets (backs off on loss like TCP — public links at full bandwidth no longer drop the connection). Override per component: `clum-cli --cc`, server `CLUM_CC`, bridge `BRIDGE_CC`.
 - **Receiver computes hash**: Sender streams data in one pass; receiver calculates SHA256 inline — halves disk I/O on the sending side
 - **Unified 1MB buffer**: Both MCP and Bridge use `COPY_BUF_SIZE = 1MB` for `tokio::io::copy_with_buf`, aligned to avoid cross-boundary buffering
 

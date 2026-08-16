@@ -26,7 +26,7 @@
 ```
 
 - **clum-mcp (Central Server)**: 中央 MCP Server，双栈监听。AI 客户端通过 HTTP 连接，Bridge 通过 QUIC 反向注册。
-- **clum-cli**: 命令行工具，通过 QUIC 连接 Server 中继到 Bridge。支持 term/push/pull/forward/list/replay；push/pull 支持文件与目录（1MB 分块流式传输，目录上传支持 `--exclude` 过滤）。
+- **clum-cli**: 命令行工具，通过 QUIC 连接 Server 中继到 Bridge。支持 term/push/pull/forward/list/replay；push/pull 支持文件与目录（1MB 分块流式传输，目录上传支持 `--exclude` 过滤）。拥塞控制默认 `auto`（内网目标→BBR，公网目标→CUBIC 丢包退避），可用 `--cc bbr|cubic|auto` 显式覆盖（也支持 `CLUM_CC` 环境变量）。
 - **rmux-bridge**: 部署在每台目标 Linux 主机，主动连接 Server 注册，处理工具执行、文件 I/O、PTY、录制推送。
 - **RMUX daemon**: 每个 Linux 主机上的终端多路复用器。
 
@@ -136,6 +136,7 @@ bash deploy/deploy-bridge.sh root@<your-bridge-ip>
 - 上传 `rmux-bridge` 二进制到 `/usr/local/bin/rmux-bridge`
 - 下载 CA 证书到 `/etc/clum/ca.crt`
 - 写入配置到 `/etc/clum/bridge.env`（权限 600）：`BRIDGE_AUTH_TOKEN`、`RMUX_SOCKET`（自动检测）、`RECORDING_ENABLED`、`RECORDING_DIR`、`BRIDGE_AUDIT_DB`、`CLUM_SERVER_ADDR`、`CLUM_CA_CERT`；direct 模式另含 `QUIC_LISTEN_ADDR`、`BRIDGE_TLS_CERT`、`BRIDGE_TLS_KEY`（enrolled 模式即配置了 `CLUM_SERVER_ADDR` 时不监听本地 QUIC 端口，无需这些参数，消除多余端口占用与攻击面）
+- 可选 `BRIDGE_CC`（bridge 侧拥塞控制：`auto`/`bbr`/`cubic`，默认 `auto`——注册连接按目标地址自动判定，直连监听在 auto 下回退 bbr）
 - 创建 `rmux-bridge.service`（`systemctl enable --now`）
 
 **其他 Justfile 命令：**
@@ -212,6 +213,8 @@ ssh root@<your-bridge-ip> "systemctl status rmux-bridge --no-pager"
 | `--static-dir` | 无 | 静态文件服务目录（install.sh、ca.crt、releases 等） |
 | `--hosts-file` | `config/hosts.yaml` | 主机注册表路径（直连回退用） |
 | `--ca-cert` | 无 | CA 证书路径（必填，不传则拒绝连接） |
+
+> **拥塞控制（Server）**：环境变量 `CLUM_CC=auto|bbr|cubic`（默认 `auto`）控制 server→bridge 中继发送段。`auto` 下监听端按对端地址自动判定（内网→BBR，公网→CUBIC）。公网部署建议显式 `CLUM_CC=cubic` 以在丢包时主动退避，避免带宽打满断连。
 | `--audit-db` | `~/.clum/audit.db` | 审计数据库路径 |
 | `--audit-retention-days` | `90` | 审计数据保留天数 |
 | `--audit-max-size-mb` | `500` | 审计数据库大小上限 (MB) |

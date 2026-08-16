@@ -8,7 +8,7 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use sha2::{Digest, Sha256};
 
 use crate::registry::{BridgeConn, BridgeRegistry};
-use clum_core::quic::{read_frame, write_frame};
+use clum_core::quic::{read_frame, write_frame, CcKind};
 use clum_core::COPY_BUF_SIZE;
 
 /// Maximum size of a single recording file accepted via Push path.
@@ -64,15 +64,24 @@ pub async fn run_quic_server(
     config: QuicServerConfig,
     registry: Arc<BridgeRegistry>,
 ) -> anyhow::Result<()> {
-    let tls_config = load_server_tls(&config.cert_path, &config.key_path)?;
+    let tls_config = Arc::new(load_server_tls(&config.cert_path, &config.key_path)?);
 
-    let mut server_config = quinn::ServerConfig::with_crypto(Arc::new(tls_config));
-    let mut transport = clum_core::quic::build_transport_config(
-        std::time::Duration::from_secs(120),
-        clum_core::quic::DEFAULT_KEEPALIVE,
-    )?;
-    transport.max_concurrent_bidi_streams(256u32.into());
-    *Arc::get_mut(&mut server_config.transport).context("transport Arc is shared")? = transport;
+    let cc_env = CcKind::from_env("CLUM_CC");
+
+    let build_server_config = |cc: CcKind| -> Arc<quinn::ServerConfig> {
+        let mut transport = clum_core::quic::build_transport_config(
+            std::time::Duration::from_secs(120),
+            clum_core::quic::DEFAULT_KEEPALIVE,
+            cc,
+        )
+        .expect("build transport config");
+        transport.max_concurrent_bidi_streams(256u32.into());
+        let mut server_config = quinn::ServerConfig::with_crypto(tls_config.clone());
+        server_config.transport = Arc::new(transport);
+        Arc::new(server_config)
+    };
+    let bbr_server_config = build_server_config(CcKind::Bbr);
+    let cubic_server_config = build_server_config(CcKind::Cubic);
 
     let addr: SocketAddr = config
         .listen_addr
@@ -82,7 +91,7 @@ pub async fn run_quic_server(
     let runtime = quinn::default_runtime().context("no async runtime found")?;
     let endpoint = quinn::Endpoint::new(
         quinn::EndpointConfig::default(),
-        Some(server_config),
+        Some(bbr_server_config.as_ref().clone()),
         socket,
         runtime,
     )?;
@@ -112,6 +121,19 @@ pub async fn run_quic_server(
     });
 
     while let Some(incoming) = endpoint.accept().await {
+        let remote = incoming.remote_address();
+        let cc = cc_env.resolve(Some(remote));
+        let cfg = match cc {
+            CcKind::Bbr => bbr_server_config.clone(),
+            _ => cubic_server_config.clone(),
+        };
+        let connecting = match incoming.accept_with(cfg) {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!("accept failed from {remote}: {e}");
+                continue;
+            }
+        };
         let registry = Arc::clone(&registry);
         let token_map = Arc::clone(&token_map);
         let rec_dir = config.recordings_dir.clone();
@@ -123,7 +145,7 @@ pub async fn run_quic_server(
         let groups = Arc::clone(&host_groups);
         tokio::spawn(async move {
             if let Err(e) = handle_connection(
-                incoming, registry, token_map, rec_dir, store, agents, router, ca_cert, audit,
+                connecting, registry, token_map, rec_dir, store, agents, router, ca_cert, audit,
                 groups,
             )
             .await
@@ -138,7 +160,7 @@ pub async fn run_quic_server(
 
 #[allow(clippy::too_many_arguments)]
 async fn handle_connection(
-    incoming: quinn::Incoming,
+    connecting: quinn::Connecting,
     registry: Arc<BridgeRegistry>,
     token_map: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
     recordings_dir: std::path::PathBuf,
@@ -149,7 +171,7 @@ async fn handle_connection(
     audit_db: Arc<crate::audit::AuditDb>,
     host_groups: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
 ) -> anyhow::Result<()> {
-    let conn = incoming.await?;
+    let conn = connecting.await?;
     let remote_addr = conn.remote_address();
 
     let (mut send, mut recv) = conn.accept_bi().await?;

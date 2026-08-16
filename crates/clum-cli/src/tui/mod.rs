@@ -9,6 +9,7 @@ use std::os::unix::io::AsRawFd;
 
 use anyhow::{Context, Result};
 use clum_core::backoff::FullJitterBackoff;
+use clum_core::quic::CcKind;
 use clum_core::HostConfig;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
@@ -365,6 +366,7 @@ pub async fn run_connect_with_ai(
     opencode_dir: &str,
     server: Option<(String, String)>,
     api_key: Option<&str>,
+    cc: CcKind,
 ) -> Result<()> {
     crate::ai::init_opencode_dir(opencode_dir);
 
@@ -390,6 +392,7 @@ pub async fn run_connect_with_ai(
             watch,
             &server,
             api_key,
+            cc,
             &ai,
             &is_ai_mode,
             &pty_buffer,
@@ -436,12 +439,14 @@ async fn run_session(
     watch: bool,
     server: &Option<(String, String)>,
     api_key: Option<&str>,
+    cc: CcKind,
     ai: &AiPanel,
     is_ai_mode: &Arc<AtomicBool>,
     pty_buffer: &Arc<Mutex<Vec<String>>>,
 ) -> Result<SessionOutcome> {
     let conn = if let Some((server_addr, host)) = server {
-        crate::term::connect_via_server(server_addr, ca_cert_path, host, api_key, "term").await?
+        crate::term::connect_via_server(server_addr, ca_cert_path, host, api_key, "term", cc)
+            .await?
     } else {
         let config = config.context("either config or server must be provided")?;
         let addr = config
@@ -452,7 +457,7 @@ async fn run_session(
             .bridge_token
             .as_deref()
             .context("bridge_token not configured")?;
-        connect_to_bridge_quic(addr, token, ca_cert_path).await?
+        connect_to_bridge_quic(addr, token, ca_cert_path, cc).await?
     };
 
     // JSON channel

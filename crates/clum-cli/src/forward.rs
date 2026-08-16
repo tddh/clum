@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
 use clum_core::backoff::FullJitterBackoff;
+use clum_core::quic::CcKind;
 
 /// 解析 "30s" / "10m" / "2h" / 纯秒数 "7200"；"0" 表示永不（Duration::ZERO）。
 pub fn parse_duration(s: &str) -> Result<Duration> {
@@ -39,9 +40,18 @@ pub async fn run(
     remote_host: &str,
     remote_port: u16,
     give_up_after: Duration, // Duration::ZERO = 永不放弃
+    cc: CcKind,
 ) -> Result<()> {
-    let mut conn =
-        crate::get_connection(server_addr, ca_cert, api_key, hosts_file, host, "forward").await?;
+    let mut conn = crate::get_connection(
+        server_addr,
+        ca_cert,
+        api_key,
+        hosts_file,
+        host,
+        "forward",
+        cc,
+    )
+    .await?;
     let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{local}")).await?;
     println!(
         "forward: 127.0.0.1:{local} → {host}:{remote_host}:{remote_port} (Ctrl+C to stop{})",
@@ -71,8 +81,16 @@ pub async fn run(
                 wait
             };
             tokio::time::sleep(wait).await;
-            match crate::get_connection(server_addr, ca_cert, api_key, hosts_file, host, "forward")
-                .await
+            match crate::get_connection(
+                server_addr,
+                ca_cert,
+                api_key,
+                hosts_file,
+                host,
+                "forward",
+                cc,
+            )
+            .await
             {
                 Ok(c) => {
                     conn = c;

@@ -8,6 +8,12 @@ mod tui;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
+use clum_core::quic::CcKind;
+
+fn parse_cc(s: &str) -> Result<CcKind, String> {
+    s.parse::<CcKind>()
+        .map_err(|_| format!("invalid congestion control '{s}' (expected auto|bbr|cubic)"))
+}
 
 #[derive(Parser)]
 #[command(name = "clum-cli", about = "AI Agent 远程运维 CLI")]
@@ -28,6 +34,10 @@ struct Cli {
     /// API key for server authentication.
     #[arg(long, env = "CLUM_API_KEY")]
     api_key: Option<String>,
+
+    /// Congestion control: auto (default; private target→bbr, public→cubic), bbr, or cubic.
+    #[arg(long, default_value = "auto", env = "CLUM_CC", value_parser = parse_cc)]
+    cc: CcKind,
 }
 
 #[derive(Subcommand)]
@@ -151,9 +161,10 @@ async fn get_connection(
     hosts_file: &str,
     host: &str,
     purpose: &str,
+    cc: CcKind,
 ) -> anyhow::Result<quinn::Connection> {
     if let Some(addr) = server_addr {
-        term::connect_via_server(addr, ca_cert, host, api_key.as_deref(), purpose).await
+        term::connect_via_server(addr, ca_cert, host, api_key.as_deref(), purpose, cc).await
     } else {
         let config = load_host_config(hosts_file, host)?;
         let addr = config
@@ -164,7 +175,7 @@ async fn get_connection(
             .bridge_token
             .as_deref()
             .context("bridge_token not configured in hosts.yaml")?;
-        term::connect_to_bridge_quic(addr, token, ca_cert).await
+        term::connect_to_bridge_quic(addr, token, ca_cert, cc).await
     }
 }
 
@@ -188,6 +199,7 @@ async fn main() -> anyhow::Result<()> {
     let ca_cert = cli.ca_cert.clone();
     let api_key = cli.api_key.clone();
     let hosts_file = cli.hosts_file.clone();
+    let cc = cli.cc;
 
     let result = match cli.command {
         Commands::Term {
@@ -205,6 +217,7 @@ async fn main() -> anyhow::Result<()> {
                     &host,
                     cli.api_key.as_deref(),
                     &session,
+                    cc,
                 )
                 .await?;
                 let pane = match pane {
@@ -218,6 +231,7 @@ async fn main() -> anyhow::Result<()> {
                             &host,
                             cli.api_key.as_deref(),
                             &session,
+                            cc,
                         )
                         .await?
                     }
@@ -231,16 +245,18 @@ async fn main() -> anyhow::Result<()> {
                     &opencode_dir,
                     Some((server_addr.clone(), host.clone())),
                     cli.api_key.as_deref(),
+                    cc,
                 )
                 .await
             } else {
                 let config = load_host_config(&cli.hosts_file, &host)?;
                 // session 不存在时自动创建，避免 term 报错退出
-                term::ensure_session(&config, cli.ca_cert.as_deref(), &session).await?;
+                term::ensure_session(&config, cli.ca_cert.as_deref(), &session, cc).await?;
                 let pane = match pane {
                     Some(p) => p,
                     None => {
-                        term::find_lowest_pane(&config, cli.ca_cert.as_deref(), &session).await?
+                        term::find_lowest_pane(&config, cli.ca_cert.as_deref(), &session, cc)
+                            .await?
                     }
                 };
                 crate::tui::run_connect_with_ai(
@@ -252,6 +268,7 @@ async fn main() -> anyhow::Result<()> {
                     &opencode_dir,
                     None,
                     None,
+                    cc,
                 )
                 .await
             }
@@ -264,6 +281,7 @@ async fn main() -> anyhow::Result<()> {
                 &hosts_file,
                 &host,
                 "list",
+                cc,
             )
             .await?;
             let (mut send, mut recv) = conn.open_bi().await?;
@@ -358,6 +376,7 @@ async fn main() -> anyhow::Result<()> {
                 &hosts_file,
                 &host,
                 "push",
+                cc,
             )
             .await?;
             let result =
@@ -378,6 +397,7 @@ async fn main() -> anyhow::Result<()> {
                 &hosts_file,
                 &host,
                 "pull",
+                cc,
             )
             .await?;
             let result = transfer::download(&conn, &remote_path, &local_path, bw_limit).await;
@@ -405,6 +425,7 @@ async fn main() -> anyhow::Result<()> {
                 remote_host,
                 remote_port,
                 give_up_after,
+                cc,
             )
             .await
         }

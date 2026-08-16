@@ -1,6 +1,16 @@
 # Changelog
 
-## [0.14.1] — 2026-08-14
+## [0.15.0] — 2026-08-17
+
+### Added
+- **拥塞控制自适应（BBR/CUBIC）+ 显式覆盖**：解决公网链路带宽打满时 QUIC 丢包导致传输断连的问题（TCP/scp 打满不断、QUIC BBR 打满不退避）。
+  - 默认 `auto`：按连接目标地址自动判定——内网（RFC1918/loopback/link-local/IPv6 ULA）用 BBR 保持最大吞吐，公网用 CUBIC 在丢包时主动退避（行为接近 TCP，稳定不断连）。
+  - 显式覆盖优先级高于 auto：`clum-cli --cc bbr|cubic|auto`（CLI，含 `CLUM_CC` 环境变量）；server 端 `CLUM_CC`（env，控制 server→bridge 中继发送段）；bridge 端 `BRIDGE_CC`（env，控制注册连接与直连监听段）。
+  - server 监听端按对端地址动态判定（`Incoming::accept_with` 选择 BBR/CUBIC server config）。
+  - 新增 `clum_core::quic::CcKind`（`Auto`/`Bbr`/`Cubic`，实现 `FromStr` + `from_env`）与 `is_private_network` 公共 API。
+- **MCP 文件传输默认限速改为 0（无限速）**：`server-config.yaml` 的 `file_transfer.upload/download_bandwidth_mbps` 默认值从 70 Mbps 改为 0。原 70 Mbps 默认限速的唯一动机是"防止公网带宽打满导致断连"，已被 CUBIC 丢包退避替代（且硬限速会把高带宽链路白白限制在 70 Mbps）。需要显式限速的用户仍可配置该字段。
+
+
 
 ### Fixed
 - **录制 push 通道推送半成品**（`rmux-bridge/register.rs`）：`scan_cast_files` 仅按 `*.cast` 后缀扫描，不区分录制是否完成——录制中的文件（无 `.meta`，`.meta` 仅 finalize 时生成）会在 30s push 周期内被当作已完成推送给 server，推过即记录不再重推，完整版只能依赖 pull 兜底。实测 server 端 97 个录制中 49 个缺 `exit` 事件（半成品）。修复：只推送「有 `.meta` 且 `synced=false`」的已完成文件，与 `list_unsynced` 语义对齐。

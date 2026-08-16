@@ -4,11 +4,74 @@
 //! transport parameters (flow-control windows, congestion control, keepalive)
 //! stay consistent instead of drifting across copy-pasted implementations.
 
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
+
+/// 拥塞控制算法选择。
+///
+/// `Auto` 为默认行为：按连接目标地址自动判定——内网用 BBR 追求最大吞吐，
+/// 公网用 CUBIC 在丢包时主动退避，避免带宽打满导致 QUIC 断连。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CcKind {
+    Auto,
+    Bbr,
+    Cubic,
+}
+
+impl CcKind {
+    /// 解析为具体算法。`Auto` 时按目标地址判定；无目标地址时回退 `Bbr`。
+    pub fn resolve(self, target: Option<SocketAddr>) -> CcKind {
+        match self {
+            CcKind::Auto => match target {
+                Some(addr) if is_private_network(addr) => CcKind::Bbr,
+                Some(_) => CcKind::Cubic,
+                None => CcKind::Bbr,
+            },
+            other => other,
+        }
+    }
+
+    /// 从环境变量解析，非法或未设置时回退 `Auto`。
+    pub fn from_env(name: &str) -> CcKind {
+        std::env::var(name)
+            .ok()
+            .and_then(|v| v.parse::<CcKind>().ok())
+            .unwrap_or(CcKind::Auto)
+    }
+
+    /// 返回对应算法的 `ControllerFactory`。`Auto` 直接调用时回退 `Bbr`。
+    pub fn factory(self) -> Arc<dyn quinn::congestion::ControllerFactory + Send + Sync> {
+        match self {
+            CcKind::Bbr => Arc::new(quinn::congestion::BbrConfig::default()),
+            CcKind::Cubic => Arc::new(quinn::congestion::CubicConfig::default()),
+            CcKind::Auto => Arc::new(quinn::congestion::BbrConfig::default()),
+        }
+    }
+}
+
+impl std::str::FromStr for CcKind {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "auto" => Ok(CcKind::Auto),
+            "bbr" => Ok(CcKind::Bbr),
+            "cubic" => Ok(CcKind::Cubic),
+            _ => Err("expected auto|bbr|cubic"),
+        }
+    }
+}
+
+/// 判断目标地址是否为内网（RFC1918 / loopback / link-local / IPv6 ULA）。
+pub fn is_private_network(addr: SocketAddr) -> bool {
+    match addr.ip() {
+        IpAddr::V4(ip) => ip.is_private() || ip.is_loopback() || ip.is_link_local(),
+        IpAddr::V6(ip) => ip.is_unique_local() || ip.is_loopback(),
+    }
+}
 
 /// 16 MB 流控窗口：quinn 默认初始拥塞窗口 ~12 KB，内网千兆链路下
 /// 慢启动要 ~20 个 RTT 才能打满带宽；调大窗口大幅缩短爬坡时间。
@@ -50,6 +113,7 @@ const AUTH_OK: &[u8; 3] = b"OK\n";
 pub fn build_transport_config(
     idle_timeout: Duration,
     keepalive: Duration,
+    cc: CcKind,
 ) -> anyhow::Result<quinn::TransportConfig> {
     let mut transport = quinn::TransportConfig::default();
     transport.max_idle_timeout(Some(
@@ -61,7 +125,7 @@ pub fn build_transport_config(
     transport.stream_receive_window(quinn::VarInt::from_u32(WINDOW_SIZE));
     transport.send_window(WINDOW_SIZE as u64);
     transport.receive_window(quinn::VarInt::from_u32(WINDOW_SIZE));
-    transport.congestion_controller_factory(Arc::new(quinn::congestion::BbrConfig::default()));
+    transport.congestion_controller_factory(cc.factory());
     Ok(transport)
 }
 
@@ -86,13 +150,18 @@ pub fn client_endpoint(
     alpn: &[&[u8]],
     idle_timeout: Duration,
     keepalive: Duration,
+    cc: CcKind,
 ) -> anyhow::Result<quinn::Endpoint> {
     let socket = build_udp_socket("[::]:0".parse()?)?;
     let runtime = quinn::default_runtime().context("no async runtime found")?;
     let mut endpoint =
         quinn::Endpoint::new(quinn::EndpointConfig::default(), None, socket, runtime)?;
     let mut client_config = quinn::ClientConfig::new(build_client_crypto(ca_cert_path, alpn)?);
-    client_config.transport_config(Arc::new(build_transport_config(idle_timeout, keepalive)?));
+    client_config.transport_config(Arc::new(build_transport_config(
+        idle_timeout,
+        keepalive,
+        cc,
+    )?));
     endpoint.set_default_client_config(client_config);
     Ok(endpoint)
 }
@@ -128,11 +197,13 @@ pub async fn connect_bridge(
     ca_cert_path: Option<&str>,
     idle_timeout: Duration,
     connect_timeout: Duration,
+    cc: CcKind,
 ) -> anyhow::Result<quinn::Connection> {
     let addr: std::net::SocketAddr = bridge_addr
         .parse()
         .with_context(|| format!("invalid bridge address: {bridge_addr}"))?;
-    let endpoint = client_endpoint(ca_cert_path, &[], idle_timeout, DEFAULT_KEEPALIVE)?;
+    let cc = cc.resolve(Some(addr));
+    let endpoint = client_endpoint(ca_cert_path, &[], idle_timeout, DEFAULT_KEEPALIVE, cc)?;
     let server_name = bridge_addr.split(':').next().unwrap_or("localhost");
     let conn = tokio::time::timeout(connect_timeout, endpoint.connect(addr, server_name)?)
         .await
@@ -186,26 +257,173 @@ mod tests {
 
     #[test]
     fn build_transport_config_does_not_panic_standard_params() {
-        let _config =
-            build_transport_config(Duration::from_secs(30), Duration::from_secs(15)).unwrap();
+        let _config = build_transport_config(
+            Duration::from_secs(30),
+            Duration::from_secs(15),
+            CcKind::Bbr,
+        )
+        .unwrap();
     }
 
     #[test]
     fn build_transport_config_does_not_panic_zero_timeout() {
         let _config =
-            build_transport_config(Duration::from_secs(0), Duration::from_secs(5)).unwrap();
+            build_transport_config(Duration::from_secs(0), Duration::from_secs(5), CcKind::Bbr)
+                .unwrap();
     }
 
     #[test]
     fn build_transport_config_does_not_panic_large_timeout() {
-        let _config =
-            build_transport_config(Duration::from_secs(3600), Duration::from_secs(60)).unwrap();
+        let _config = build_transport_config(
+            Duration::from_secs(3600),
+            Duration::from_secs(60),
+            CcKind::Bbr,
+        )
+        .unwrap();
     }
 
     #[test]
     fn build_transport_config_does_not_panic_zero_keepalive() {
         let _config =
-            build_transport_config(Duration::from_secs(30), Duration::from_secs(0)).unwrap();
+            build_transport_config(Duration::from_secs(30), Duration::from_secs(0), CcKind::Bbr)
+                .unwrap();
+    }
+
+    #[test]
+    fn build_transport_config_accepts_cubic() {
+        let _config = build_transport_config(
+            Duration::from_secs(30),
+            Duration::from_secs(15),
+            CcKind::Cubic,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn build_transport_config_accepts_auto_resolved() {
+        let cc = CcKind::Auto.resolve(Some("8.8.8.8:443".parse().unwrap()));
+        let _config =
+            build_transport_config(Duration::from_secs(30), Duration::from_secs(15), cc).unwrap();
+    }
+
+    #[test]
+    fn is_private_network_detects_rfc1918_ipv4() {
+        for ip in [
+            "10.0.0.1",
+            "10.255.255.255",
+            "172.16.0.1",
+            "172.31.255.255",
+            "192.168.1.1",
+        ] {
+            let addr: std::net::SocketAddr = format!("{ip}:1234").parse().unwrap();
+            assert!(is_private_network(addr), "{ip} should be private");
+        }
+    }
+
+    #[test]
+    fn is_private_network_detects_loopback_and_link_local() {
+        for ip in ["127.0.0.1", "169.254.1.1"] {
+            let addr: std::net::SocketAddr = format!("{ip}:1234").parse().unwrap();
+            assert!(is_private_network(addr), "{ip} should be private");
+        }
+    }
+
+    #[test]
+    fn is_private_network_rejects_public_ipv4() {
+        for ip in ["8.8.8.8", "210.14.159.130", "101.200.139.81", "100.64.0.1"] {
+            let addr: std::net::SocketAddr = format!("{ip}:1234").parse().unwrap();
+            assert!(!is_private_network(addr), "{ip} should be public");
+        }
+    }
+
+    #[test]
+    fn is_private_network_detects_ipv6_private_ranges() {
+        for ip in ["::1", "fd00::1", "fc00::1"] {
+            let addr: std::net::SocketAddr = format!("[{ip}]:1234").parse().unwrap();
+            assert!(is_private_network(addr), "{ip} should be private");
+        }
+    }
+
+    #[test]
+    fn is_private_network_rejects_public_ipv6() {
+        let addr: std::net::SocketAddr = "[2001:4860:4860::8888]:1234".parse().unwrap();
+        assert!(
+            !is_private_network(addr),
+            "public IPv6 should not be private"
+        );
+    }
+
+    #[test]
+    fn cc_resolve_auto_picks_bbr_for_private_target() {
+        let addr: std::net::SocketAddr = "10.0.0.1:1234".parse().unwrap();
+        assert_eq!(CcKind::Auto.resolve(Some(addr)), CcKind::Bbr);
+    }
+
+    #[test]
+    fn cc_resolve_auto_picks_cubic_for_public_target() {
+        let addr: std::net::SocketAddr = "8.8.8.8:1234".parse().unwrap();
+        assert_eq!(CcKind::Auto.resolve(Some(addr)), CcKind::Cubic);
+    }
+
+    #[test]
+    fn cc_resolve_auto_falls_back_to_bbr_without_target() {
+        assert_eq!(CcKind::Auto.resolve(None), CcKind::Bbr);
+    }
+
+    #[test]
+    fn cc_resolve_explicit_overrides_auto_detection() {
+        let private: std::net::SocketAddr = "10.0.0.1:1234".parse().unwrap();
+        let public: std::net::SocketAddr = "8.8.8.8:1234".parse().unwrap();
+        assert_eq!(CcKind::Cubic.resolve(Some(private)), CcKind::Cubic);
+        assert_eq!(CcKind::Bbr.resolve(Some(public)), CcKind::Bbr);
+    }
+
+    #[test]
+    fn cc_from_str_parses_valid_values_case_insensitively() {
+        for s in ["auto", "bbr", "cubic", "AUTO", "Bbr", "CUBIC"] {
+            assert!(s.parse::<CcKind>().is_ok(), "{s} should parse");
+        }
+        assert_eq!("auto".parse::<CcKind>(), Ok(CcKind::Auto));
+        assert_eq!("bbr".parse::<CcKind>(), Ok(CcKind::Bbr));
+        assert_eq!("cubic".parse::<CcKind>(), Ok(CcKind::Cubic));
+    }
+
+    #[test]
+    fn cc_from_str_rejects_invalid_values() {
+        for s in ["", "reno", "vegas", "newreno", "auto,x"] {
+            assert!(s.parse::<CcKind>().is_err(), "{s:?} should be rejected");
+        }
+    }
+
+    #[test]
+    fn cc_from_str_trims_surrounding_whitespace() {
+        assert_eq!("  bbr".parse::<CcKind>(), Ok(CcKind::Bbr));
+        assert_eq!("cubic\n".parse::<CcKind>(), Ok(CcKind::Cubic));
+        assert_eq!(" auto ".parse::<CcKind>(), Ok(CcKind::Auto));
+    }
+
+    #[test]
+    fn cc_from_env_parses_value_and_falls_back_to_auto() {
+        const TEST_ENV: &str = "CLUM_CC_TEST_VAR";
+        unsafe {
+            std::env::set_var(TEST_ENV, "cubic");
+        }
+        assert_eq!(CcKind::from_env(TEST_ENV), CcKind::Cubic);
+        unsafe {
+            std::env::set_var(TEST_ENV, "bogus");
+        }
+        assert_eq!(CcKind::from_env(TEST_ENV), CcKind::Auto);
+        unsafe {
+            std::env::remove_var(TEST_ENV);
+        }
+        assert_eq!(CcKind::from_env(TEST_ENV), CcKind::Auto);
+    }
+
+    #[test]
+    fn cc_factory_builds_controllers_for_concrete_kinds() {
+        let _ = CcKind::Bbr.factory();
+        let _ = CcKind::Cubic.factory();
+        let _ = CcKind::Auto.factory();
     }
 
     #[test]

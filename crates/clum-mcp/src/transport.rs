@@ -7,6 +7,7 @@
 
 use anyhow::{Context, Result};
 use clum_core::backoff::FullJitterBackoff;
+use clum_core::quic::CcKind;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context as TaskContext, Poll};
@@ -18,6 +19,10 @@ use tokio::time::sleep;
 const FILE_IDLE_TIMEOUT: Duration = Duration::from_secs(3600);
 /// QUIC 握手超时。
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+fn server_cc() -> CcKind {
+    CcKind::from_env("CLUM_CC")
+}
 
 /// Establish QUIC connection to bridge and open the JSON protocol stream.
 /// Returns authenticated Connection + json stream's send/recv handles.
@@ -33,6 +38,7 @@ pub async fn connect_to_bridge_quic(
         ca_cert_path,
         FILE_IDLE_TIMEOUT,
         CONNECT_TIMEOUT,
+        server_cc(),
     )
     .await?;
     tracing::info!("QUIC connected and authenticated to {}", bridge_addr);
@@ -54,6 +60,7 @@ pub async fn connect_to_bridge_quic_forward(
         ca_cert_path,
         FILE_IDLE_TIMEOUT,
         CONNECT_TIMEOUT,
+        server_cc(),
     )
     .await?;
     tracing::info!(
@@ -75,11 +82,13 @@ pub async fn connect_to_bridge_quic_stream(
     let addr: std::net::SocketAddr = bridge_addr
         .parse()
         .with_context(|| format!("invalid bridge address: {bridge_addr}"))?;
+    let cc = server_cc().resolve(Some(addr));
     let endpoint = clum_core::quic::client_endpoint(
         ca_cert_path,
         &[],
         Duration::from_secs(idle_timeout_secs),
         Duration::from_secs(keepalive_secs),
+        cc,
     )?;
     let server_name = bridge_addr.split(':').next().unwrap_or("localhost");
     let conn = tokio::time::timeout(CONNECT_TIMEOUT, endpoint.connect(addr, server_name)?)

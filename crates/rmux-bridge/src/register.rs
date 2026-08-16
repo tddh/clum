@@ -100,14 +100,16 @@ pub async fn run_registration_loop(config: RegisterConfig) {
 }
 
 async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
+    let server_addr = resolve_addr(&config.server_addr).await?;
+    let cc = clum_core::quic::CcKind::from_env("BRIDGE_CC").resolve(Some(server_addr));
     let endpoint = clum_core::quic::client_endpoint(
         config.ca_cert.as_deref(),
         &[b"clum"],
         Duration::from_secs(120),
         clum_core::quic::DEFAULT_KEEPALIVE,
+        cc,
     )?;
 
-    let server_addr = resolve_addr(&config.server_addr).await?;
     let server_name = extract_server_name(&config.server_addr);
 
     tracing::info!(addr = %server_addr, "connecting to server");
