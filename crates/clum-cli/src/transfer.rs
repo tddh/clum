@@ -848,30 +848,30 @@ mod tests {
     #[test]
     fn test_resolve_remote_file_dir_suffix_appends_local_name() {
         let local = Path::new("/tmp/foo.txt");
-        assert_eq!(resolve_remote_file("/remote/", &local), "/remote/foo.txt");
+        assert_eq!(resolve_remote_file("/remote/", local), "/remote/foo.txt");
         assert_eq!(
-            resolve_remote_file("/remote/dir/", &local),
+            resolve_remote_file("/remote/dir/", local),
             "/remote/dir/foo.txt"
         );
-        assert_eq!(resolve_remote_file("/", &local), "/foo.txt");
+        assert_eq!(resolve_remote_file("/", local), "/foo.txt");
     }
 
     #[test]
     fn test_resolve_remote_file_file_path_unchanged() {
         let local = Path::new("/tmp/foo.txt");
         assert_eq!(
-            resolve_remote_file("/remote/foo.txt", &local),
+            resolve_remote_file("/remote/foo.txt", local),
             "/remote/foo.txt"
         );
-        assert_eq!(resolve_remote_file("/remote/bar", &local), "/remote/bar");
-        assert_eq!(resolve_remote_file("rel/foo.txt", &local), "rel/foo.txt");
+        assert_eq!(resolve_remote_file("/remote/bar", local), "/remote/bar");
+        assert_eq!(resolve_remote_file("rel/foo.txt", local), "rel/foo.txt");
     }
 
     #[test]
     fn test_resolve_remote_file_no_file_name() {
         let local = Path::new("");
-        assert_eq!(resolve_remote_file("/remote/", &local), "/remote/");
-        assert_eq!(resolve_remote_file("/remote/file", &local), "/remote/file");
+        assert_eq!(resolve_remote_file("/remote/", local), "/remote/");
+        assert_eq!(resolve_remote_file("/remote/file", local), "/remote/file");
     }
 
     #[tokio::test]
