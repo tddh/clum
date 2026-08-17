@@ -17,6 +17,7 @@ async fn log_cli_audit(db: &audit::AuditDb, action: AuditAction, detail: String)
         host_name: String::new(),
         session_name: String::new(),
         pane_id: None,
+        operation_id: None,
         action,
         detail,
         output_summary: None,

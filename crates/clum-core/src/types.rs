@@ -67,6 +67,10 @@ pub struct AuditEvent {
     pub host_name: String,
     pub session_name: String,
     pub pane_id: Option<String>,
+    /// End-to-end operation id linking this audit event to its log lines
+    /// and (for session-scoped ops) recording metadata.
+    #[serde(default)]
+    pub operation_id: Option<String>,
     pub action: AuditAction,
     pub detail: String,
     pub output_summary: Option<String>,
@@ -221,6 +225,7 @@ mod tests {
             host_name: "tf01".to_string(),
             session_name: "clum".to_string(),
             pane_id: Some("%0".to_string()),
+            operation_id: None,
             action: AuditAction::Exec,
             detail: "ls -la /tmp".to_string(),
             output_summary: Some("3 files listed".to_string()),
@@ -555,6 +560,7 @@ mod tests {
             host_name: "build-01".to_string(),
             session_name: "build-session".to_string(),
             pane_id: Some("%2".to_string()),
+            operation_id: None,
             action: AuditAction::DeployBridge,
             detail: "deploy v2.3.1".to_string(),
             output_summary: Some("deployed to 3 hosts".to_string()),

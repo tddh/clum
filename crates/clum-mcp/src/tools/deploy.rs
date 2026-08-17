@@ -27,6 +27,11 @@ pub(crate) async fn audit(
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .clone();
+    let operation_id = ctx
+        .current_op
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     let event = AuditEvent {
         event_id: Uuid::new_v4(),
         timestamp: Utc::now(),
@@ -34,6 +39,7 @@ pub(crate) async fn audit(
         host_name: host.to_string(),
         session_name: session.to_string(),
         pane_id: pane_id.map(|s| s.to_string()),
+        operation_id,
         action,
         detail: detail.to_string(),
         output_summary: output_summary.map(|s| s.to_string()),

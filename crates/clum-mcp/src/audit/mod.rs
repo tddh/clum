@@ -38,6 +38,7 @@ impl AuditDb {
                 host_name      TEXT NOT NULL,
                 session_name   TEXT NOT NULL DEFAULT '',
                 pane_id        TEXT,
+                operation_id   TEXT,
                 action         TEXT NOT NULL,
                 detail         TEXT NOT NULL DEFAULT '',
                 output_summary TEXT,
@@ -57,6 +58,8 @@ impl AuditDb {
                 ON audit_events(success);",
         )
         .context("failed to create audit schema")?;
+
+        migrate_operation_id(&conn)?;
 
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
@@ -79,6 +82,7 @@ impl AuditDb {
                 host_name      TEXT NOT NULL,
                 session_name   TEXT NOT NULL DEFAULT '',
                 pane_id        TEXT,
+                operation_id   TEXT,
                 action         TEXT NOT NULL,
                 detail         TEXT NOT NULL DEFAULT '',
                 output_summary TEXT,
@@ -107,6 +111,17 @@ impl AuditDb {
     }
 }
 
+/// Add `operation_id` column to legacy databases created before v0.16.
+/// Idempotent: fails silently if the column already exists.
+fn migrate_operation_id(conn: &Connection) -> Result<()> {
+    let result = conn.execute("ALTER TABLE audit_events ADD COLUMN operation_id TEXT", []);
+    match result {
+        Ok(_) => Ok(()),
+        Err(e) if e.to_string().contains("duplicate column") => Ok(()),
+        Err(e) => Err(e).context("failed to migrate audit schema (operation_id)"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,6 +138,7 @@ mod tests {
             host_name: host.into(),
             session_name: "test-session".into(),
             pane_id: Some("%0".into()),
+            operation_id: None,
             action,
             detail: "test detail".into(),
             output_summary: None,

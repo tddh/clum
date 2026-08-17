@@ -544,6 +544,7 @@ async fn handle_agent_connection(
             host_name: host.clone(),
             session_name: String::new(),
             pane_id: None,
+            operation_id: None,
             action: clum_core::types::AuditAction::AgentRelay,
             detail: format!("purpose={purpose} addr={remote_addr}"),
             output_summary: None,

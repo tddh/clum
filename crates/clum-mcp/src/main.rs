@@ -82,6 +82,10 @@ struct Cli {
 
     #[arg(long)]
     static_dir: Option<PathBuf>,
+
+    /// Log level: trace/debug/info/warn/error (also via RUST_LOG env)
+    #[arg(long, default_value = "info")]
+    log_level: String,
 }
 
 pub(crate) fn resolve_audit_db_path(custom: Option<PathBuf>) -> PathBuf {
@@ -108,10 +112,14 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let _ = rustls::crypto::ring::default_provider().install_default();
+    let cli = Cli::parse();
+
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&cli.log_level));
     tracing_subscriber::fmt()
+        .with_env_filter(filter)
         .with_writer(std::io::stderr)
         .init();
-    let cli = Cli::parse();
 
     let file_config = match &cli.config {
         Some(path) => match server_config::ServerConfig::load(path) {
@@ -212,6 +220,7 @@ async fn main() -> anyhow::Result<()> {
                                 host_name: String::new(),
                                 session_name: String::new(),
                                 pane_id: None,
+                                operation_id: None,
                                 action: clum_core::types::AuditAction::ConfigReload,
                                 detail: "SIGHUP received".to_string(),
                                 output_summary: None,
@@ -256,6 +265,7 @@ async fn main() -> anyhow::Result<()> {
         audit_db: audit_db.clone(),
         agent_name: Arc::new(std::sync::Mutex::new("unknown".to_string())),
         caller_group: Arc::new(std::sync::Mutex::new(None)),
+        current_op: Arc::new(std::sync::Mutex::new(None)),
         forward_manager: Arc::new(forward::ForwardManager::new()),
         stream_manager: Arc::new(stream::StreamManager::new()),
         recordings_dir,

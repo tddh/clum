@@ -12,9 +12,9 @@ impl AuditDb {
             conn.execute(
                 "INSERT INTO audit_events
                     (event_id, timestamp, agent_name, host_name, session_name,
-                     pane_id, action, detail, output_summary, success,
+                     pane_id, operation_id, action, detail, output_summary, success,
                      duration_ms, error_message)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
                 params![
                     event.event_id.to_string(),
                     event.timestamp.to_rfc3339(),
@@ -22,6 +22,7 @@ impl AuditDb {
                     event.host_name,
                     event.session_name,
                     event.pane_id,
+                    event.operation_id,
                     serde_json::to_string(&event.action)
                         .unwrap_or_else(|e| {
                             tracing::error!("failed to serialize audit action: {}", e);

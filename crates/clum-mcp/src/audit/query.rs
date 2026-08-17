@@ -29,6 +29,7 @@ pub struct AuditRow {
     pub host_name: String,
     pub session_name: String,
     pub pane_id: Option<String>,
+    pub operation_id: Option<String>,
     pub action: String,
     pub detail: String,
     pub output_summary: Option<String>,
@@ -47,7 +48,7 @@ impl AuditDb {
 
             let mut sql = String::from(
                 "SELECT id, timestamp, agent_name, host_name, session_name,
-                        pane_id, action, detail, output_summary, success,
+                        pane_id, operation_id, action, detail, output_summary, success,
                         duration_ms, error_message
                  FROM audit_events WHERE 1=1",
             );
@@ -105,12 +106,13 @@ impl AuditDb {
                     host_name: row.get(3)?,
                     session_name: row.get(4)?,
                     pane_id: row.get(5)?,
-                    action: row.get(6)?,
-                    detail: row.get(7)?,
-                    output_summary: row.get(8)?,
-                    success: row.get::<_, i32>(9)? != 0,
-                    duration_ms: row.get(10)?,
-                    error_message: row.get(11)?,
+                    operation_id: row.get(6)?,
+                    action: row.get(7)?,
+                    detail: row.get(8)?,
+                    output_summary: row.get(9)?,
+                    success: row.get::<_, i32>(10)? != 0,
+                    duration_ms: row.get(11)?,
+                    error_message: row.get(12)?,
                 })
             })?;
 

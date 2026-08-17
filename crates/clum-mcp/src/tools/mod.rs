@@ -33,6 +33,7 @@ pub struct ToolContext {
     pub audit_db: Arc<audit::AuditDb>,
     pub agent_name: Arc<std::sync::Mutex<String>>,
     pub caller_group: Arc<std::sync::Mutex<Option<String>>>,
+    pub current_op: Arc<std::sync::Mutex<Option<String>>>,
     pub forward_manager: Arc<ForwardManager>,
     pub stream_manager: Arc<StreamManager>,
     pub recordings_dir: PathBuf,
@@ -56,6 +57,12 @@ impl Clone for ToolContext {
             )),
             caller_group: Arc::new(std::sync::Mutex::new(
                 self.caller_group
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone(),
+            )),
+            current_op: Arc::new(std::sync::Mutex::new(
+                self.current_op
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .clone(),
@@ -159,7 +166,11 @@ pub async fn execute_tool(
 ) -> Result<Value> {
     authorize(ctx, tool_name, &args).await?;
 
-    match tool_name {
+    let op = uuid::Uuid::now_v7().to_string();
+    *ctx.current_op.lock().unwrap_or_else(|e| e.into_inner()) = Some(op.clone());
+    let start = std::time::Instant::now();
+
+    let result = match tool_name {
         "clum_usage_rules" => Ok(json!({})),
         "host_list" => discovery::host_list(ctx).await,
         "host_filter" => discovery::host_filter(ctx, args).await,
@@ -430,7 +441,23 @@ pub async fn execute_tool(
         }
         "search_recordings" => search::search_recordings(ctx, args).await,
         _ => anyhow::bail!("unknown tool: {}", tool_name),
-    }
+    };
+
+    let duration_ms = start.elapsed().as_millis() as u64;
+    let outcome = match &result {
+        Ok(v) if v.get("ok").and_then(|x| x.as_bool()) == Some(false) => "error",
+        Ok(_) => "ok",
+        Err(_) => "error",
+    };
+    tracing::info!(
+        op = %op,
+        tool = %tool_name,
+        result = %outcome,
+        duration_ms,
+        "tool call"
+    );
+    *ctx.current_op.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    result
 }
 
 /// Read a recording file's content, ensuring the resolved path stays within
