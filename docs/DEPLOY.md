@@ -216,6 +216,9 @@ ssh root@<your-bridge-ip> "systemctl status rmux-bridge --no-pager"
 | `--static-dir` | 无 | 静态文件服务目录（install.sh、ca.crt、releases 等） |
 | `--hosts-file` | `config/hosts.yaml` | 主机注册表路径（直连回退用） |
 | `--ca-cert` | 无 | CA 证书路径（必填，不传则拒绝连接） |
+| `--log-level` | `info` | 日志级别：trace/debug/info/warn/error（`RUST_LOG` 环境变量优先） |
+
+> **审计与日志关联（operation_id）**：每次 MCP 工具调用会生成一个 `operation_id`（UUID），同时写入审计事件（`audit_events.operation_id`）与日志行（`op=... tool=... result=... duration_ms=...`）。排查时用同一 ID 即可在 `audit_query` 与 `journalctl` 之间定位同一次操作的全链路记录。
 
 > **拥塞控制（Server）**：环境变量 `CLUM_CC=auto|bbr|cubic`（默认 `auto`）控制 server→bridge 中继发送段。`auto` 下监听端按对端地址自动判定（内网→BBR，公网→CUBIC）。公网部署建议显式 `CLUM_CC=cubic` 以在丢包时主动退避，避免带宽打满断连。
 | `--audit-db` | `~/.clum/audit.db` | 审计数据库路径 |

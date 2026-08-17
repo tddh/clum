@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **审计与日志关联（operation_id）**：每次 MCP 工具调用生成一个 `operation_id`（UUID v7，含毫秒时间戳、单调递增、SQLite 索引友好），同时写入审计事件（`audit_events.operation_id`）与日志单行摘要（`op=... tool=... result=... duration_ms=...`）。排查时用同一 ID 即可在 `audit_query` 与 `journalctl` 之间定位同一次操作的全链路记录。
+  - `audit_query` 结果新增 `operation_id` 字段。
+  - 旧审计库自动迁移（幂等 `ALTER TABLE` 加列），历史事件为 NULL。
+  - 系统级事件（AgentRelay / ConfigReload / CLI 审计）不生成 op，保持 NULL——op 只标记「AI/人发起的工具调用」。
+- **clum-mcp 日志级别可调**：新增 `--log-level`（trace/debug/info/warn/error，`RUST_LOG` 环境变量优先），对齐 rmux-bridge 已有的 EnvFilter 机制。
+
 ## [0.15.0] — 2026-08-17
 
 ### Added
