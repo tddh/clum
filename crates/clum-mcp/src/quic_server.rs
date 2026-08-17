@@ -347,12 +347,15 @@ async fn handle_bridge_registration(
             }
             Err(quinn::ConnectionError::ApplicationClosed { .. }) => break,
             Err(quinn::ConnectionError::LocallyClosed) => break,
-            Err(_) => break,
+            Err(e) => {
+                tracing::warn!(%hostname, error = %e, "bridge connection closed with error");
+                break;
+            }
         }
     }
 
     registry.unregister(&hostname).await;
-    tracing::info!(%hostname, "bridge disconnected");
+    tracing::info!(%hostname, reason = ?conn.close_reason(), "bridge disconnected");
     Ok(())
 }
 

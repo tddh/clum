@@ -322,7 +322,7 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
         }
     }
 
-    tracing::info!("connection closed, will reconnect");
+    tracing::info!(reason = ?conn.close_reason(), "connection closed, will reconnect");
     Ok(())
 }
 
