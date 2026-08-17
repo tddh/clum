@@ -105,6 +105,17 @@ session_attach(host, session_name="clum")
 
 **原因**：这些服务的重启/重载会导致 clum 连接断开。`exec` 依赖与 bridge 的连接来等待命令退出——连接已不存在，`exec` 永远收不到返回，直接超时。`send_keys` 将命令写入 tmux pane，命令在远端 tmux 里独立执行，不受连接影响。命令完成后通过 `capture_pane` 或 `host_list`（等 bridge 重新上线）验证结果。
 
+#### send_keys 三个关键要点（踩坑教训）
+
+1. **`keys` 必须以 `\n` 结尾才会执行**：`send_keys(keys="systemctl restart clum-mcp\n")` 会回车执行；漏掉尾部 `\n` 时命令只被"输入"到 pane 的输入行，不会执行。这是最常见的使用错误。
+2. **`wait_for_text` 可能假成功**：未执行的命令文本**本身就显示在 pane 输入行**上，`wait_for_text` 会匹配到输入行中的文本而返回 `found: true`——但这只是"命令被输入了"，不是"命令执行完成"。验证是否真正执行，必须看**输出结果**（如命令的产物、时间戳、PID 变化），不能只看 wait_for_text 命中。
+3. **误输入了未执行命令的恢复方法**：先 `send_keys(keys="\x03")`（Ctrl-C）清空输入行回到提示符，再重新发送带 `\n` 的正确命令。
+
+**验证运维操作的可靠方式**：
+- 替换二进制：对比 `ls -la` 的**大小和时间戳**、`sha256sum` 哈希
+- 重启服务：`systemctl show <svc> -p ActiveEnterTimestamp -p MainPID`——PID 变了 = 真的重启了
+- 服务重启后 server 不可用是正常的：`host_list` 全部 `online: null` → bridge 正在退避重连，等 1-2 分钟全部恢复 `online: true`
+
 ### 8. 执行后必须验证
 
 **不是 exec 返回 ok 就代表操作成功。** 关键操作后必须捕获输出验证结果：
@@ -432,6 +443,7 @@ Pane 管理？
 ├── 移动 pane → `break_pane` / `join_pane`
 ├── 交换 pane → `swap_pane`
 └── 多 pane 同时输入 → `broadcast_keys`
+    ⚠️ broadcast_keys = 单台主机上的多个 pane；**跨主机多台机器**用 `batch_send_keys`（见下）
 
 Window 管理？
 ├── 新建窗口 → `split_window`

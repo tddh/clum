@@ -72,12 +72,12 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "host_list",
-                "description": "List all registered remote hosts from the host registry (hosts.yaml). Returns {\"hosts\": [...], \"count\": N} where each host object includes name, group, tags, labels, bridge_addr, remote_addr (IP:port for enrolled bridges), online (true for enrolled bridges, null for hosts.yaml-only), and via (\"enrolled\" or \"direct\"). Use this to discover available hosts before performing operations. This is typically the first tool called in any workflow.",
+                "description": "List all registered remote hosts from the registry. Returns hosts with name, group, tags, labels, online status, and connection mode (enrolled/direct).\n\nUse this first in any workflow to discover available hosts before operating on them.",
                 "inputSchema": { "type": "object", "properties": {}, "required": [] }
             },
             {
                 "name": "host_filter",
-                "description": "Filter hosts from the registry by group, tags, labels, or name glob pattern. All filters are ANDed together. Use this to target specific subsets of hosts for batch operations. Returns matching hosts with full metadata. Example: filter by group='production' and tags=['web'] to get all production web servers.",
+                "description": "Filter hosts from the registry by group, tags, labels, or name glob pattern (all filters ANDed).\n\nUse this to target a specific subset of hosts — e.g. filter group='production' tags=['web'] before batch operations.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -91,7 +91,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "host_set_meta",
-                "description": "Set metadata (group, tags, labels) for an enrolled bridge host. Changes are persisted to SQLite and take effect immediately in host_list/host_filter. Only works for hosts that have a bridge registered via `bridge add`.",
+                "description": "Set metadata (group, tags, labels) for an enrolled bridge host. Persisted to SQLite, takes effect immediately in host_list/host_filter.\n\nOnly works for hosts with a bridge registered via `bridge add`. Do NOT use for hosts.yaml-only hosts.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -105,12 +105,12 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "reload_config",
-                "description": "Reload the host registry from the hosts.yaml configuration file without restarting the MCP server. Use this after editing hosts.yaml to pick up new, removed, or modified host entries. Returns the number of hosts loaded.",
+                "description": "Reload the host registry from hosts.yaml without restarting the MCP server.\n\nUse this after editing hosts.yaml to pick up new, removed, or modified host entries. Returns the number of hosts loaded.",
                 "inputSchema": { "type": "object", "properties": {}, "required": [] }
             },
             {
                 "name": "session_create",
-                "description": "Create a new detached terminal session on a remote host. Returns the session info including the initial pane_id (typically %0). Sessions persist across disconnects. If a session with the same name already exists, it will return an error — use session_attach to check first. Default session name is 'clum'. Use this when you need a fresh session or the default doesn't exist yet.",
+                "description": "Create a new detached terminal session on a remote host. Sessions persist across disconnects.\n\nUse this when the default session 'clum' doesn't exist yet — first session_attach to check. If the session already exists, an error is returned.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -122,7 +122,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "session_list",
-                "description": "List all active terminal sessions on a remote host. Returns session names and metadata. Use this to discover existing sessions before creating new ones or to verify session state. Sessions are persistent and survive disconnects.",
+                "description": "List all active terminal sessions on a remote host. Sessions are persistent and survive disconnects.\n\nUse this to discover existing sessions before creating new ones, or to verify session state.",
                 "inputSchema": {
                     "type": "object",
                     "properties": { "host": { "type": "string", "description": "Hostname, e.g. tf01" } },
@@ -131,7 +131,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "session_attach",
-                "description": "Check if a session exists on the remote host. Returns ok=true if the session exists, ok=false otherwise. This is a read-only check — it does NOT attach to the session or modify its state. Use this before session_create to avoid 'session already exists' errors, or to verify a session is still active. Typical workflow: session_attach → if not found → session_create.",
+                "description": "Check if a session exists on a remote host (read-only, does NOT attach or modify state). Returns ok=true if the session exists.\n\nUse this before session_create to avoid 'already exists' errors. Typical workflow: session_attach → if not found → session_create.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -143,7 +143,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "session_detach",
-                "description": "Check if a session exists on the remote host. Functionally identical to session_attach — both are read-only existence checks. Returns ok=true if the session exists, ok=false otherwise. The name 'detach' is historical; this does NOT detach from a session. Use session_attach or session_detach interchangeably for existence checks.",
+                "description": "Check if a session exists on a remote host — functionally identical to session_attach (read-only existence check, does NOT detach).\n\nUse session_attach or session_detach interchangeably for existence checks. The name 'detach' is historical.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -155,21 +155,21 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "send_keys",
-                "description": "Send keystrokes to a pane, supporting escape sequences (\\n=Enter, \\t=Tab, \\r=CR, \\e=Escape, \\x03=Ctrl-C, \\xNN=hex). Prefer exec for running commands; prefer send_text for plain text without escape interpretation.",
+                "description": "Send keystrokes to a pane, supporting escape sequences (\\n=Enter, \\t=Tab, \\x03=Ctrl-C, \\xNN=hex).\n\nUse this for interactive programs (vim, htop) or when you must trigger input without waiting for output.\n\nPrefer exec for running plain commands (it waits and captures output); prefer send_text for literal text without escape interpretation.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
-                        "keys": { "type": "string", "description": "Key sequence, e.g. \\n=Enter, \\x03=Ctrl-C" }
+                        "keys": { "type": "string", "description": "Key sequence, e.g. \\n=Enter, \\x03=Ctrl-C. ⚠️ End with \\n to press Enter — a sequence without trailing \\n is typed but NOT executed." }
                     },
                     "required": ["host", "keys"]
                 }
             },
             {
                 "name": "capture_pane",
-                "description": "Capture pane text (default last 200 lines, max_lines=0 for full scrollback). Advanced capture with ansi, start_line, end_line, join_wrapped, preserve_spaces, alternate, buffer_name for fine-grained control. Returns text plus terminal_state (ready/running/password/confirm/repl/editor/pager/unknown) and cursor position.",
+                "description": "Capture a pane's visible text (default last 200 lines, max_lines=0 for full scrollback), returning text plus terminal_state and cursor position.\n\nUse this to read what is currently on screen — after running a command, to inspect output, or to check what program is active.\n\nDo NOT use for monitoring new output over time — use stream_pane (incremental output) or wait_for_text (block until text appears) instead.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -190,7 +190,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "wait_for_text",
-                "description": "Block until specific text appears in the pane's visible output, or timeout expires. Uses event-driven detection via the rmux daemon (not polling). Returns found=true with terminal_state and cursor on success; found=false on timeout (WITHOUT terminal_state). Use this instead of polling capture_pane in a loop. Ideal for waiting for command prompts, completion messages, or error indicators. Default timeout is 30 seconds.",
+                "description": "Block until a specific text string appears in a pane's visible output, or timeout expires (default 30s). Returns found=true with terminal_state on success.\n\nUse this instead of polling capture_pane in a loop — e.g. waiting for a command prompt, 'PLAY RECAP', or an error line.\n\nDo NOT use to wait for process exit — use wait_exit. Do NOT use when you don't know what text to expect — use wait_stable.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -205,7 +205,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "shell_command",
-                "description": "Run a command via /bin/sh -c in a pane, replacing the current shell process. The pane MUST be idle (no running process). Interprets the command through a shell, so you can use shell features like pipes, redirects, and variable expansion. Use this for complex shell one-liners. Unlike exec, this does NOT wait for completion or capture output — use stream_pane or capture_pane to monitor. For simple commands that need output captured, prefer exec.",
+                "description": "Run a command via /bin/sh -c in a pane, REPLACING the current shell process. The pane should be idle — no code-level check is performed; if a process is already running, behavior depends on the rmux daemon.\n\nUse this for complex shell one-liners (pipes, redirects, variable expansion) where you want the command to own the pane.\n\nDo NOT use for simple commands that need output captured — use exec. Unlike exec, this does NOT wait for completion or capture output — monitor with stream_pane or capture_pane.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -219,7 +219,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "respawn_pane",
-                "description": "Respawn a pane's process — restart the default shell or launch a custom command. Use this when a process has exited and you want to reuse the pane, when the shell needs a reset, or when you want to replace the running process. If the pane has a running process, set kill=true to force-kill it first (otherwise respawn will fail). Supports custom command, working directory, environment variables, and keep_alive_on_exit to prevent the pane from closing when the process exits. Without a command parameter, restarts the default shell.",
+                "description": "Respawn a pane's process — restart the default shell or launch a custom command.\n\nUse this when a process has exited and you want to reuse the pane, the shell needs a reset, or you want to replace the running process. If the pane has a running process, set kill=true to force-kill it first. Supports custom command, cwd, env, and keep_alive_on_exit.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -239,7 +239,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "wait_exit",
-                "description": "Wait for the process running in a pane to exit and return its exit status. Blocks until the process terminates or timeout expires. On success: {ok:true, exited:true, exit_code:N, signal:N} if the process exited, or {ok:true, exited:false} if the pane disappeared. On timeout: {ok:false, error:\"timeout...\"}. Use this after shell_command to wait for completion. Default timeout is 30 seconds. Note: exec already waits for exit internally — you don't need wait_exit after exec.",
+                "description": "Wait for the process running in a pane to exit and return its exit status.\n\nUse this after shell_command to wait for completion. Default timeout 30s.\n\nDo NOT use after exec — exec already waits for exit internally.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -253,7 +253,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "split_window",
-                "description": "Create a new empty window in a session. The new window contains a single pane running the default shell. Use this to create separate workspaces within a session (like browser tabs). For splitting an existing pane into multiple panes, use split_pane instead. The direction parameter is currently ignored. Returns the new window index.",
+                "description": "Create a new empty window in a session (like a browser tab), containing a single pane with the default shell.\n\nUse this to create separate workspaces within a session.\n\nDo NOT use to split an existing pane — use split_pane instead. The direction parameter is currently ignored.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -266,7 +266,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "stream_pane",
-                "description": "Blocking read from a pane's output stream. Creates a stream on first call (returns current snapshot + subsequent output), reuses it on later calls (returns only new output). Blocks until data arrives or timeout_ms expires. Use with long-running commands instead of capture_pane polling. Stream state is held in-memory on the MCP server — if the server restarts or the bridge connection drops, the next call creates a fresh stream (returns a new snapshot).",
+                "description": "Blocking read from a pane's output stream. First call creates the stream (returns current snapshot + subsequent output); later calls reuse it (return only new output). Blocks until data arrives or timeout_ms expires.\n\nUse this to monitor long-running commands (tail -f, builds) incrementally instead of polling capture_pane.\n\nNote: stream state is held in-memory on the MCP server — after a server restart or bridge drop, the next call creates a fresh stream.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -280,7 +280,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "file_upload",
-                "description": "Upload files/directories to remote host via QUIC. Central server mode: local_path refers to the SERVER filesystem, not the client machine. For client-to-remote transfers use clum-cli push. Auto-creates target dirs. overwrite: overwrite(default)|skip|rename|error. exclude: glob patterns. bandwidth_limit_mbps: rate limit in Mbps (0=unlimited). Paths containing '..' are rejected by the bridge (path traversal protection). ⚠️ Do NOT add exclude/overwrite unless user explicitly requests.",
+                "description": "Upload files/directories to a remote host via QUIC.\n\nUse this to push files to the SERVER filesystem in central server mode. For client-to-remote transfers use clum-cli push instead.\n\nAuto-creates target dirs. overwrite: overwrite|skip|rename|error (default overwrite). Paths containing '..' are rejected. ⚠️ Do NOT set exclude/overwrite unless the user explicitly requests.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -296,7 +296,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "file_download",
-                "description": "Download a file or directory from remote host via QUIC. Central server mode: local_path writes to the SERVER filesystem, not the client machine. For remote-to-client downloads use clum-cli pull. Auto-detects path type: single file downloads directly; directory recursively downloads all files preserving structure. bandwidth_limit_mbps: rate limit in Mbps (0=unlimited). Returns size and SHA256 for files, or file list for directories. Paths containing '..' are rejected by the bridge; MCP validates relative paths from bridge. ⚠️ Do NOT modify paths or add filters unless user explicitly requests.",
+                "description": "Download a file or directory from a remote host via QUIC, saving it to the MCP server's local filesystem.\n\nUse this to fetch remote files down to the server in central server mode. For remote-to-client downloads use clum-cli pull instead.\n\nAuto-detects file vs directory. Returns size and SHA256 for files. Paths containing '..' are rejected. ⚠️ Do NOT modify paths or add filters unless the user explicitly requests.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -310,7 +310,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "exec",
-                "description": "One-shot command execution: send command → wait for exit → capture full output from scrollback (start_marker → sentinel range, complete terminal context including prompt and command echo; max_lines truncates to the LAST N lines of output, default 200, 0=unlimited — large outputs of hundreds/thousands of lines are fully captured up to the daemon history limit), 10min timeout. Automatically clears any unexecuted input before running. Returns output, exit_code, duration_ms, plus terminal_state (ready/running/password/confirm/repl/editor/pager/unknown) and cursor position. Shell combiners (&&, ;, |) are allowed — PREFER combining multiple read-only diagnostic commands into a single exec to reduce round-trips (e.g., 'df -h && free -m && uptime'). Exec auto-detects terminal state before running and refuses if not ready. CAUTION: some commands may trigger pager/editor (e.g., git log, journalctl). If that happens mid-chain, subsequent commands won't execute. Use --no-pager or append '| cat' for commands that might page. For self-terminating commands (ls, cat, grep, systemctl, kubectl, curl). NOT for interactive programs (vim, htop) or non-terminating commands (tail -f, ping). Use send_keys + capture_pane for those. The 10min default timeout is just a safety net — normal commands (including builds, apt/yum installs, docker pulls) do NOT need timeout_ms set. The wait is resilient: if the connection drops mid-wait (bridge restart, network flap, QUIC idle), exec transparently reconnects with backoff and resumes waiting within the same timeout budget — the sentinel marker lives on the remote pane, so command execution is never affected by reconnects. On timeout the command keeps running (unlike collect_until_exit) and output can be recovered later with capture_pane. For very long tasks (ansible-playbook, terraform, large builds) prefer send_keys + collect_until_exit or stream_pane instead.",
+                "description": "Execute a shell command on a remote Linux host in an existing session pane, waiting for it to exit and returning full output plus exit code.\n\nUse this for self-terminating commands you expect to finish (ls, cat, grep, df, systemctl, kubectl, curl). PREFER combining read-only checks with && or ; (e.g. 'df -h && free -m') to save round-trips.\n\nDo NOT use for interactive programs (vim, htop) — use send_keys. Do NOT use for long-running commands (builds, ansible) — use shell_command then monitor with wait_for_text / stream_pane. Do NOT use for large-output commands — use send_keys + collect_until_exit. Refuses to run when the terminal is not in ready state (e.g. inside vim/less). On timeout the command keeps running — recover output later with capture_pane.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -327,7 +327,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "split_pane",
-                "description": "Split an existing pane into two panes. horizontal direction creates top/bottom panes, vertical direction creates left/right panes. The new pane runs a default shell. Returns the new pane_id. Use this to create multiple panes within a window for parallel work. For creating a new window (separate workspace), use split_window. For splitting and immediately running a command in the new pane, use split_pane_with.",
+                "description": "Split an existing pane into two panes. horizontal = top/bottom, vertical = left/right. The new pane runs a default shell.\n\nUse this to create multiple panes within a window for parallel work.\n\nDo NOT use to create a new window — use split_window. Do NOT use when you want to run a command immediately in the new pane — use split_pane_with.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -341,7 +341,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "resize_pane",
-                "description": "Resize a pane to the specified dimensions (columns x rows). Default size is 80x24. Use this to adjust pane size for better visibility or to fit specific output. Note: in rmux, pane sizes are constrained by the window size and other panes — the actual size may differ from requested if constraints prevent exact sizing.",
+                "description": "Resize a pane to the specified dimensions (cols x rows, default 80x24).\n\nUse this to adjust pane size for better visibility or to fit specific output. Note: actual size may differ from requested due to window constraints and other panes.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -356,7 +356,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "send_text",
-                "description": "Send plain text to a pane's input buffer WITHOUT interpreting escape sequences. Unlike send_keys, backslashes and special characters are sent literally. The text stays in the terminal input buffer and is NOT executed — you must follow with send_keys '\\n' to run it (do NOT use exec — exec clears the input buffer first). Multiple send_text calls without execution in between will concatenate on the same input line. Use this when you need to send text that contains escape-like sequences (e.g., '\\n', '\\t') as literal characters.",
+                "description": "Send plain text to a pane's input buffer WITHOUT interpreting escape sequences — backslashes and special characters are sent literally. The text stays in the input buffer and is NOT executed until you follow with send_keys '\\n'.\n\nUse this when you need to send text containing escape-like sequences (e.g. '\\n', '\\t') as literal characters.\n\n⚠️ Do NOT leave buffered text for a later exec — exec does NOT clear the input buffer; any previously buffered text will be executed before the exec command runs.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -370,7 +370,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "set_pane_title",
-                "description": "Set the title of a pane. The title is displayed in the pane's status bar and can be used to identify panes. Use get_pane_by_title or find_panes to locate panes by title later. Titles are useful for organizing multiple panes in complex workflows.",
+                "description": "Set the title of a pane, displayed in the pane's status bar.\n\nUse this to label panes for identification in complex workflows. Locate panes later with get_pane_by_title or find_panes.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -384,7 +384,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "find_pane_text",
-                "description": "Search the pane's visible text for the first occurrence of a pattern. Returns found=true with the position (row, column) if found, found=false otherwise. Only searches the currently visible area (not scrollback). Use this to quickly check if specific text is visible on screen. For searching all occurrences, use find_text_all. For searching scrollback history, use capture_pane with max_lines=0 and search the result.",
+                "description": "Search a pane's VISIBLE text for the first occurrence of a pattern. Returns position if found.\n\nUse this to quickly check if specific text is visible on screen.\n\nDo NOT use to find all matches — use find_text_all. Do NOT use to search scrollback history — use capture_pane with max_lines=0.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -398,7 +398,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "broadcast_keys",
-                "description": "Send the same keystrokes to multiple panes simultaneously. All target panes receive the input at the same time. Supports escape sequences like send_keys (\\n=Enter, \\t=Tab, \\x03=Ctrl-C, etc.). Use this to execute the same command across multiple panes in parallel (e.g., running the same command on multiple servers). Note: pane_ids parameter is optional — if omitted, sends to all panes in the window.",
+                "description": "Send the same keystrokes to MULTIPLE panes simultaneously.\n\nUse this to execute the same command across several panes in parallel (e.g. the same command on multiple servers in one window). If pane_ids is omitted, sends to all panes in the window.\n\nDo NOT use for multi-HOST operations — use batch_send_keys instead.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -412,7 +412,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "cmd_escape",
-                "description": "Execute rmux CLI commands directly on the remote host, bypassing the standard tool interface. Use this for advanced operations not covered by other tools (e.g., custom rmux commands, debugging). Returns stdout, stderr, and exit_code. This is an escape hatch — prefer standard tools (exec, send_keys, etc.) when possible. Requires rmux to be installed on the remote host.",
+                "description": "Execute rmux CLI commands directly on the remote host, bypassing the standard tool interface.\n\nUse this ONLY for advanced operations not covered by other tools (custom rmux commands, debugging). This is an escape hatch — prefer standard tools (exec, send_keys) when possible. Requires rmux on the remote host.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -424,7 +424,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "close_pane",
-                "description": "Close a pane and kill its running process. The pane is permanently removed from the window. ⚠️ WARNING: NEVER use this unless the user explicitly asks to close/kill/destroy the pane. Closing a pane will terminate any running process and discard all output. If you need to restart the process, use respawn_pane instead.",
+                "description": "Close a pane and kill its running process. The pane is permanently removed from the window.\n\n⚠️ NEVER use unless the user explicitly asks to close/kill/destroy the pane — it terminates any running process and discards all output. To restart a process, use respawn_pane instead.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -437,7 +437,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "rename_window",
-                "description": "Rename a window to the specified name. The window name is displayed in the window status bar and can be used to identify windows. Use window_info to get the current window index, or list_window_panes to enumerate windows. Window names are useful for organizing multiple workspaces within a session.",
+                "description": "Rename a window to a specified name, displayed in the window status bar.\n\nUse this to label workspaces for identification. Get the window index with window_info or list_window_panes.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -451,7 +451,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "list_window_panes",
-                "description": "List all panes in a specific window. Returns an array of pane objects with pane_id, size, title, command, and working directory. Use this to discover pane IDs for a window, or to verify pane state. Window index is 0-based. Use window_info to get window metadata.",
+                "description": "List all panes in a specific window with pane_id, size, title, command, and working directory.\n\nUse this to discover pane IDs for a window or verify pane state. Window index is 0-based. For window metadata, use window_info.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -464,7 +464,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "resize_window",
-                "description": "Resize a window to the specified dimensions (width x height in cells). Both width and height are optional — if omitted, the window uses the default size. Note: window size affects all panes within it. Use resize_pane to adjust individual panes within a window.",
+                "description": "Resize a window (width x height in cells). Affects all panes within it.\n\nUse this to adjust workspace size. To adjust individual panes within a window, use resize_pane.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -479,7 +479,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "select_window",
-                "description": "Set a window as the active (visible) window in a session. Only one window can be active at a time. Use this to switch between different workspaces within a session. Window index is 0-based. Use window_info or list_window_panes to discover window indices.",
+                "description": "Set a window as the active (visible) window in a session. Only one window can be active at a time.\n\nUse this to switch between workspaces within a session. Window index is 0-based — discover with window_info or list_window_panes.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -492,7 +492,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "select_layout",
-                "description": "Apply a predefined layout to a window, automatically arranging all panes. Available layouts: 'even-horizontal' (panes side by side), 'even-vertical' (panes stacked), 'main-horizontal' (large pane on top, others below), 'main-vertical' (large pane on left, others right), 'tiled' (panes in a grid). Use this to quickly reorganize panes without manual resizing.",
+                "description": "Apply a predefined layout to a window, arranging all panes automatically. Layouts: even-horizontal, even-vertical, main-horizontal, main-vertical, tiled.\n\nUse this to quickly reorganize panes without manual resizing.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -506,7 +506,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "close_window",
-                "description": "Close a window and kill all panes within it. All running processes in the window's panes will be terminated. The window is permanently removed from the session. ⚠️ WARNING: NEVER use this unless the user explicitly asks to close/kill/destroy the window. Use list_window_panes to verify window contents before closing.",
+                "description": "Close a window and kill all panes within it — all running processes are terminated and the window is permanently removed.\n\n⚠️ NEVER use unless the user explicitly asks — verify window contents with list_window_panes before closing.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -519,7 +519,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "kill_session",
-                "description": "Destroy an entire terminal session — all windows, panes, and running processes are terminated. The session is permanently removed from the host. ⚠️ WARNING: NEVER use this unless the user explicitly asks to close/kill/destroy the session. Sessions may contain ongoing work, unsaved data, or long-running processes. Use session_list or find_sessions to verify session contents before destroying.",
+                "description": "Destroy an entire terminal session — all windows, panes, and running processes are terminated permanently.\n\n⚠️ NEVER use unless the user explicitly asks — sessions may contain ongoing work, unsaved data, or long-running processes. Verify with session_list or find_sessions first.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -531,7 +531,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "pane_info",
-                "description": "Get detailed information about a pane. Returns pane_id, size (cols x rows), current command, working directory, title, tags, plus terminal_state (ready/running/password/confirm/repl/editor/pager/unknown) and cursor position. Use this to verify pane state, check what process is running, or get the working directory. For listing all panes in a window, use list_window_panes.",
+                "description": "Get detailed information about a pane: pane_id, size, current command, working directory, title, tags, terminal_state, and cursor position.\n\nUse this to verify pane state or check what process is running. To list all panes in a window, use list_window_panes.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -544,7 +544,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "window_info",
-                "description": "Get detailed information about a window. Returns window name, size (width x height), index, and active pane. Use this to verify window state or get metadata. To list all panes within the window, use list_window_panes. To list all windows in a session, use find_sessions.",
+                "description": "Get detailed information about a window: name, size, index, and active pane.\n\nUse this to verify window state or get metadata. To list all panes in the window, use list_window_panes. To list all windows in a session, use find_sessions.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -557,7 +557,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "pane_exists",
-                "description": "Check if a pane exists in a session. Returns ok=true if the pane exists, ok=false otherwise. Use this to verify pane state before performing operations. Pane IDs are typically %0, %1, %2, etc. Use list_window_panes to discover valid pane IDs.",
+                "description": "Check if a pane exists in a session. Returns ok=true if the pane exists.\n\nUse this to verify pane state before performing operations. Pane IDs are typically %0, %1, etc. Discover valid IDs with list_window_panes.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -570,7 +570,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "batch_exec",
-                "description": "Multi-host command execution: sends the same command to all specified hosts concurrently, waits for each to complete via sentinel markers (event-driven detection), captures output per host, and returns results keyed by hostname. Default 5 concurrent connections, 200 lines/host, 10min timeout/host. Host-level failures (connection refused, timeout) are marked ok=false but do NOT affect other hosts. Non-zero exit codes set per-host ok=false (but output is always captured — check per-host exit_code). For self-terminating commands only (ls, cat, grep, df, systemctl, kubectl, curl). NOT for interactive programs (vim, htop) or non-terminating commands (tail -f, ping). Uses the clum session's initial pane (typically %0) on each host. Use this when you need to run the same command on multiple machines in one round — saves N-1 round trips compared to calling exec per host.",
+                "description": "Execute the same command on MULTIPLE hosts concurrently, capturing output per host. Default 5 concurrent connections, 200 lines/host, 10min timeout/host.\n\nUse this when you need to run the same command on many machines in one round — saves N-1 round trips versus calling exec per host. Per-host failures do NOT affect other hosts.\n\nFor self-terminating commands only (ls, cat, grep, df, systemctl, kubectl, curl). NOT for interactive or non-terminating commands (vim, htop, tail -f) — use batch_send_keys.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -585,7 +585,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "batch_upload",
-                "description": "Upload a file or directory to multiple hosts concurrently. Each host receives the same file(s) at the specified remote_path. Per-host error isolation. Supports overwrite modes (overwrite|skip|rename|error) and exclude glob patterns. Default 5 concurrent connections. Uses QUIC transport.",
+                "description": "Upload the same file or directory to MULTIPLE hosts concurrently. Per-host error isolation. Default 5 concurrent connections.\n\nUse this to push a config or binary to many machines at once. Supports overwrite modes (overwrite|skip|rename|error) and exclude globs.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -601,7 +601,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "batch_download",
-                "description": "Download a file from multiple hosts concurrently. Saves to local_dir/<hostname>/<filename> to avoid host-to-host overwrites. ⚠️ Multiple runs to same local_dir WILL overwrite previous downloads. Use different local_dir per run to preserve history. Returns per-host size and SHA256. Per-host error isolation. Default 5 concurrent connections. Uses QUIC transport.",
+                "description": "Download a file from MULTIPLE hosts concurrently, saving to local_dir/<hostname>/<filename>. Per-host error isolation. Default 5 concurrent connections.\n\n⚠️ Multiple runs to the same local_dir WILL overwrite previous downloads — use a different local_dir per run to preserve history.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -615,7 +615,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "batch_send_keys",
-                "description": "Send the same keystrokes to a single pane on multiple hosts concurrently. Fire-and-forget (delivery confirmation): returns once the keys are written into each host's pane — it does NOT wait for the command to finish and returns no output/exit_code. Use this to trigger the same interactive/non-terminating command (or any fire-and-forget operation) across many machines in one round. To read results later, use capture_pane / wait_for_text / wait_exit per host. Default session 'clum', default concurrency 5.",
+                "description": "Send the same keystrokes to a pane on MULTIPLE hosts concurrently. Fire-and-forget — returns once each host's bridge acknowledges receipt of keys, does NOT wait for command completion or return output.\n\nUse this to trigger the same interactive/non-terminating command across many machines in one round. Read results later with capture_pane / wait_for_text / wait_exit per host.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -630,7 +630,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "forward_create",
-                "description": "Create a port forwarding through an encrypted QUIC channel. Central server mode: the TCP listener is created on the SERVER side, not the client machine. For client-side local port forwarding use clum-cli forward. Opens a TCP listener on the specified port that forwards all connections to a remote host:port via the bridge. The remote_host can be an internal address (e.g., 127.0.0.1, 10.x.x.x) not directly reachable from your machine. If the host has 'allowed_forward_targets' configured in hosts.yaml, only matching targets are allowed (glob patterns supported). Returns a forward_id that can be used with forward_close. Tunnels persist until explicitly closed or the MCP server restarts.",
+                "description": "Create a port forwarding tunnel through an encrypted QUIC channel, exposing a remote host:port via a local TCP listener.\n\nUse this to reach remote internal services (e.g. 127.0.0.1 or 10.x.x.x) not directly reachable from your machine. Returns a forward_id used with forward_close.\n\nIn central server mode the listener is on the SERVER side — for client-side forwarding use clum-cli forward. Tunnel targets may be restricted by allowed_forward_targets in hosts.yaml.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -645,7 +645,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "forward_list",
-                "description": "List all active port forwardings. Returns an array of forward objects with forward_id, local address/port, remote host/port, and status. Use this to discover existing forwards before creating new ones, or to verify forward state. Tunnels persist until explicitly closed or the MCP server restarts.",
+                "description": "List all active port forwardings with forward_id, local address/port, remote host/port, and status.\n\nUse this to discover existing forwards before creating new ones, or to verify forward state.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {},
@@ -654,7 +654,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "forward_close",
-                "description": "Close an active port forwarding by its ID. The forward stops accepting new connections and existing connections are terminated. Use forward_list to discover forward IDs. Once closed, the forward cannot be reopened — create a new forward with forward_create if needed.",
+                "description": "Close an active port forwarding by its ID. Existing connections are terminated and the forward cannot be reopened.\n\nUse forward_list to discover forward IDs. To recreate a tunnel, use forward_create again.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -665,7 +665,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "find_panes",
-                "description": "Discover panes across sessions by various criteria. All filters are ANDed together. Returns matching panes with full metadata (pane_id, session, window, title, command, cwd, state). Use this to locate specific panes in complex setups. Examples: find panes running 'vim', find panes in '/var/log' directory, find exited panes that need cleanup. For finding a single pane by exact title, use get_pane_by_title.",
+                "description": "Discover panes across sessions by various criteria (title, command, cwd, window, running state) — all filters ANDed.\n\nUse this to locate specific panes in complex setups — e.g. find panes running 'vim', panes in '/var/log', or exited panes needing cleanup.\n\nDo NOT use for exact-title lookup — use get_pane_by_title.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -684,7 +684,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "find_sessions",
-                "description": "Discover sessions on a remote host with detailed metadata. Unlike session_list (which only returns session names), find_sessions returns session objects with windows, panes, and state information. Optionally filter by exact session name. Use this to explore the full session structure or to verify session state. For a simple list of session names, use session_list.",
+                "description": "Discover sessions on a remote host with full detail — session objects with windows, panes, and state.\n\nUse this to explore the full session structure or verify session state.\n\nDo NOT use for a simple list of session names — use session_list instead.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -696,7 +696,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "get_pane_title",
-                "description": "Get the title of a specific pane. Returns the pane title as set by set_pane_title or by the terminal application (e.g., vim sets its own title). Pane titles are useful for identifying panes in complex setups. Use get_pane_by_title to find a pane by its title.",
+                "description": "Get the title of a specific pane, as set by set_pane_title or by the terminal application (e.g. vim sets its own title).\n\nUse this to identify panes in complex setups. To find a pane by its title, use get_pane_by_title.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -709,7 +709,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "find_text_all",
-                "description": "Search the pane's visible text for ALL occurrences of a pattern, including overlapping matches on the same line. Returns an array of matches with row and column positions. Only searches the currently visible area (not scrollback). Use this when you need to find all instances of a pattern (e.g., counting errors, locating all occurrences of a keyword). For finding just the first match, use find_pane_text.",
+                "description": "Search a pane's VISIBLE text for ALL occurrences of a pattern, including overlapping matches on the same line.\n\nUse this to find all instances of a pattern (e.g. counting errors, locating every occurrence of a keyword).\n\nDo NOT use to find just the first match — use find_pane_text. Do NOT search scrollback — use capture_pane with max_lines=0.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -723,7 +723,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "clear_history",
-                "description": "Clear the pane's scrollback history, removing all retained output above the visible area. Unlike exec's clear_screen parameter (which only clears the visible area and can be undone by scrolling up), this permanently removes all scrollback content. Use this to free memory or start with a clean slate. The visible area is not affected.",
+                "description": "Clear a pane's scrollback history, permanently removing all retained output above the visible area.\n\nUse this to free memory or start with a clean slate. The visible area is NOT affected.\n\nDo NOT confuse with exec's clear_screen (which only clears the visible area and can be undone by scrolling up).",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -736,7 +736,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "list_buffers",
-                "description": "List all paste buffers on the remote host. Returns an array of buffer objects with buffer name, size in bytes, and a content preview (first few lines). Buffers are used to store text that can be pasted into panes later. Use this before paste_buffer to verify buffer content and avoid unintended command execution.",
+                "description": "List all paste buffers on the remote host with name, size, and content preview.\n\nUse this BEFORE paste_buffer to verify buffer content and avoid unintended command execution.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -747,7 +747,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "paste_buffer",
-                "description": "⚠️ DANGEROUS: Paste a named buffer into a pane. If the target pane is running a shell (bash/zsh), the buffer content will be executed as commands. This can cause unintended command execution and data loss. BEFORE pasting: (1) use `list_buffers` to check buffer content, (2) print the first 10 lines of buffer content to the user for review, (3) get explicit user approval. If buffer_name is omitted, pastes the most recent buffer.",
+                "description": "Paste a named buffer into a pane. ⚠️ DANGEROUS: if the pane is running a shell, the buffer content will be EXECUTED as commands — unintended command execution and data loss are possible.\n\nBEFORE pasting: (1) use list_buffers to check buffer content, (2) print the first 10 lines to the user for review, (3) get explicit user approval. If buffer_name is omitted, pastes the most recent buffer.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -761,7 +761,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "delete_buffer",
-                "description": "Delete a named paste buffer. The buffer is permanently removed and cannot be recovered. Use list_buffers to discover buffer names. If the buffer doesn't exist, the operation returns an error.",
+                "description": "Delete a named paste buffer permanently. Cannot be recovered.\n\nUse list_buffers to discover buffer names. Returns an error if the buffer doesn't exist.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -773,7 +773,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "split_pane_with",
-                "description": "Split an existing pane and immediately run a command in the new pane — combines split_pane and command execution in one operation. The new pane is created and the command starts executing right away. Use the shell flag to control execution: shell=true (default) interprets the command through /bin/sh -c (supports pipes, redirects); shell=false passes args directly to the command. Supports custom working directory, environment variables, pane title, and keep_alive_on_exit to prevent the pane from closing when the command finishes. Returns the new pane_id. Use this for parallel workflows where you want to start multiple commands simultaneously.",
+                "description": "Split an existing pane and immediately run a command in the new pane — combines split_pane and command execution.\n\nUse this for parallel workflows where you want to start multiple commands simultaneously. shell=true (default) runs via /bin/sh -c; shell=false passes args directly. Supports custom cwd, env, title, and keep_alive_on_exit.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -794,7 +794,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "get_pane_by_title",
-                "description": "Find a single pane by its exact title. Returns the pane metadata if exactly one pane matches, or an error if zero or multiple panes match. Use this when you know the exact title and expect a unique match. For more flexible searching (prefix, partial match), use find_panes. Pane titles are set by set_pane_title or by the terminal application.",
+                "description": "Find a single pane by its exact title. Returns metadata if exactly one pane matches, error if zero or multiple match.\n\nUse this when you know the exact title and expect a unique match.\n\nDo NOT use for prefix/partial matching — use find_panes.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -806,7 +806,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "collect_until_exit",
-                "description": "Collect all pane output from now until the process exits. The pane process MUST already be running — use send_keys or shell_command to start it first. More efficient than sentinel markers for large-output commands, as it streams directly without repeated capture_pane calls. Returns collected bytes and exit info. Default max is 1MB, default timeout is 60s. Use starting_at='oldest' to include scrollback history. ⚠️ On timeout, the collection is cancelled (partial output lost), but the remote process keeps running — use capture_pane to check progress or wait_for_text to wait for completion. Unlike exec where the command keeps running after timeout AND output is preserved. For fire-and-forget long tasks, use shell_command + wait_for_text instead.",
+                "description": "Collect all pane output from now until the process exits. The pane process MUST already be running — start it first with send_keys or shell_command.\n\nUse this for large-output commands (builds, ansible) where you want the full output without repeated capture_pane calls. Default max 1MB, timeout 60s.\n\n⚠️ On timeout the collection is aborted and ALL collected output is discarded (the response contains no output field) — but the remote process keeps running; use capture_pane to check progress. For fire-and-forget long tasks, use shell_command + wait_for_text instead.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -822,7 +822,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "break_pane",
-                "description": "Break a pane out of its current window and move it to a new window (or a specified destination window). The pane retains its state and running process. Use this to reorganize panes across windows. If destination_window is omitted, a new window is created. If pane_id is omitted, the current active pane is broken out.",
+                "description": "Break a pane out of its current window and move it to a new window (or a specified destination window). The pane retains its state and running process.\n\nUse this to reorganize panes across windows. If destination_window is omitted, a new window is created.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -837,7 +837,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "join_pane",
-                "description": "Move a pane from one window into another window, joining it with an existing pane. The source pane is removed from its original window and added to the target window. Optionally specify direction (horizontal/vertical) and size. Use this to consolidate panes across windows or reorganize your workspace layout.",
+                "description": "Move a pane from one window into another window, joining it with an existing pane. The source pane is removed from its original window.\n\nUse this to consolidate panes across windows or reorganize your workspace layout. Optionally specify direction (horizontal/vertical) and size.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -853,7 +853,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "swap_pane",
-                "description": "Swap the positions of two panes within a session. Both panes retain their state and running processes, but their positions are exchanged. Use this to reorganize pane layout without losing work. Both panes must be in the same session (can be in different windows).",
+                "description": "Swap the positions of two panes within a session. Both panes retain their state and running processes.\n\nUse this to reorganize pane layout without losing work. Both panes must be in the same session (can be in different windows).",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -868,7 +868,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "host_capabilities",
-                "description": "Query which features the host's rmux daemon supports. Returns a list of capabilities like 'web.share', 'sdk.waits', 'stream.control'. Use this before attempting advanced operations to verify the host supports the required features. Optionally check for a specific capability — returns ok=true if supported, ok=false otherwise. Useful for feature detection in multi-host environments with varying rmux versions.",
+                "description": "Query which features the host's rmux daemon supports (e.g. 'web.share', 'sdk.waits', 'stream.control'). Optionally check a specific capability — returns ok=true if supported.\n\nUse this before attempting advanced operations to verify host support in multi-host environments with varying rmux versions.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -880,7 +880,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "capture_region",
-                "description": "Capture a rectangular region of a pane's visible content. Specify the region with row, col, rows, and cols parameters (all 0-based). If coordinates are omitted, captures the entire pane (like a screenshot). Supports plain text output (default) or styled output with color markup. Use this to extract specific portions of the screen (e.g., a table, a status bar, a specific UI element).",
+                "description": "Capture a rectangular region of a pane's visible content (row, col, rows, cols — all 0-based). If coordinates are omitted, captures the entire pane.\n\nUse this to extract a specific portion of the screen (e.g. a table, status bar, UI element). Supports plain text or styled output with color markup.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -898,7 +898,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "wait_for_bytes",
-                "description": "Wait for specific raw bytes to appear in the pane output stream. Unlike wait_for_text (which only matches visible text after ANSI processing), this matches the raw byte stream including ANSI escape sequences and control characters. Bytes must be provided as a base64-encoded string. Use this when you need to detect specific terminal sequences (e.g., cursor movements, color changes) that are not visible in text. ⚠️ timeout_ms is currently not enforced at the bridge level — the wait is effectively unbounded until the bytes appear.",
+                "description": "Wait for specific raw bytes (base64-encoded) to appear in the pane output stream — matches the raw byte stream including ANSI escape sequences.\n\nUse this when you need to detect terminal sequences not visible as text (e.g. cursor movements, color changes).\n\nDo NOT use for visible text — use wait_for_text. ⚠️ timeout_ms is currently NOT enforced at the bridge level — the wait is effectively unbounded.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -914,7 +914,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "wait_stable",
-                "description": "Wait until the pane output has been stable (no changes) for a specified duration. Monitors the pane content and returns when it hasn't changed for stable_ms milliseconds. On success: stable=true with terminal_state and cursor. On timeout: stable=false WITHOUT terminal_state. Use this after sending commands to ensure terminal rendering is complete before capturing output. Ideal for commands with progressive output (e.g., builds, downloads) where you want to wait for completion without knowing the exact completion text. Default stable duration is 500ms, default timeout is 30 seconds.",
+                "description": "Wait until the pane output has been stable (no changes) for a specified duration (default 500ms, total timeout 30s).\n\nUse this after sending commands to ensure terminal rendering is complete before capturing — ideal for commands with progressive output (builds, downloads) where you don't know the exact completion text.\n\nDo NOT use when you know what text to wait for — use wait_for_text.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -929,7 +929,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "deploy_bridge",
-                "description": "Deploy a compiled rmux-bridge binary to multiple remote hosts and restart the service. This is for UPGRADE deployments only — target hosts MUST already have rmux-bridge running (first-time deployments must use deploy/install-bridge.sh via SSH). The deployment process for each host: upload binary → replace existing binary → restart service → reconnect to verify. Supports concurrent deployments with configurable concurrency limit. Returns per-host deployment status. Use this to roll out bridge updates across your infrastructure.",
+                "description": "Deploy a compiled rmux-bridge binary to multiple remote hosts and restart the service. For UPGRADE deployments only — target hosts MUST already have rmux-bridge running (first-time deployments use deploy/install-bridge.sh via SSH).\n\nUse this to roll out bridge updates across your infrastructure. Process per host: upload binary → replace → restart → reconnect to verify. Supports concurrent deployments.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -943,7 +943,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "query_bridge_audit",
-                "description": "Query the bridge-side connection event log on a target host (auth events, attach/detach, file operations, forward events, etc.). Returns events in reverse chronological order. Less useful in central server mode — prefer audit_query for centralized audit.",
+                "description": "Query the bridge-side connection event log on a target host (auth events, attach/detach, file operations, forward events), in reverse chronological order.\n\nUse this for host-level connection history. In central server mode, prefer audit_query for centralized audit.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -959,7 +959,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "audit_query",
-                "description": "Query the server-side centralized audit log (all MCP tool call records: who, when, which host, what action, success/failure). Use this to review operation history. Preferred over query_bridge_audit in central server mode.",
+                "description": "Query the server-side centralized audit log — all MCP tool call records: who, when, which host, what action, success/failure.\n\nUse this to review operation history and answer 'who did what'. Filter by host, action, agent, time range, or success. Preferred over query_bridge_audit in central server mode.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -975,7 +975,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "list_recordings",
-                "description": "List PTY session recordings synced to local storage (asciinema v2 .cast files). Filter by hostname, date (YYYY-MM-DD), or session name prefix. Returns host, date, file, size_bytes, path, user, session (name), pane, duration_secs, and started_at for each recording. Recordings are periodically synced from bridges by a background task.",
+                "description": "List PTY session recordings synced to local storage (asciinema v2 .cast files). Filter by hostname, date, or session name prefix.\n\nUse this to find recordings of past terminal sessions. Recordings are periodically synced from bridges by a background task.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -987,7 +987,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "get_recording",
-                "description": "Get the content of a recording file (asciinema v2 format). The path must be an absolute path returned by list_recordings; for security, the path must be within the local recordings directory (path traversal is rejected). Returns the full text content of the file.",
+                "description": "Get the content of a recording file (asciinema v2 format). The path must be an absolute path returned by list_recordings — path traversal is rejected.\n\nUse this to read the full text content of a recorded session.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -998,7 +998,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "search_recordings",
-                "description": "Search the text content of synced PTY session recordings (asciinema v2 format). Scans locally synced .cast files for a keyword or regex, returning matched lines with surrounding context. Supports filtering by host, date range, session name, and event type (input/output). ANSI escape codes are stripped before matching. Non-parseable lines (corrupted/binary) are silently skipped. Use this to find when a specific command was run or when a specific string appeared in terminal output.",
+                "description": "Search the text content of synced PTY session recordings (asciinema v2) for a keyword or regex, returning matched lines with surrounding context. Supports filtering by host, date range, session, and event type (input/output). ANSI escapes are stripped before matching.\n\nUse this to find when a specific command was run or where a specific string appeared in terminal output — complements audit_query ('who did what') with 'what actually happened'.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
