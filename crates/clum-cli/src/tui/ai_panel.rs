@@ -193,7 +193,8 @@ impl AiPanel {
                     Style::default().fg(Color::DarkGray),
                 )));
                 lines.push(Line::from(format!("> {}_", input)));
-            } else if !thinking {
+            } else {
+                // thinking 时也渲染输入行，用户可预输入或看到已键入内容
                 lines.push(Line::from(format!("> {}_", input)));
             }
         }

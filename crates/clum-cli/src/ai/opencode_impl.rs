@@ -51,12 +51,19 @@ async fn ensure_serve_impl(force: bool) -> Result<()> {
 
     let dir = OPENCODE_DIR.get_or_init(|| String::from(".")).clone();
 
+    // stderr 重定向到文件（opencode 内部日志在 ~/.local/share/opencode/log/，stderr 是启动/运行时错误），启动失败时据此定位
+    let stderr_path = std::env::temp_dir().join("clum-opencode-serve.log");
+    let stderr_file = std::fs::File::create(&stderr_path)
+        .with_context(|| format!("failed to create {}", stderr_path.display()))?;
+
     let mut cmd = tokio::process::Command::new("opencode");
     cmd.args(["serve", "--port", &SERVE_PORT.to_string()])
         .current_dir(&dir)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+        .stderr(std::process::Stdio::from(stderr_file))
+        // 元数据服务国内直连不通，白耗 2×10s 超时并刷 ERROR 日志
+        .env("OPENCODE_DISABLE_MODELS_FETCH", "true")
         .kill_on_drop(true);
     let child = cmd.spawn().context("failed to start opencode serve")?;
 
@@ -73,7 +80,11 @@ async fn ensure_serve_impl(force: bool) -> Result<()> {
         }
     }
 
-    anyhow::bail!("opencode serve failed to start on port {}", SERVE_PORT)
+    anyhow::bail!(
+        "opencode serve failed to start on port {} (stderr: {})",
+        SERVE_PORT,
+        stderr_path.display()
+    )
 }
 
 async fn ensure_serve() -> Result<()> {
@@ -197,6 +208,10 @@ pub async fn ask_opencode(prompt: &str, ai_panel: &AiPanel) -> Result<String> {
             std::collections::HashMap::new();
         let mut last_part_id = String::new();
         while let Some(Ok(event)) = events.next().await {
+            // 外部停止生成（Ctrl+C 已置 thinking=false）时退出，避免停止后仍向面板追加内容
+            if !*panel.thinking.lock().await {
+                break;
+            }
             let data = event.data.as_str();
             if data.is_empty() {
                 continue;
