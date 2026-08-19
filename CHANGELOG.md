@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.16.0] — 2026-08-19
 
 ### Added
 - **审计与日志关联（operation_id）**：每次 MCP 工具调用生成一个 `operation_id`（UUID v7，含毫秒时间戳、单调递增、SQLite 索引友好），同时写入审计事件（`audit_events.operation_id`）与日志单行摘要（`op=... tool=... result=... duration_ms=...`）。排查时用同一 ID 即可在 `audit_query` 与 `journalctl` 之间定位同一次操作的全链路记录。
@@ -8,6 +8,24 @@
   - 旧审计库自动迁移（幂等 `ALTER TABLE` 加列），历史事件为 NULL。
   - 系统级事件（AgentRelay / ConfigReload / CLI 审计）不生成 op，保持 NULL——op 只标记「AI/人发起的工具调用」。
 - **clum-mcp 日志级别可调**：新增 `--log-level`（trace/debug/info/warn/error，`RUST_LOG` 环境变量优先），对齐 rmux-bridge 已有的 EnvFilter 机制。
+- **CLI AI 面板增强**：`@analyze` 注入 host 上下文（当前主机/会话信息，提升 AI 诊断准确率）；新增 `Ctrl+C` 停止当前 AI 生成（不退出面板），长响应可随时中断重问。
+- **bridge 主题化 zsh 提示符识别**：agnoster/p10k 等以 `➜`/`❯` 开头的 prompt 识别为 `Ready`（原判 `Unknown`，exec 安全检查会拒绝执行）。`➜`/`❯` 出现在命令输出行中部不误判；cursor_col=0 二次验证对主题化 prompt 照常生效。
+
+### Fixed
+- **HTTP 模式强制 TLS（fail-closed）**：`--server-cert`/`--server-key` 任一缺失时启动直接失败退出，不再降级明文 HTTP——消除 HTTP 降级导致的 MITM 攻击面（与 DEPLOY.md 既有表述对齐）。
+- **bridge 断开原因记录**：QUIC 连接关闭原因不再静默丢弃，记录到日志，断连排查不再靠猜。
+- **unescape_keys 非两位 hex 修复**：`\x4`/`\xzz`/`\x` 等不完整转义原样保留（不吞字符、不注入 NUL 字节），避免畸形输入破坏命令序列。
+
+### Changed
+- **MCP 工具描述重写（面向 AI 决策）**：优化全部工具描述的"何时用/何时不用/参数语义"，send_keys 指引加固（建议优先用 exec、明确 pane_id 语义与危险场景），提升 Agent 工具选择准确率。
+
+### Quality
+- 测试补全（三个模块）：RateLimiter（rate=0 无限速、初始满桶、token 补充、并发无死锁、全局桶共享/per-stream 独立）、batch 工具（空 hosts、缺失必填参数、未知主机 per-host 错误聚合）、exec（unescape 转义矩阵、exit_code 解析、max_lines 截断、sentinel 回退、terminal_state 安全拒绝矩阵、send_keys 失败透传）。
+
+### Docs
+- CHANGELOG 记录 operation_id 与 --log-level；DEPLOY 补日志配置说明。
+- SKILL.md 补充二进制可执行权限检查流程（clum-cli push 保持 644、mv 后无 x 位、systemd 静默失败排查）。
+- 生产就绪评估文档修正。
 
 ## [0.15.0] — 2026-08-17
 
