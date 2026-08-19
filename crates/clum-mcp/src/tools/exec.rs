@@ -24,12 +24,24 @@ pub(crate) fn unescape_keys(raw: &str) -> String {
             Some('t') => out.push('\t'),
             Some('e') => out.push('\x1b'),
             Some('x') => {
-                let hi = chars.next().unwrap_or('\0');
-                let lo = chars.next().unwrap_or('\0');
-                if let (Some(h), Some(l)) = (hi.to_digit(16), lo.to_digit(16)) {
-                    out.push(((h << 4) | l) as u8 as char);
-                } else {
-                    out.push_str(&format!("\\x{}{}", hi, lo));
+                let hi = chars.next();
+                let lo = chars.next();
+                match (
+                    hi.and_then(|c| c.to_digit(16)),
+                    lo.and_then(|c| c.to_digit(16)),
+                ) {
+                    (Some(h), Some(l)) => out.push(((h << 4) | l) as u8 as char),
+                    _ => {
+                        // 非完整两位 hex（\x4、\x、\xzz）：原样保留，不注入 NUL
+                        out.push('\\');
+                        out.push('x');
+                        if let Some(h) = hi {
+                            out.push(h);
+                        }
+                        if let Some(l) = lo {
+                            out.push(l);
+                        }
+                    }
                 }
             }
             Some('\\') => out.push('\\'),
@@ -799,4 +811,365 @@ pub(crate) async fn collect_until_exit(ctx: &ToolContext, args: Value) -> Result
     )
     .await;
     Ok(response)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    // ── 测试辅助 ─────────────────────────────────────────────────
+
+    fn sent_cmd(timeout_ms: u64) -> SentCommand {
+        SentCommand {
+            precheck_state: None,
+            start_marker: "[abc]".to_string(),
+            sentinel_marker: "[abc ".to_string(),
+            timeout_ms,
+            started_at: std::time::Instant::now(),
+        }
+    }
+
+    /// 用一个后台 task 模拟 bridge：按请求 type 返回 responder 给出的响应。
+    /// client 端 drop 时 server 读到 EOF 自动退出。
+    async fn mock_bridge<R>(responder: R) -> tokio::io::DuplexStream
+    where
+        R: Fn(&serde_json::Value) -> serde_json::Value + Send + 'static,
+    {
+        let (client, mut server) = tokio::io::duplex(1 << 20);
+        tokio::spawn(async move {
+            loop {
+                let req = match recv_json_frame(&mut server).await {
+                    Ok(r) => r,
+                    Err(_) => break,
+                };
+                let resp = responder(&req);
+                if send_json_frame(&mut server, &resp).await.is_err() {
+                    break;
+                }
+            }
+        });
+        client
+    }
+
+    fn assert_refused(outcome: SendOutcome, expected_state: &str, error_hint: &str) {
+        match outcome {
+            SendOutcome::Done(r) => {
+                assert!(r.refused, "terminal_state={expected_state} 应 refused");
+                let err = r.error.unwrap_or_default();
+                assert!(
+                    err.contains(error_hint),
+                    "错误建议应包含 '{error_hint}'，实际: {err}"
+                );
+                assert!(!r.ok);
+                assert_eq!(r.exit_code, None);
+            }
+            SendOutcome::Sent(_) => {
+                panic!("terminal_state={expected_state} 不应发送命令")
+            }
+        }
+    }
+
+    // ── unescape_keys ────────────────────────────────────────────
+
+    #[test]
+    fn unescape_keys_handles_simple_escapes() {
+        assert_eq!(unescape_keys(r"a\nb"), "a\nb");
+        assert_eq!(unescape_keys(r"a\tb"), "a\tb");
+        assert_eq!(unescape_keys(r"a\rb"), "a\rb");
+        assert_eq!(unescape_keys(r"\e"), "\x1b");
+    }
+
+    #[test]
+    fn unescape_keys_handles_hex_escapes() {
+        assert_eq!(unescape_keys(r"\x1b"), "\x1b");
+        assert_eq!(unescape_keys(r"\x41"), "A");
+        assert_eq!(unescape_keys(r"abc\x00def"), "abc\x00def");
+    }
+
+    #[test]
+    fn unescape_keys_preserves_invalid_hex() {
+        // 非两位 hex 应保留字面量，不吞字符也不注入 NUL
+        assert_eq!(unescape_keys(r"\xzz"), r"\xzz");
+        assert_eq!(unescape_keys(r"\x4"), r"\x4");
+        assert_eq!(unescape_keys(r"\x"), r"\x");
+        assert_eq!(unescape_keys(r"\x4z"), r"\x4z");
+    }
+
+    #[test]
+    fn unescape_keys_preserves_unknown_escapes() {
+        assert_eq!(unescape_keys(r"\q"), r"\q");
+        assert_eq!(unescape_keys(r"\\"), "\\");
+        assert_eq!(unescape_keys(r"abc\"), r"abc\");
+        assert_eq!(unescape_keys(r"hello"), "hello");
+    }
+
+    // ── parse_exit_code ──────────────────────────────────────────
+
+    #[test]
+    fn parse_exit_code_reads_digits_after_sentinel() {
+        assert_eq!(parse_exit_code("[abc 0]", "[abc "), Some(0));
+        assert_eq!(parse_exit_code("[abc 127]", "[abc "), Some(127));
+        assert_eq!(parse_exit_code("line1\n[abc 42]", "[abc "), Some(42));
+    }
+
+    #[test]
+    fn parse_exit_code_ignores_unexpanded_echo() {
+        // echo 回显中 "$?" 尚未展开为数字 —— 必须返回 None
+        assert_eq!(parse_exit_code("echo \"[abc $?]\"", "[abc "), None);
+    }
+
+    #[test]
+    fn parse_exit_code_none_when_absent() {
+        assert_eq!(parse_exit_code("no marker here", "[abc "), None);
+        assert_eq!(parse_exit_code("[abc ]", "[abc "), None);
+        assert_eq!(parse_exit_code("[abc abc]", "[abc "), None);
+    }
+
+    // ── parse_exec_output ────────────────────────────────────────
+
+    fn sample_output() -> String {
+        [
+            "user@host:~$ echo '[abc]'",
+            "[abc]",
+            "user@host:~$ ls",
+            "file1",
+            "file2",
+            "user@host:~$ echo \"[abc 0]\"",
+            "[abc 0]",
+        ]
+        .join("\n")
+    }
+
+    #[test]
+    fn parse_exec_output_extracts_command_region() {
+        let sent = sent_cmd(5000);
+        let r = parse_exec_output(sample_output(), None, None, &sent, 200);
+        assert!(r.ok);
+        assert_eq!(r.exit_code, Some(0));
+        let out = r.output;
+        assert!(out.contains("file1"), "输出应含命令结果，实际: {out:?}");
+        assert!(out.contains("file2"));
+        assert!(
+            out.contains("echo \"[abc 0]\""),
+            "sentinel 的 echo 命令行应保留在区间内: {out:?}"
+        );
+        assert!(
+            !out.contains("\n[abc 0]"),
+            "sentinel 输出行应被排除: {out:?}"
+        );
+        assert!(
+            !out.contains("echo '[abc]'"),
+            "start_marker 命令行应被排除: {out:?}"
+        );
+    }
+
+    #[test]
+    fn parse_exec_output_nonzero_exit_code() {
+        let text = [
+            "user@host:~$ echo '[abc]'",
+            "[abc]",
+            "user@host:~$ false",
+            "user@host:~$ echo \"[abc 1]\"",
+            "[abc 1]",
+        ]
+        .join("\n");
+        let sent = sent_cmd(5000);
+        let r = parse_exec_output(text, None, None, &sent, 200);
+        assert!(!r.ok);
+        assert_eq!(r.exit_code, Some(1));
+        assert_eq!(r.error, None);
+    }
+
+    #[test]
+    fn parse_exec_output_truncates_to_max_lines() {
+        let mut lines = vec!["user@host:~$ echo '[abc]'".to_string(), "[abc]".to_string()];
+        for i in 0..20 {
+            lines.push(format!("user@host:~$ echo \"line {i}\""));
+            lines.push(format!("line {i}"));
+        }
+        lines.push("user@host:~$ echo \"[abc 0]\"".to_string());
+        lines.push("[abc 0]".to_string());
+        let sent = sent_cmd(5000);
+        let r = parse_exec_output(lines.join("\n"), None, None, &sent, 5);
+        assert_eq!(r.exit_code, Some(0));
+        let out_lines: Vec<&str> = r.output.lines().collect();
+        assert!(
+            out_lines.len() <= 5,
+            "max_lines=5 应截断，实际 {} 行",
+            out_lines.len()
+        );
+        assert!(
+            out_lines.iter().any(|l| l.contains("line 19")),
+            "应保留尾部最新行（line 19），实际: {:?}",
+            out_lines
+        );
+    }
+
+    #[test]
+    fn parse_exec_output_sentinel_not_found() {
+        let sent = sent_cmd(5000);
+        let r = parse_exec_output("some random output".to_string(), None, None, &sent, 200);
+        assert!(!r.ok);
+        assert_eq!(r.exit_code, None);
+        assert!(
+            r.error.unwrap().contains("sentinel not found"),
+            "应报 sentinel not found"
+        );
+    }
+
+    #[test]
+    fn parse_exec_output_falls_back_when_start_marker_scrolled_away() {
+        // start_marker 滚出 scrollback，只有 sentinel —— 回退到从头截取
+        let text = ["only-output", "user@host:~$ echo \"[abc 0]\"", "[abc 0]"].join("\n");
+        let sent = sent_cmd(5000);
+        let r = parse_exec_output(text, None, None, &sent, 200);
+        assert_eq!(r.exit_code, Some(0));
+        assert!(r.output.contains("only-output"), "应回退到全文本");
+    }
+
+    // ── timeout_exec_result ──────────────────────────────────────
+
+    #[test]
+    fn timeout_exec_result_formats_message() {
+        let sent = sent_cmd(1000);
+        let r = timeout_exec_result(&sent, "partial".to_string(), None, None, None);
+        assert!(!r.ok);
+        assert_eq!(r.exit_code, None);
+        let err = r.error.unwrap();
+        assert!(err.contains("timeout"), "错误消息应含 timeout: {err}");
+        assert!(err.contains("1000"), "应含超时毫秒数: {err}");
+        assert_eq!(r.output, "partial");
+    }
+
+    #[test]
+    fn timeout_exec_result_with_reason() {
+        let sent = sent_cmd(1000);
+        let r = timeout_exec_result(&sent, String::new(), None, None, Some("boom"));
+        let err = r.error.unwrap();
+        assert!(err.contains("boom"), "应含失败原因: {err}");
+    }
+
+    // ── exec_send：terminal_state 安全检查 ───────────────────────
+
+    #[tokio::test]
+    async fn exec_send_refuses_when_terminal_not_ready() {
+        let mut stream = mock_bridge(|req| match req["type"].as_str() {
+            Some("capture_pane") => json!({"ok": true, "text": "", "terminal_state": "editor"}),
+            other => json!({"ok": false, "error": format!("unexpected: {other:?}")}),
+        })
+        .await;
+        let outcome = exec_send(&mut stream, "clum", "%0", "ls", 5000).await;
+        assert_refused(outcome, "editor", "editor");
+    }
+
+    #[tokio::test]
+    async fn exec_send_refuses_each_non_ready_state() {
+        let cases = [
+            ("pager", "pager"),
+            ("password", "password"),
+            ("confirm", "confirm"),
+            ("running", "wait_stable"),
+            ("repl", "REPL"),
+            ("unknown", "unknown"),
+        ];
+        for (state, hint) in cases {
+            let mut stream = mock_bridge(move |req| match req["type"].as_str() {
+                Some("capture_pane") => {
+                    json!({"ok": true, "text": "", "terminal_state": state})
+                }
+                _ => json!({"ok": false, "error": "unexpected"}),
+            })
+            .await;
+            let outcome = exec_send(&mut stream, "clum", "%0", "ls", 5000).await;
+            assert_refused(outcome, state, hint);
+        }
+    }
+
+    #[tokio::test]
+    async fn exec_send_refused_result_carries_pre_terminal_state() {
+        let mut stream =
+            mock_bridge(|_| json!({"ok": true, "text": "", "terminal_state": "running"})).await;
+        let outcome = exec_send(&mut stream, "clum", "%0", "ls", 5000).await;
+        match outcome {
+            SendOutcome::Done(r) => {
+                assert_eq!(r.pre_terminal_state.unwrap(), json!("running"));
+                assert_eq!(r.terminal_state.unwrap(), json!("running"));
+            }
+            SendOutcome::Sent(_) => panic!("should refuse"),
+        }
+    }
+
+    #[tokio::test]
+    async fn exec_send_sends_marker_command_when_ready() {
+        let captured: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&captured);
+        let mut stream = mock_bridge(move |req| match req["type"].as_str() {
+            Some("capture_pane") => json!({"ok": true, "text": "", "terminal_state": "ready"}),
+            Some("send_keys") => {
+                sink.lock()
+                    .unwrap()
+                    .push(req["keys"].as_str().unwrap_or("").to_string());
+                json!({"ok": true})
+            }
+            _ => json!({"ok": false, "error": "unexpected"}),
+        })
+        .await;
+        let outcome = exec_send(&mut stream, "clum", "%0", "ls -la", 5000).await;
+        match outcome {
+            SendOutcome::Sent(sent) => {
+                assert_eq!(sent.timeout_ms, 5000);
+                assert!(sent.start_marker.starts_with('['));
+                assert!(sent.sentinel_marker.starts_with("["));
+            }
+            SendOutcome::Done(r) => {
+                panic!(
+                    "ready 状态应发送命令，实际 refused={} err={:?}",
+                    r.refused, r.error
+                )
+            }
+        }
+        let keys = captured.lock().unwrap().first().unwrap().clone();
+        assert!(keys.contains("ls -la"), "keys 应含命令: {keys:?}");
+        assert!(keys.contains("echo '["), "keys 应含 start marker: {keys:?}");
+        assert!(keys.contains("$?"), "keys 应含 exit code echo: {keys:?}");
+    }
+
+    #[tokio::test]
+    async fn exec_send_reports_send_keys_failure() {
+        let mut stream = mock_bridge(|req| match req["type"].as_str() {
+            Some("capture_pane") => json!({"ok": true, "text": "", "terminal_state": "ready"}),
+            Some("send_keys") => json!({"ok": false, "error": "pane %0 not found"}),
+            _ => json!({"ok": false, "error": "unexpected"}),
+        })
+        .await;
+        let outcome = exec_send(&mut stream, "clum", "%0", "ls", 5000).await;
+        match outcome {
+            SendOutcome::Done(r) => {
+                assert!(!r.refused, "send_keys 失败不是安全检查拒绝");
+                let err = r.error.unwrap();
+                assert!(
+                    err.contains("pane %0 not found"),
+                    "应透传 bridge 错误: {err}"
+                );
+            }
+            SendOutcome::Sent(_) => panic!("send_keys 失败不应返回 Sent"),
+        }
+    }
+
+    #[tokio::test]
+    async fn exec_send_allows_when_terminal_state_missing() {
+        // capture_pane 未返回 terminal_state 时向后兼容放行（is_ready 默认 true）
+        let mut stream = mock_bridge(|req| match req["type"].as_str() {
+            Some("capture_pane") => json!({"ok": true, "text": ""}),
+            Some("send_keys") => json!({"ok": true}),
+            _ => json!({"ok": false, "error": "unexpected"}),
+        })
+        .await;
+        let outcome = exec_send(&mut stream, "clum", "%0", "ls", 5000).await;
+        assert!(
+            matches!(outcome, SendOutcome::Sent(_)),
+            "terminal_state 缺失应放行执行"
+        );
+    }
 }
