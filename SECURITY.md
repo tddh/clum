@@ -30,7 +30,7 @@ Security assumptions:
 - AI clients authenticate via API Key (`yk_{name}_{32hex}`, SHA-256 hashed in SQLite)
 - Bridge authentication uses static tokens with constant-time comparison
 - QUIC transport (Server↔Bridge, Server↔CLI) is TLS 1.3 encrypted (mandatory in the QUIC protocol)
-- The MCP HTTPS endpoint uses rustls (TLS 1.2+, negotiates 1.3 by default); without a server certificate configured, the endpoint falls back to plain HTTP — intended for local development only
+- The MCP HTTPS endpoint uses rustls (TLS 1.2+, negotiates 1.3 by default); HTTP mode is TLS-only (fail-closed) — startup fails if `--server-cert`/`--server-key` are missing, never falls back to plain HTTP
 - CA certificate is mandatory for server→bridge connections — connections without CA verification are rejected. The former `--insecure` flag has been removed; skipping TLS verification is not supported
 
 For production deployments:

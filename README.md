@@ -111,6 +111,7 @@ Inside the AI panel (activated via `Ctrl+G`):
 | Key | Action |
 |-----|--------|
 | `Ctrl+G` / `Esc` | Close AI panel, return to terminal |
+| `Ctrl+C` | Stop current AI generation (stay in panel) |
 | `Enter` | Send message |
 | `Backspace` | Delete last character |
 | `↑` / `PageUp` | Scroll message history up (older messages, exits follow mode) |
