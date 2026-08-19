@@ -140,7 +140,14 @@ pub fn detect_terminal_state(text: &str, cursor_col: u16, cursor_visible: bool) 
     }
 
     // ── 规则 6：Shell 提示符 + cursor 二次验证 ──
-    if tail.ends_with('$') || tail.ends_with('#') || tail.ends_with('>') || tail.ends_with('%') {
+    // 传统 bash/sh/zsh 提示符以 $ # > % 结尾；主题化 zsh（agnoster/p10k）以 ➜ ❯ 开头
+    let shell_prompt = tail.ends_with('$')
+        || tail.ends_with('#')
+        || tail.ends_with('>')
+        || tail.ends_with('%')
+        || tail.starts_with('➜')
+        || tail.starts_with('❯');
+    if shell_prompt {
         // 排除进度条
         if tail.contains('[') && tail.contains(']') {
             return TerminalState::Running;
@@ -322,10 +329,37 @@ mod tests {
 
     #[test]
     fn test_zsh_prompt() {
-        // zsh 提示符不以 $ # > % 结尾 → Unknown（后续可通过 shell_prompt_regex 扩展）
+        // 主题化 zsh（agnoster 等）以 ➜ 开头，不以 $ # > % 结尾 —— 也应识别为 Ready
         assert_eq!(
-            detect_terminal_state("➜ ~ git:(main) ✗ ", 20, true),
+            detect_terminal_state("➜  ~ git:(main)", 17, true),
+            TerminalState::Ready
+        );
+    }
+
+    #[test]
+    fn test_zsh_powerlevel10k_prompt() {
+        // powerlevel10k 单行 prompt 以 ❯ 开头
+        assert_eq!(
+            detect_terminal_state("❯ ~/code/clum", 14, true),
+            TerminalState::Ready
+        );
+    }
+
+    #[test]
+    fn test_zsh_theme_marker_midline_is_not_prompt() {
+        // ➜ 出现在行中部（命令输出内容）不应误判为提示符
+        assert_eq!(
+            detect_terminal_state("result ➜ 42", 12, true),
             TerminalState::Unknown
+        );
+    }
+
+    #[test]
+    fn test_zsh_theme_prompt_running_when_cursor_col_zero() {
+        // cursor 二次验证对主题化 zsh 同样生效
+        assert_eq!(
+            detect_terminal_state("➜ ~ git:(main)", 0, true),
+            TerminalState::Running
         );
     }
 

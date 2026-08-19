@@ -182,8 +182,10 @@ fn detect_terminal_state(text: &str, cursor_col: u16, cursor_visible: bool) -> T
     // 这样避免了 heredoc `>` 等待输入等非 shell 场景被误判为 Running。
     // PiloTY 的做法：先匹配 shell 提示符模式，匹配成功后再用 cursor 位置区分
     // "真正的提示符"（cursor 在提示符之后）和"命令输出中的提示符文本"（cursor 在 col 0）。
+    // 识别两类提示符：传统 bash/sh/zsh 以 $ # > % 结尾；主题化 zsh（agnoster/p10k）以 ➜ ❯ 开头。
     if tail.ends_with('$') || tail.ends_with('#')
         || tail.ends_with('>') || tail.ends_with('%')
+        || tail.starts_with('➜') || tail.starts_with('❯')
     {
         // 排除进度条：包含 [ ] 或百分比数字
         if tail.contains('[') && tail.contains(']') {
@@ -566,10 +568,16 @@ mod tests {
     // ── 补充场景（Oracle 审查建议） ──
     #[test]
     fn test_zsh_prompt() {
-        let text = "➜ ~ git:(main) ✗ ";
-        // zsh 提示符不以 $ # > % 结尾，应判为 Unknown
-        // 后续可通过 shell_prompt_regex 扩展支持
-        assert_eq!(detect_terminal_state(text, 20, true), TerminalState::Unknown);
+        let text = "➜  ~ git:(main)";
+        // 主题化 zsh（agnoster）以 ➜ 开头，不以 $ # > % 结尾 —— 识别为 Ready
+        assert_eq!(detect_terminal_state(text, 17, true), TerminalState::Ready);
+    }
+
+    #[test]
+    fn test_zsh_powerlevel10k_prompt() {
+        let text = "❯ ~/code/clum";
+        // powerlevel10k 单行 prompt 以 ❯ 开头 —— 识别为 Ready
+        assert_eq!(detect_terminal_state(text, 14, true), TerminalState::Ready);
     }
 
     #[test]
@@ -635,7 +643,9 @@ mod tests {
 | 风险 | 影响 | 缓解 |
 |------|------|------|
 | 误判状态（false positive） | AI 可能在不恰当时机发命令 | 状态是辅助信息，AI 仍可忽略；密码/确认优先于 cursor_col=0 规则 |
-| 自定义 PS1 不匹配 | 非标准提示符（如 zsh `➜`）判为 `unknown` | `unknown` 是安全默认值，不会导致错误行为；后续可通过 `shell_prompt_regex` 扩展 |
+| 自定义 PS1 不匹配 | 非标准提示符（未以 `$ # > %` 结尾、未以 `➜ ❯` 开头，或带 ANSI 前缀的主题提示符）判为 `unknown` | `unknown` 是安全默认值（exec 会拒绝执行，AI 可改用 send_keys/shell_command）；后续可通过 `shell_prompt_regex` 扩展 |
+| `➜`/`❯` 误判（false positive） | 命令输出的最后一行恰以 `➜`/`❯` 开头且无尾随换行（cursor col>0）时可能误判为 Ready | 概率低（U+279C/U+276F 罕见出现在命令输出）；cursor_col=0 二次验证兜住大部分流式输出；与既有 `ends_with('$')` 的同类误判风险对称，可接受 |
+| 方括号主题误判 | git 分支用方括号展示的主题（如 `➜ [main]`）命中进度条排除规则 → Running | 安全方向（拒绝而非误放行），仅影响该类主题的 exec 可用性 |
 | 性能影响 | capture_pane Path A / wait_stable 零额外 RPC；wait_for_text / pane_info 各 +1 次 IPC（约 1-10ms） | 检测算法本身 < 1μs；额外 IPC 仅在低频操作中发生 |
 | 向后兼容 | 旧客户端收到多余字段 | JSON 新增字段不影响标准解析器；在 CHANGELOG 中记录 |
 | `clean_text` 交互 | 如果检测在 clean_text 之后运行，ANSI 码和终端布局信息会丢失 | 检测必须在 `clean_text` **之前**运行（已在 §3.2 明确） |
