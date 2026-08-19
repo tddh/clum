@@ -116,6 +116,15 @@ session_attach(host, session_name="clum")
 - 重启服务：`systemctl show <svc> -p ActiveEnterTimestamp -p MainPID`——PID 变了 = 真的重启了
 - 服务重启后 server 不可用是正常的：`host_list` 全部 `online: null` → bridge 正在退避重连，等 1-2 分钟全部恢复 `online: true`
 
+**⚠️ 二进制可执行权限（血泪教训）**：
+
+**凡涉及"拷贝/上传二进制 → 重启服务"的操作，必须检查并确保目标文件有可执行权限（`rwxr-xr-x` / 755）。**
+
+- `clum-cli push` 上传的文件**保持原始权限（通常是 644，无 x 位）**——与 `deploy_bridge` 不同（它的 replace 命令自带 `chmod +x`）。
+- 手动 `mv` 替换二进制后**不会自动获得 x 位**。systemd 用无执行权限的 binary 启动会静默失败（`Permission denied`），表现为：服务重启后端口无监听、服务不可达，但**没有明显报错**。
+- **强制流程**：`cp/mv` 替换 binary 后，先 `ls -la` 确认权限 → 无 x 位则 `chmod +x <path>` → 再 `systemctl restart` → 最后 `systemctl is-active` + 端口探测验证。
+- **典型事故**：`clum-cli push clum-mcp`（644）→ `mv .new` → `systemctl restart` → 9788 端口拒绝连接，全部 MCP 通道中断。
+
 ### 8. 执行后必须验证
 
 **不是 exec 返回 ok 就代表操作成功。** 关键操作后必须捕获输出验证结果：
