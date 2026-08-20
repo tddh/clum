@@ -146,7 +146,7 @@ if has("pane id") && has("not found") || has("can't find pane") || has("pane not
 | 前置 | `"invalid pane"`（覆盖 pane_id/source_pane_id/target_pane_id） | PANE_NOT_FOUND |
 | 中段 | `"not found in enrolled"` | HOST_NOT_FOUND |
 | 中段 | `"no pane found with title"` / `"pane has no id"` | PANE_NOT_FOUND |
-| 中段 | `"null byte"` / `"directory too deep"`（并入现有 path traversal 分支） | PATH_TRAVERSAL |
+| 中段 | `"path contains null byte"` / `"directory too deep"`（并入现有 path traversal 分支） | PATH_TRAVERSAL |
 | 中段 | `"invalid auth preamble"` / `"token too long"`（并入 auth 分支） | AUTH_FAILED |
 | 中段 | `"registration rejected"` / `"handshake failed"`（并入 connection refused 分支） | BRIDGE_UNREACHABLE |
 | 中段 | `"rmux CLI"` / `"CLI command"` | CLI_FAILED |

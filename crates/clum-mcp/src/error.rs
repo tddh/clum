@@ -320,7 +320,7 @@ mod tests {
         assert!(!r.retryable);
         assert!(r.hint.contains("分组"));
 
-        let r = classify_message("forbidden: access denied");
+        let r = classify_message("forbidden: 'list_recordings' requires superadmin");
         assert_eq!(r.code, "FORBIDDEN");
         assert!(!r.retryable);
     }
@@ -345,7 +345,7 @@ mod tests {
         assert_eq!(r.code, "BRIDGE_UNREACHABLE");
         assert!(r.retryable);
 
-        let r = classify_message("FORBIDDEN");
+        let r = classify_message("NOT IN YOUR GROUP");
         assert_eq!(r.code, "FORBIDDEN");
     }
 

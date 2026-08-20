@@ -52,7 +52,9 @@ pub fn classify_error_message(msg: &str) -> &'static str {
     let has = |p: &str| m.contains(p);
 
     // ── RBAC / 分组隔离 ──
-    if has("not in your group") || has("forbidden") {
+    // 只匹配真实消息格式（"host 'x' is not in your group" / "forbidden: 'x' requires superadmin"），
+    // 不用宽泛的 "forbidden" 子串——避免 "access forbidden on port 22" 这类消息被误判。
+    if has("not in your group") || has("requires superadmin") {
         return CODE_FORBIDDEN;
     }
     // ── 主机 ──
@@ -96,9 +98,11 @@ pub fn classify_error_message(msg: &str) -> &'static str {
         return CODE_PANE_BUSY;
     }
     // ── 路径安全 ──
+    // "null byte" 收紧为 "path contains null byte"（两处真实来源 bridge/files.rs + mcp/files.rs 均为此格式），
+    // 非路径场景的 null byte（如参数校验）不应归入路径问题。
     if has("path traversal")
         || has("unsafe relative path")
-        || has("null byte")
+        || has("path contains null byte")
         || has("directory too deep")
     {
         return CODE_PATH_TRAVERSAL;
@@ -260,6 +264,15 @@ mod tests {
         assert_eq!(
             classify_error_message("forbidden: requires superadmin"),
             CODE_FORBIDDEN
+        );
+        // 收紧后的边界：宽泛词不再误判
+        assert_eq!(
+            classify_error_message("access forbidden on port 22"),
+            CODE_UNKNOWN
+        );
+        assert_eq!(
+            classify_error_message("invalid input contains null byte"),
+            CODE_UNKNOWN
         );
     }
 
