@@ -699,3 +699,65 @@ impl AsyncWrite for QuicStreamAdapter {
         Pin::new(&mut self.send).poll_shutdown(cx)
     }
 }
+
+#[cfg(test)]
+mod send_response_tests {
+    use super::send_response;
+    use serde_json::json;
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    type MemWriter = Arc<Mutex<Vec<u8>>>;
+
+    fn mem_writer() -> MemWriter {
+        Arc::new(Mutex::new(Vec::new()))
+    }
+
+    async fn take_bytes(w: &MemWriter) -> Vec<u8> {
+        std::mem::take(&mut *w.lock().await)
+    }
+
+    #[tokio::test]
+    async fn injects_error_code_on_failure() {
+        let w = mem_writer();
+        let mut resp = json!({"ok": false, "error": "pane id %99 was not found"});
+        send_response(&w, &mut resp).await.unwrap();
+
+        let expected = clum_core::error_code::classify_error_message("pane id %99 was not found");
+        assert_eq!(resp["error_code"], json!(expected));
+
+        let wire: serde_json::Value = serde_json::from_slice(&take_bytes(&w).await[4..]).unwrap();
+        assert_eq!(wire["error_code"], json!(expected));
+        assert_eq!(wire["ok"], json!(false));
+    }
+
+    #[tokio::test]
+    async fn preserves_existing_error_code() {
+        let w = mem_writer();
+        let mut resp = json!({"ok": false, "error": "boom", "error_code": "CUSTOM"});
+        send_response(&w, &mut resp).await.unwrap();
+        assert_eq!(resp["error_code"], json!("CUSTOM"));
+    }
+
+    #[tokio::test]
+    async fn ok_response_gets_no_error_code() {
+        let w = mem_writer();
+        let mut resp = json!({"ok": true, "output": "hello"});
+        send_response(&w, &mut resp).await.unwrap();
+        assert!(resp.get("error_code").is_none());
+    }
+
+    #[tokio::test]
+    async fn frame_has_le_length_prefix_and_json_body() {
+        let w = mem_writer();
+        let mut resp = json!({"ok": true, "n": 42});
+        send_response(&w, &mut resp).await.unwrap();
+
+        let bytes = take_bytes(&w).await;
+        assert!(bytes.len() >= 4);
+        let declared = u32::from_le_bytes(bytes[..4].try_into().unwrap()) as usize;
+        assert_eq!(declared, bytes.len() - 4);
+        let body: serde_json::Value = serde_json::from_slice(&bytes[4..]).unwrap();
+        assert_eq!(body, json!({"ok": true, "n": 42}));
+    }
+}
