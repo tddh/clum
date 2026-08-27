@@ -10,6 +10,8 @@ Instead, email the maintainer directly. We will respond within 48 hours and work
 
 | Version | Supported          |
 |---------|--------------------|
+| 0.17.x  | ✅ Supported       |
+| 0.16.x  | ✅ Supported       |
 | 0.15.x  | ✅ Supported       |
 | 0.14.x  | ✅ Supported       |
 | 0.13.x  | ⚠️ Legacy         |
