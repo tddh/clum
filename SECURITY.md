@@ -67,6 +67,10 @@ hosts:
 
 The `exec` tool checks terminal state before executing commands. If the terminal is not in `ready` state (e.g., inside vim, less, password prompt), execution is refused to prevent command injection into non-shell contexts.
 
+### Sensitive Input Redaction
+
+Input tools (`send_keys`, `send_text`, `broadcast_keys`, `batch_send_keys`) accept a `sensitive` flag that redacts the audit `detail` to `[REDACTED:N bytes]`. When the terminal is in `password` state (detected via a pre-injection snapshot), redaction is enforced server-side regardless of the flag — there is no opt-out. Audit events carry a `redacted` marker; plaintext credentials are never written to the audit database.
+
 ### HTTP Endpoint Protection
 
 - **Static file serving**: The `/releases/` download endpoint rejects path components containing `..`, preventing traversal outside the release directory.

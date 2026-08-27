@@ -238,6 +238,7 @@ clum-mcp bridge join <hostname>   # 生成新 join token（离线恢复用）
 - **路径穿越防护**：文件上传/下载拒绝包含 `..` 的路径
 - **隧道目标白名单**：`hosts.yaml` 中可选配置 `allowed_forward_targets` 限制端口转发目标（支持 glob 模式）
 - **exec 安全检查**：`exec` 在终端非 `ready` 状态时拒绝执行（防止命令注入到 vim/less/密码提示等）
+- **敏感输入脱敏**：终端处于 `password` 状态时发送的输入在审计日志中自动脱敏（`[REDACTED:N bytes]`，服务端强制、无法关闭）；输入工具的 `sensitive` 标志可强制脱敏 token/2FA 码
 
 ## 审计查询
 
@@ -352,7 +353,7 @@ echo "$(cat)" >> knowledge.jsonl && git commit -am "新增排障经验条目"
 
 > 💡 `stream_pane` 适用于长命令实时输出监控（阻塞读，增量返回），替代 capture_pane 轮询。
 
-完整工具文档见 [docs/TOOLS.md](docs/TOOLS.md)。
+完整工具文档见 [clum-docs/TOOLS.md](clum-docs/TOOLS.md)。
 
 ## 性能
 
@@ -393,9 +394,9 @@ just release-linux  # 交叉编译 Linux x86_64 musl
 
 ## 文档
 
-- [工具文档](docs/TOOLS.md) — 69 个 MCP 工具的完整参数与返回值
-- [部署文档](docs/DEPLOY.md) — 架构、构建、部署、运维、安全
-- [终端状态感知设计](docs/terminal-state-design.md) — 终端状态启发式检测引擎
+- [工具文档](clum-docs/TOOLS.md) — 69 个 MCP 工具的完整参数与返回值
+- [部署文档](clum-docs/DEPLOY.md) — 架构、构建、部署、运维、安全
+- [终端状态感知设计](clum-docs/terminal-state-design.md) — 终端状态启发式检测引擎
 - [贡献指南](CONTRIBUTING.md)
 - [安全策略](SECURITY.md)
 - [更新日志](CHANGELOG.md)

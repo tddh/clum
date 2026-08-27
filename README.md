@@ -238,6 +238,7 @@ clum-mcp bridge join <hostname>   # Generate a new join token (offline recovery)
 - **Path traversal prevention**: File upload/download rejects paths containing `..`
 - **Tunnel target whitelist**: Optional `allowed_forward_targets` in `hosts.yaml` restricts port forwarding targets (glob patterns)
 - **Exec safety check**: `exec` refuses execution when terminal is not in `ready` state (prevents command injection into vim/less/password prompts)
+- **Sensitive input redaction**: Inputs sent while the terminal is in `password` state are auto-redacted in the audit log (`[REDACTED:N bytes]`, server-enforced, no opt-out); the `sensitive` flag on input tools forces redaction for tokens/2FA codes
 
 ## Audit
 
@@ -353,7 +354,7 @@ This design keeps clum focused on operations while enabling teams to build their
 
 > 💡 `stream_pane` is ideal for real-time output monitoring of long-running commands (blocking read, incremental return), replacing capture_pane polling.
 
-Full docs: [docs/TOOLS.md](docs/TOOLS.md)
+Full docs: [clum-docs/TOOLS.md](clum-docs/TOOLS.md)
 
 ## Performance
 
@@ -394,9 +395,9 @@ just release-linux  # cross-compile Linux x86_64 musl
 
 ## Docs
 
-- [Tool Reference](docs/TOOLS.md) — 69 MCP tools with parameters and return values
-- [Deployment Guide](docs/DEPLOY.md) — Architecture, build, deploy, operations, security
-- [Terminal State Design](docs/terminal-state-design.md) — Terminal state awareness heuristic engine
+- [Tool Reference](clum-docs/TOOLS.md) — 69 MCP tools with parameters and return values
+- [Deployment Guide](clum-docs/DEPLOY.md) — Architecture, build, deploy, operations, security
+- [Terminal State Design](clum-docs/terminal-state-design.md) — Terminal state awareness heuristic engine
 - [Contributing](CONTRIBUTING.md)
 - [Security Policy](SECURITY.md)
 - [Changelog](CHANGELOG.md)

@@ -39,9 +39,9 @@
 .DS_Store
 
 # 项目分析文档（本地参考，不上传）
-docs/project-analysis.md
-docs/competitive-analysis.md
-docs/project-evaluation-2026-08-03.md
+clum-docs/project-analysis.md
+clum-docs/competitive-analysis.md
+clum-docs/project-evaluation-2026-08-03.md
 001.md
 
 # AI 辅助开发计划
@@ -55,8 +55,8 @@ docs/project-evaluation-2026-08-03.md
 *.bak
 .qoder/*
 .qoder
-docs/superpowers/plans/*
-docs/superpowers/specs/*
+clum-docs/superpowers/plans/*
+clum-docs/superpowers/specs/*
 
 deploy/libexec/
 deploy/rmux
@@ -65,7 +65,7 @@ deploy/rmux-daemon
 # 发布打包产物
 dist/
 release-pkg/
-docs/superpowers/
+clum-docs/superpowers/
 deploy/*.tar.gz
 downloaded-readme.md
 .workbuddy

@@ -33,7 +33,7 @@ crates/
 - [ ] `just lint` — fix all clippy warnings
 - [ ] `just test` — all tests pass
 - [ ] New features: include tests
-- [ ] Documentation: update `docs/TOOLS.md` for new/changed tools, `docs/DEPLOY.md` for config changes
+- [ ] Documentation: update `clum-docs/TOOLS.md` for new/changed tools, `clum-docs/DEPLOY.md` for config changes
 
 ## Commit Style
 
