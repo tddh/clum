@@ -73,6 +73,9 @@ pub struct AuditEvent {
     pub operation_id: Option<String>,
     pub action: AuditAction,
     pub detail: String,
+    /// 输入内容已脱敏（detail 为 [REDACTED:N bytes]）。用于元审计。
+    #[serde(default)]
+    pub redacted: bool,
     pub output_summary: Option<String>,
     pub success: bool,
     pub duration_ms: u64,
@@ -228,6 +231,7 @@ mod tests {
             operation_id: None,
             action: AuditAction::Exec,
             detail: "ls -la /tmp".to_string(),
+            redacted: false,
             output_summary: Some("3 files listed".to_string()),
             success: true,
             duration_ms: 42,
@@ -563,6 +567,7 @@ mod tests {
             operation_id: None,
             action: AuditAction::DeployBridge,
             detail: "deploy v2.3.1".to_string(),
+            redacted: false,
             output_summary: Some("deployed to 3 hosts".to_string()),
             success: true,
             duration_ms: 8_300,

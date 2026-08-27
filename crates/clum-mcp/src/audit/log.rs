@@ -12,9 +12,9 @@ impl AuditDb {
             conn.execute(
                 "INSERT INTO audit_events
                     (event_id, timestamp, agent_name, host_name, session_name,
-                     pane_id, operation_id, action, detail, output_summary, success,
-                     duration_ms, error_message)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                     pane_id, operation_id, action, detail, redacted, output_summary,
+                     success, duration_ms, error_message)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
                 params![
                     event.event_id.to_string(),
                     event.timestamp.to_rfc3339(),
@@ -31,6 +31,7 @@ impl AuditDb {
                         .trim_matches('"')
                         .to_string(),
                     event.detail,
+                    event.redacted as i32,
                     event.output_summary,
                     event.success as i32,
                     event.duration_ms as i64,

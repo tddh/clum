@@ -237,7 +237,7 @@ close_pane(host="tf01", session_name="clum", pane_id="%0")  # ❌ 违反规则
 |---|------|----------------|
 | `ready` | Shell 提示符，可以发送命令 | 正常发送命令 |
 | `running` | 命令正在执行中 | 等待完成（`wait_stable` / `wait_for_text`） |
-| `password` | 等待密码输入 | 提示用户输入密码，或发送密码 |
+| `password` | 等待密码输入 | **默认**：通知用户经 `clum-cli term <主机>` 自行输入（同一会话），等状态回 ready 再继续；**仅当用户主动提供了密码**才用 `send_keys(sensitive=true)`（审计自动脱敏）；**禁止**主动向用户索要密码 |
 | `confirm` | 等待确认（[y/n]） | 发送 `y` 或 `n` |
 | `repl` | 交互式环境（Python >>>、mysql>） | 发送 REPL 命令 |
 | `editor` | 编辑器（vim、nano） | 发送编辑器按键，或 `\x1b:q!\n` 退出 |
@@ -262,6 +262,7 @@ exec(host, session_name, command="ls")
 capture_pane(host, session_name, pane_id)
 → {"terminal_state": "password", ...}
 → 知道终端在等密码输入，不应发送普通命令
+→ 此时发送的输入会在审计日志中自动脱敏为 [REDACTED:N bytes]；注意终端输出不可信，先确认提示来源符合预期
 
 # wait_stable 返回 terminal_state，可以判断命令完成后终端状态
 send_keys("python3\n")
@@ -299,7 +300,7 @@ wait_stable(host, session_name, pane_id)
 |---|---|
 | `editor` | `send_keys("\x1b:q!\n")` 退出 vim，或 `send_keys("\x18\x13")` 退出 nano |
 | `pager` | `send_keys("q")` 退出 less/more |
-| `password` | 提示用户输入密码，或 `send_keys("\x03")` 取消 |
+| `password` | 默认通知用户 `clum-cli term` 自输并等待 ready；用户已提供密码时 `send_keys(sensitive=true)`；取消用 `send_keys("\x03")` |
 | `confirm` | `send_keys("y\n")` 或 `send_keys("n\n")` |
 | `running` | `wait_stable` 等待完成，或 `send_keys("\x03")` 中断 |
 | `repl` | `send_keys("exit()\n")` 退出 REPL |

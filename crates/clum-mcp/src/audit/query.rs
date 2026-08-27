@@ -32,6 +32,7 @@ pub struct AuditRow {
     pub operation_id: Option<String>,
     pub action: String,
     pub detail: String,
+    pub redacted: bool,
     pub output_summary: Option<String>,
     pub success: bool,
     pub duration_ms: i64,
@@ -48,8 +49,8 @@ impl AuditDb {
 
             let mut sql = String::from(
                 "SELECT id, timestamp, agent_name, host_name, session_name,
-                        pane_id, operation_id, action, detail, output_summary, success,
-                        duration_ms, error_message
+                        pane_id, operation_id, action, detail, redacted, output_summary,
+                        success, duration_ms, error_message
                  FROM audit_events WHERE 1=1",
             );
             let mut bind_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
@@ -109,10 +110,11 @@ impl AuditDb {
                     operation_id: row.get(6)?,
                     action: row.get(7)?,
                     detail: row.get(8)?,
-                    output_summary: row.get(9)?,
-                    success: row.get::<_, i32>(10)? != 0,
-                    duration_ms: row.get(11)?,
-                    error_message: row.get(12)?,
+                    redacted: row.get::<_, i32>(9)? != 0,
+                    output_summary: row.get(10)?,
+                    success: row.get::<_, i32>(11)? != 0,
+                    duration_ms: row.get(12)?,
+                    error_message: row.get(13)?,
                 })
             })?;
 

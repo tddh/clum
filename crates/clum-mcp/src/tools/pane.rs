@@ -12,6 +12,7 @@ pub(crate) async fn send_keys(ctx: &ToolContext, args: Value) -> Result<Value> {
     let pane_id_arg = args["pane_id"].as_str();
     let raw_keys = args["keys"].as_str().context("missing 'keys'")?;
     let keys = unescape_keys(raw_keys);
+    let sensitive = args["sensitive"].as_bool().unwrap_or(false);
     let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =
@@ -20,13 +21,20 @@ pub(crate) async fn send_keys(ctx: &ToolContext, args: Value) -> Result<Value> {
     send_json_frame(&mut tls, &json!({ "type": "send_keys", "session_name": session_name, "pane_id": pane_id, "keys": keys })).await?;
     let mut response = recv_json_frame(&mut tls).await?;
     super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
-    super::audit(
+    let pre_state = response["pre_terminal_state"].as_str();
+    let prompt_line = response["prompt_line"].as_str();
+    let (detail, redacted) = input_audit_detail("", &keys, sensitive, pre_state, prompt_line);
+    if redacted {
+        response["redacted"] = json!(true);
+    }
+    super::audit_flagged(
         ctx,
         AuditAction::SendKeys,
         host_name,
         session_name,
         Some(&pane_id),
-        &keys,
+        &detail,
+        redacted,
         None,
         response["ok"].as_bool().unwrap_or(false),
         0,
@@ -134,6 +142,7 @@ pub(crate) async fn send_text(ctx: &ToolContext, args: Value) -> Result<Value> {
     let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id_arg = args["pane_id"].as_str();
     let text = args["text"].as_str().context("missing 'text'")?;
+    let sensitive = args["sensitive"].as_bool().unwrap_or(false);
     let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =
@@ -141,13 +150,20 @@ pub(crate) async fn send_text(ctx: &ToolContext, args: Value) -> Result<Value> {
     send_json_frame(&mut tls, &json!({ "type": "send_text", "session_name": session_name, "pane_id": pane_id, "text": text })).await?;
     let mut response = recv_json_frame(&mut tls).await?;
     super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
-    super::audit(
+    let pre_state = response["pre_terminal_state"].as_str();
+    let prompt_line = response["prompt_line"].as_str();
+    let (detail, redacted) = input_audit_detail("", text, sensitive, pre_state, prompt_line);
+    if redacted {
+        response["redacted"] = json!(true);
+    }
+    super::audit_flagged(
         ctx,
         AuditAction::SendText,
         host_name,
         session_name,
         Some(&pane_id),
-        text,
+        &detail,
+        redacted,
         None,
         response["ok"].as_bool().unwrap_or(false),
         0,
@@ -155,6 +171,30 @@ pub(crate) async fn send_text(ctx: &ToolContext, args: Value) -> Result<Value> {
     )
     .await;
     Ok(response)
+}
+
+/// 构造输入类操作（send_keys/send_text/broadcast_keys/batch_send_keys）的审计 detail。
+///
+/// 返回 `(detail, redacted)`。当 `sensitive` 为 true 或注入前终端状态为 `password` 时，
+/// payload 被替换为 `[REDACTED:N bytes]`（N 为 payload 的 UTF-8 字节数），前缀保留；
+/// 密码态且 `prompt_line` 非空时追加 ` (prompt: "...")` 上下文（服务端派生）。
+/// 脱敏无关闭开关：调用方只能强制开启，不能关闭服务端判定。
+pub(crate) fn input_audit_detail(
+    prefix: &str,
+    payload: &str,
+    sensitive: bool,
+    pre_terminal_state: Option<&str>,
+    prompt_line: Option<&str>,
+) -> (String, bool) {
+    if sensitive || pre_terminal_state == Some("password") {
+        let mut detail = format!("{prefix}[REDACTED:{} bytes]", payload.len());
+        if let Some(prompt) = prompt_line {
+            detail.push_str(&format!(" (prompt: \"{prompt}\")"));
+        }
+        (detail, true)
+    } else {
+        (format!("{prefix}{payload}"), false)
+    }
 }
 
 pub(crate) async fn set_pane_title(ctx: &ToolContext, args: Value) -> Result<Value> {
@@ -583,4 +623,77 @@ pub(crate) async fn capture_region(ctx: &ToolContext, args: Value) -> Result<Val
     )
     .await;
     Ok(response)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::input_audit_detail;
+
+    #[test]
+    fn plain_when_not_sensitive() {
+        let (detail, redacted) = input_audit_detail("", "ls -la", false, None, None);
+        assert_eq!(detail, "ls -la");
+        assert!(!redacted);
+    }
+
+    #[test]
+    fn redact_when_sensitive_flag() {
+        let (detail, redacted) = input_audit_detail("", "hunter2\n", true, None, None);
+        assert_eq!(detail, "[REDACTED:8 bytes]");
+        assert!(redacted);
+    }
+
+    #[test]
+    fn redact_when_password_state() {
+        let (detail, redacted) = input_audit_detail("", "hunter2\n", false, Some("password"), None);
+        assert_eq!(detail, "[REDACTED:8 bytes]");
+        assert!(redacted);
+    }
+
+    #[test]
+    fn other_state_not_redacted() {
+        let (detail, redacted) = input_audit_detail("", "ls", false, Some("ready"), None);
+        assert_eq!(detail, "ls");
+        assert!(!redacted);
+    }
+
+    #[test]
+    fn prefix_preserved_on_redaction() {
+        let (detail, redacted) =
+            input_audit_detail("2 panes: ", "secret", false, Some("password"), None);
+        assert_eq!(detail, "2 panes: [REDACTED:6 bytes]");
+        assert!(redacted);
+    }
+
+    #[test]
+    fn redacted_byte_count_is_utf8_bytes() {
+        // "密码x" = 3 + 3 + 1 = 7 UTF-8 bytes
+        let (detail, redacted) = input_audit_detail("", "密码x", true, None, None);
+        assert_eq!(detail, "[REDACTED:7 bytes]");
+        assert!(redacted);
+    }
+
+    #[test]
+    fn prompt_appended_in_password_state() {
+        let (detail, redacted) = input_audit_detail(
+            "",
+            "hunter2\n",
+            false,
+            Some("password"),
+            Some("[sudo] password for tddh:"),
+        );
+        assert_eq!(
+            detail,
+            "[REDACTED:8 bytes] (prompt: \"[sudo] password for tddh:\")"
+        );
+        assert!(redacted);
+    }
+
+    #[test]
+    fn prompt_ignored_when_not_redacted() {
+        let (detail, redacted) =
+            input_audit_detail("", "ls", false, Some("ready"), Some("ignored"));
+        assert_eq!(detail, "ls");
+        assert!(!redacted);
+    }
 }

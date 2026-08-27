@@ -5,6 +5,7 @@ use serde_json::{json, Value};
 
 use super::common::{collect_batch_results, make_semaphore, resolve_hosts, resolve_pane_id};
 use super::exec::{exec_in_session, unescape_keys};
+use super::pane::input_audit_detail;
 use super::ToolContext;
 use crate::files::OverwriteMode;
 use crate::transport::{connect_via_registry, recv_json_frame, send_json_frame};
@@ -457,6 +458,7 @@ pub(crate) async fn batch_send_keys(
     let pane_id_arg = args["pane_id"].as_str().map(String::from);
     let keys = unescape_keys(args["keys"].as_str().context("missing 'keys'")?);
     let concurrency_limit = args["concurrency"].as_u64().unwrap_or(5) as usize;
+    let sensitive = args["sensitive"].as_bool().unwrap_or(false);
 
     let targets = resolve_hosts(ctx, &hosts_arg).await;
     let semaphore = make_semaphore(concurrency_limit);
@@ -565,7 +567,14 @@ pub(crate) async fn batch_send_keys(
                 .await;
 
             if result["ok"].as_bool().unwrap_or(false) {
-                (host_name, json!({"ok": true, "pane_id": pane_id}))
+                let mut ok_resp = json!({"ok": true, "pane_id": pane_id});
+                if let Some(state) = result["pre_terminal_state"].as_str() {
+                    ok_resp["pre_terminal_state"] = json!(state);
+                }
+                if let Some(prompt) = result["prompt_line"].as_str() {
+                    ok_resp["prompt_line"] = json!(prompt);
+                }
+                (host_name, ok_resp)
             } else {
                 (
                     host_name,
@@ -580,13 +589,31 @@ pub(crate) async fn batch_send_keys(
     let (results_map, success_count, failed_count) = collect_batch_results(handles).await;
     let total_duration_ms = start.elapsed().as_millis() as u64;
 
-    super::audit(
+    let any_password = results_map
+        .values()
+        .any(|v| v["pre_terminal_state"].as_str() == Some("password"));
+    let pre_state = if any_password { Some("password") } else { None };
+    let prompt_line = if any_password {
+        results_map.values().find_map(|v| v["prompt_line"].as_str())
+    } else {
+        None
+    };
+    let (detail, redacted) = input_audit_detail(
+        &format!("hosts:{:?} keys:", hosts_arg),
+        &keys,
+        sensitive,
+        pre_state,
+        prompt_line,
+    );
+
+    super::audit_flagged(
         ctx,
         AuditAction::BatchSendKeys,
         "",
         "",
         None,
-        &format!("hosts:{:?} keys:{}", hosts_arg, keys),
+        &detail,
+        redacted,
         None,
         failed_count == 0,
         total_duration_ms,

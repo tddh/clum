@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.17.0] — 2026-08-26
+
+### Added
+- **敏感输入审计脱敏**：`send_keys`/`send_text`/`broadcast_keys`/`batch_send_keys` 新增 `sensitive` 参数；终端处于 `password` 状态时发送的输入无条件自动脱敏为 `[REDACTED:N bytes]`（附服务端提取的提示行上下文），审计事件带 `redacted` 标志（`audit_events` 新增列，旧库幂等迁移）。
+- **bridge 注入前状态上报**：`send_keys`/`send_text`/`broadcast_keys` 响应新增 `pre_terminal_state` 与 `prompt_line` 字段（注入前快照检测）；发送失败时同样返回，确保失败的发送也能被审计脱敏。
+
+### Changed
+- **密码提示工作流政策**：exec 引导文案、MCP server instructions、SKILL.md 三处统一为"默认人类交接（`clum-cli term` 自输）→ 兜底脱敏输入（`sensitive=true`）→ 禁止自动注入/索要密码"。
+
+### Security
+- 修复审计日志明文记录密码的问题（4 个输入工具）；完整设计见 `clum-docs/superpowers/specs/2026-08-26-secret-input-handling.md`。
+- 自动脱敏边界：终端快照不可用（检测失败）时无法识别 password 状态，自动脱敏降级为不脱敏——与 exec 预检"检测失败则放行"的向后兼容策略一致；调用方显式传 `sensitive=true` 可确保无条件脱敏。
+
 ## [0.16.0] — 2026-08-19
 
 ### Added

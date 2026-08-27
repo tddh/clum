@@ -223,6 +223,7 @@ async fn main() -> anyhow::Result<()> {
                                 operation_id: None,
                                 action: clum_core::types::AuditAction::ConfigReload,
                                 detail: "SIGHUP received".to_string(),
+                                redacted: false,
                                 output_summary: None,
                                 success: true,
                                 duration_ms: 0,

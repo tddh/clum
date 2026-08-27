@@ -41,6 +41,7 @@ impl AuditDb {
                 operation_id   TEXT,
                 action         TEXT NOT NULL,
                 detail         TEXT NOT NULL DEFAULT '',
+                redacted       INTEGER NOT NULL DEFAULT 0,
                 output_summary TEXT,
                 success        INTEGER NOT NULL DEFAULT 1,
                 duration_ms    INTEGER NOT NULL DEFAULT 0,
@@ -60,6 +61,7 @@ impl AuditDb {
         .context("failed to create audit schema")?;
 
         migrate_operation_id(&conn)?;
+        migrate_redacted(&conn)?;
 
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
@@ -85,6 +87,7 @@ impl AuditDb {
                 operation_id   TEXT,
                 action         TEXT NOT NULL,
                 detail         TEXT NOT NULL DEFAULT '',
+                redacted       INTEGER NOT NULL DEFAULT 0,
                 output_summary TEXT,
                 success        INTEGER NOT NULL DEFAULT 1,
                 duration_ms    INTEGER NOT NULL DEFAULT 0,
@@ -122,6 +125,20 @@ fn migrate_operation_id(conn: &Connection) -> Result<()> {
     }
 }
 
+/// Add `redacted` column to legacy databases created before v0.17.
+/// Idempotent: fails silently if the column already exists.
+fn migrate_redacted(conn: &Connection) -> Result<()> {
+    let result = conn.execute(
+        "ALTER TABLE audit_events ADD COLUMN redacted INTEGER NOT NULL DEFAULT 0",
+        [],
+    );
+    match result {
+        Ok(_) => Ok(()),
+        Err(e) if e.to_string().contains("duplicate column") => Ok(()),
+        Err(e) => Err(e).context("failed to migrate audit schema (redacted)"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,6 +158,7 @@ mod tests {
             operation_id: None,
             action,
             detail: "test detail".into(),
+            redacted: false,
             output_summary: None,
             success,
             duration_ms: 42,
@@ -317,5 +335,96 @@ mod tests {
 
         assert!(result.contains("test-agent"));
         assert!(result.contains("FileUpload"));
+    }
+
+    #[tokio::test]
+    async fn test_redacted_roundtrip() {
+        let db = AuditDb::open_in_memory().unwrap();
+        let mut event = make_event(AuditAction::SendKeys, "tf01", true);
+        event.detail = "[REDACTED:8 bytes]".to_string();
+        event.redacted = true;
+        db.log(event).await;
+
+        let result = db
+            .query(
+                QueryParams {
+                    host: Some("tf01".into()),
+                    action: Some("SendKeys".into()),
+                    agent: None,
+                    since: None,
+                    until: None,
+                    success: None,
+                    limit: Some(10),
+                    host_names: None,
+                },
+                OutputFormat::Json,
+            )
+            .await
+            .unwrap();
+
+        assert!(result.contains("[REDACTED:8 bytes]"));
+        assert!(
+            result.contains("\"redacted\": true"),
+            "查询结果应包含 redacted 标志: {result}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_migrate_redacted_on_legacy_db() {
+        let path = std::env::temp_dir().join(format!(
+            "clum-audit-legacy-test-{}.db",
+            uuid::Uuid::new_v4()
+        ));
+        // 构造 v0.16 形态的旧库：无 redacted 列
+        {
+            let conn = rusqlite::Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE audit_events (
+                    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_id       TEXT NOT NULL UNIQUE,
+                    timestamp      TEXT NOT NULL,
+                    agent_name     TEXT NOT NULL DEFAULT 'unknown',
+                    host_name      TEXT NOT NULL,
+                    session_name   TEXT NOT NULL DEFAULT '',
+                    pane_id        TEXT,
+                    operation_id   TEXT,
+                    action         TEXT NOT NULL,
+                    detail         TEXT NOT NULL DEFAULT '',
+                    output_summary TEXT,
+                    success        INTEGER NOT NULL DEFAULT 1,
+                    duration_ms    INTEGER NOT NULL DEFAULT 0,
+                    error_message  TEXT,
+                    created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+                );",
+            )
+            .unwrap();
+        }
+        // open() 应触发幂等迁移
+        let db = AuditDb::open(&path).unwrap();
+        let mut event = make_event(AuditAction::SendKeys, "legacy", true);
+        event.redacted = true;
+        db.log(event).await;
+
+        let result = db
+            .query(
+                QueryParams {
+                    host: Some("legacy".into()),
+                    action: None,
+                    agent: None,
+                    since: None,
+                    until: None,
+                    success: None,
+                    limit: None,
+                    host_names: None,
+                },
+                OutputFormat::Json,
+            )
+            .await
+            .unwrap();
+        assert!(
+            result.contains("\"redacted\": true"),
+            "旧库迁移后应支持 redacted: {result}"
+        );
+        std::fs::remove_file(&path).ok();
     }
 }

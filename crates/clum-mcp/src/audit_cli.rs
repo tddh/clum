@@ -20,6 +20,7 @@ async fn log_cli_audit(db: &audit::AuditDb, action: AuditAction, detail: String)
         operation_id: None,
         action,
         detail,
+        redacted: false,
         output_summary: None,
         success: true,
         duration_ms: 0,

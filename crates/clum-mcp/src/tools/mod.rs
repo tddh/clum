@@ -25,7 +25,7 @@ mod session;
 mod window;
 
 // Re-export audit for all sub-modules
-pub(crate) use deploy::audit;
+pub(crate) use deploy::{audit, audit_flagged};
 
 pub struct ToolContext {
     pub router: Arc<HostRouter>,
