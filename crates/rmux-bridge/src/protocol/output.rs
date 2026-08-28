@@ -193,7 +193,22 @@ impl ProtocolProxy {
             }
             Err(e) => {
                 if matches!(e, rmux_sdk::RmuxError::WaitTimeout { .. }) {
-                    json!({"ok": false, "found": false, "error": format!("timeout waiting for: {}", text)})
+                    let mut resp = json!({"ok": false, "found": false, "error": format!("timeout waiting for: {}", text)});
+                    if let Ok(snapshot) = pane.snapshot().await {
+                        let raw_text = snapshot.visible_text();
+                        resp["partial_output"] = json!(raw_text);
+                        resp["terminal_state"] = json!(detect_terminal_state(
+                            &raw_text,
+                            snapshot.cursor.col,
+                            snapshot.cursor.visible,
+                        ));
+                        resp["cursor"] = json!({
+                            "row": snapshot.cursor.row,
+                            "col": snapshot.cursor.col,
+                            "visible": snapshot.cursor.visible,
+                        });
+                    }
+                    resp
                 } else {
                     json!({"ok": false, "error": e.to_string()})
                 }
@@ -248,7 +263,24 @@ impl ProtocolProxy {
 
         match result {
             Ok(()) => json!({"ok": true, "found": true}),
-            Err(e) => json!({"ok": false, "found": false, "error": e.to_string()}),
+            Err(e) => {
+                let mut resp = json!({"ok": false, "found": false, "error": e.to_string()});
+                if let Ok(snapshot) = pane.snapshot().await {
+                    let raw_text = snapshot.visible_text();
+                    resp["partial_output"] = json!(raw_text);
+                    resp["terminal_state"] = json!(detect_terminal_state(
+                        &raw_text,
+                        snapshot.cursor.col,
+                        snapshot.cursor.visible,
+                    ));
+                    resp["cursor"] = json!({
+                        "row": snapshot.cursor.row,
+                        "col": snapshot.cursor.col,
+                        "visible": snapshot.cursor.visible,
+                    });
+                }
+                resp
+            }
         }
     }
 
@@ -292,7 +324,22 @@ impl ProtocolProxy {
                 }
             }
             if std::time::Instant::now() >= deadline {
-                return json!({"ok": false, "error": "timeout waiting for exit"});
+                let mut resp = json!({"ok": false, "error": "timeout waiting for exit"});
+                if let Ok(snapshot) = pane.snapshot().await {
+                    let raw_text = snapshot.visible_text();
+                    resp["partial_output"] = json!(raw_text);
+                    resp["terminal_state"] = json!(detect_terminal_state(
+                        &raw_text,
+                        snapshot.cursor.col,
+                        snapshot.cursor.visible,
+                    ));
+                    resp["cursor"] = json!({
+                        "row": snapshot.cursor.row,
+                        "col": snapshot.cursor.col,
+                        "visible": snapshot.cursor.visible,
+                    });
+                }
+                return resp;
             }
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
@@ -344,11 +391,28 @@ impl ProtocolProxy {
                     }
                 })
             }
-            Err(e) => json!({
-                "ok": false,
-                "stable": false,
-                "error": format!("timeout: pane did not stabilize within {}ms: {}", timeout_ms, e)
-            }),
+            Err(e) => {
+                let mut resp = json!({
+                    "ok": false,
+                    "stable": false,
+                    "error": format!("timeout: pane did not stabilize within {}ms: {}", timeout_ms, e)
+                });
+                if let Ok(snapshot) = pane.snapshot().await {
+                    let raw_text = snapshot.visible_text();
+                    resp["partial_output"] = json!(raw_text);
+                    resp["terminal_state"] = json!(detect_terminal_state(
+                        &raw_text,
+                        snapshot.cursor.col,
+                        snapshot.cursor.visible,
+                    ));
+                    resp["cursor"] = json!({
+                        "row": snapshot.cursor.row,
+                        "col": snapshot.cursor.col,
+                        "visible": snapshot.cursor.visible,
+                    });
+                }
+                resp
+            }
         }
     }
 
@@ -413,6 +477,8 @@ impl ProtocolProxy {
         } else {
             PaneOutputStart::Now
         };
+        // Clone before spawn: timeout handler needs pane for snapshot
+        let pane_for_timeout = pane.clone();
         let handle = tokio::spawn(async move {
             if matches!(start_kind, PaneOutputStart::Oldest) {
                 pane.collect_output_until_exit_starting_at(PaneOutputStart::Oldest, max_bytes)
@@ -451,7 +517,23 @@ impl ProtocolProxy {
             }
             Err(_) => {
                 abort.abort();
-                json!({"ok": false, "error": format!("timeout after {}ms", timeout_ms)})
+                let mut resp =
+                    json!({"ok": false, "error": format!("timeout after {}ms", timeout_ms)});
+                if let Ok(snapshot) = pane_for_timeout.snapshot().await {
+                    let raw_text = snapshot.visible_text();
+                    resp["partial_output"] = json!(raw_text);
+                    resp["terminal_state"] = json!(detect_terminal_state(
+                        &raw_text,
+                        snapshot.cursor.col,
+                        snapshot.cursor.visible,
+                    ));
+                    resp["cursor"] = json!({
+                        "row": snapshot.cursor.row,
+                        "col": snapshot.cursor.col,
+                        "visible": snapshot.cursor.visible,
+                    });
+                }
+                resp
             }
         }
     }

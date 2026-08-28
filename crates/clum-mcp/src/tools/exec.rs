@@ -657,7 +657,7 @@ where
                     output: String::new(),
                     exit_code: None,
                     duration_ms: sent.started_at.elapsed().as_millis() as u64,
-                    error: Some("connection lost while waiting for command".to_string()),
+                    error: Some("connection lost while waiting for command — command may still be running; use capture_pane to check status".to_string()),
                     terminal_state: None,
                     cursor: None,
                     pre_terminal_state: sent.precheck_state.clone(),
@@ -728,7 +728,7 @@ pub(crate) async fn exec(
                                     String::new(),
                                     None,
                                     None,
-                                    Some("connection lost and reconnect failed"),
+                                    Some("connection lost and reconnect failed — command may still be running; use capture_pane to check status"),
                                 );
                             }
                             tokio::time::sleep(backoff.next_delay().min(deadline - now)).await;

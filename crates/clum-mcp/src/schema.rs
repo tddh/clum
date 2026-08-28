@@ -18,7 +18,8 @@ pub fn instructions() -> String {
 4. File transfer: `file_upload` / `file_download` (registered hosts); SSH/SCP (unregistered hosts). Commands: `exec` for one-shot (auto-waits, default 200 lines / 600s=10min timeout, set `max_lines=0` for full output), `send_keys` for interactive programs.\n\
 5. Use `wait_for_text` to block until specific text appears — do NOT poll `capture_pane` in a loop.\n\
 6. For long-running commands (tail -f, builds): use `stream_pane` for incremental output instead of polling `capture_pane`.\n\
-7. On failure (`ok:false`), branch on `error_code` (stable contract) and follow `recovery_hint`; `retryable:false` means never blindly retry (e.g. exec TIMEOUT — the command may still be running remotely).\n\n\
+7. On failure (`ok:false`), branch on `error_code` (stable contract) and follow `recovery_hint`; `retryable:false` means never blindly retry (e.g. exec TIMEOUT — the command may still be running remotely).\n\
+8. Package managers (`apt-get`, `yum`, `dnf`) may display ncurses dialogs (kernel upgrade notices, config file conflicts, restart prompts) that block `exec` even with `-y`. Always prefix with `DEBIAN_FRONTEND=noninteractive` (Debian/Ubuntu) or equivalent. If blocked by a dialog, `capture_pane` to see it, `send_keys` to dismiss, then `wait_for_text` for the prompt.\n\n\
 ## Basic Workflow\n\
 `host_list` → `session_attach host=<h> session_name=\"clum\"` (or `session_create`) → `exec`/`send_keys` → `capture_pane`/`wait_for_text`.\n\
 - `pane_id` is optional for most tools. If omitted, the server auto-detects the first pane in window 0. The response includes `resolved_pane_id` and `auto_resolved: true` when auto-detected.\n\
@@ -197,7 +198,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "wait_for_text",
-                "description": "Block until a specific text string appears in a pane's visible output, or timeout expires (default 30s). Returns found=true with terminal_state on success.\n\nUse this instead of polling capture_pane in a loop — e.g. waiting for a command prompt, 'PLAY RECAP', or an error line.\n\nDo NOT use to wait for process exit — use wait_exit. Do NOT use when you don't know what text to expect — use wait_stable.",
+                "description": "Block until a specific text string appears in a pane's visible output, or timeout expires (default 30s). Returns found=true with terminal_state on success.\n\nUse this instead of polling capture_pane in a loop — e.g. waiting for a command prompt, 'PLAY RECAP', or an error line.\n\nDo NOT use to wait for process exit — use wait_exit. Do NOT use when you don't know what text to expect — use wait_stable.\n\nOn timeout (ok:false, found:false): returns partial_output (visible text), terminal_state, and cursor so you can see what the pane currently shows.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -246,7 +247,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "wait_exit",
-                "description": "Wait for the process running in a pane to exit and return its exit status.\n\nUse this after shell_command to wait for completion. Default timeout 30s.\n\nDo NOT use after exec — exec already waits for exit internally.",
+                "description": "Wait for the process running in a pane to exit and return its exit status.\n\nUse this after shell_command to wait for completion. Default timeout 30s.\n\nDo NOT use after exec — exec already waits for exit internally.\n\nOn timeout (ok:false): returns partial_output (visible text), terminal_state, and cursor so you can see what the pane currently shows and whether the process is still running.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -273,7 +274,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "stream_pane",
-                "description": "Blocking read from a pane's output stream. First call creates the stream (returns current snapshot + subsequent output); later calls reuse it (return only new output). Blocks until data arrives or timeout_ms expires.\n\nUse this to monitor long-running commands (tail -f, builds) incrementally instead of polling capture_pane.\n\nNote: stream state is held in-memory on the MCP server — after a server restart or bridge drop, the next call creates a fresh stream.",
+                "description": "Blocking read from a pane's output stream. First call creates the stream (returns current snapshot + subsequent output); later calls reuse it (return only new output). Blocks until data arrives or timeout_ms expires.\n\nUse this to monitor long-running commands (tail -f, builds) incrementally instead of polling capture_pane.\n\nNote: stream state is held in-memory on the MCP server — after a server restart or bridge drop, the next call creates a fresh stream.\n\nOn timeout: returns ok:false with error — call stream_pane again to continue reading.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -317,7 +318,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "exec",
-                "description": "Execute a shell command on a remote Linux host in an existing session pane, waiting for it to exit and returning full output plus exit code.\n\nUse this for self-terminating commands you expect to finish (ls, cat, grep, df, systemctl, kubectl, curl). PREFER combining read-only checks with && or ; (e.g. 'df -h && free -m') to save round-trips.\n\nDo NOT use for interactive programs (vim, htop) — use send_keys. Do NOT use for long-running commands (builds, ansible) — use shell_command then monitor with wait_for_text / stream_pane. Do NOT use for large-output commands — use send_keys + collect_until_exit. Refuses to run when the terminal is not in ready state (e.g. inside vim/less). On timeout the command keeps running — recover output later with capture_pane.",
+                "description": "Execute a shell command on a remote Linux host in an existing session pane, waiting for it to exit and returning full output plus exit code.\n\nUse this for self-terminating commands you expect to finish (ls, cat, grep, df, systemctl, kubectl, curl). PREFER combining read-only checks with && or ; (e.g. 'df -h && free -m') to save round-trips.\n\nDo NOT use for interactive programs (vim, htop) — use send_keys. Do NOT use for long-running commands (builds, ansible) — use shell_command then monitor with wait_for_text / stream_pane. Do NOT use for large-output commands — use send_keys + collect_until_exit. Refuses to run when the terminal is not in ready state (e.g. inside vim/less). On timeout (ok:false, error_code:TIMEOUT) the command keeps running — the response includes partial_output (visible text), terminal_state, and cursor so you can see what the command is doing. Use wait_exit or wait_for_text to continue monitoring.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -816,7 +817,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "collect_until_exit",
-                "description": "Collect all pane output from now until the process exits. The pane process MUST already be running — start it first with send_keys or shell_command.\n\nUse this for large-output commands (builds, ansible) where you want the full output without repeated capture_pane calls. Default max 1MB, timeout 60s.\n\n⚠️ On timeout the collection is aborted and ALL collected output is discarded (the response contains no output field) — but the remote process keeps running; use capture_pane to check progress. For fire-and-forget long tasks, use shell_command + wait_for_text instead.",
+                "description": "Collect all pane output from now until the process exits. The pane process MUST already be running — start it first with send_keys or shell_command.\n\nUse this for large-output commands (builds, ansible) where you want the full output without repeated capture_pane calls. Default max 1MB, timeout 60s.\n\n⚠️ On timeout the collection is aborted — but the remote process keeps running and the response includes partial_output (pane snapshot), terminal_state, and cursor. Use capture_pane to check progress. For fire-and-forget long tasks, use shell_command + wait_for_text instead.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -908,7 +909,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "wait_for_bytes",
-                "description": "Wait for specific raw bytes (base64-encoded) to appear in the pane output stream — matches the raw byte stream including ANSI escape sequences.\n\nUse this when you need to detect terminal sequences not visible as text (e.g. cursor movements, color changes).\n\nDo NOT use for visible text — use wait_for_text. ⚠️ timeout_ms is currently NOT enforced at the bridge level — the wait is effectively unbounded.",
+                "description": "Wait for specific raw bytes (base64-encoded) to appear in the pane output stream — matches the raw byte stream including ANSI escape sequences.\n\nUse this when you need to detect terminal sequences not visible as text (e.g. cursor movements, color changes).\n\nDo NOT use for visible text — use wait_for_text. ⚠️ timeout_ms is currently NOT enforced at the bridge level — the wait is effectively unbounded.\n\nOn failure (ok:false): returns partial_output (visible text), terminal_state, and cursor so you can see what the pane currently shows.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -924,7 +925,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "wait_stable",
-                "description": "Wait until the pane output has been stable (no changes) for a specified duration (default 500ms, total timeout 30s).\n\nUse this after sending commands to ensure terminal rendering is complete before capturing — ideal for commands with progressive output (builds, downloads) where you don't know the exact completion text.\n\nDo NOT use when you know what text to wait for — use wait_for_text.",
+                "description": "Wait until the pane output has been stable (no changes) for a specified duration (default 500ms, total timeout 30s).\n\nUse this after sending commands to ensure terminal rendering is complete before capturing — ideal for commands with progressive output (builds, downloads) where you don't know the exact completion text.\n\nDo NOT use when you know what text to wait for — use wait_for_text.\n\nOn timeout (ok:false, stable:false): returns partial_output (visible text), terminal_state, and cursor so you can see what the pane currently shows.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {

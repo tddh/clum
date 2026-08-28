@@ -321,9 +321,9 @@ wait_stable(host, session_name, pane_id)
 3. capture_pane → 获取结果
 ```
 
-> ⚠️ **exec 超时不杀进程**：exec 的 timeout 只是客户端的等待上限，命令仍在远端 rmux pane 中运行。超时后可以用 `capture_pane` 查看进度，`wait_for_text` 等完成标志，或 `send_keys("\x03")` 中断。不要因为超时就重跑。
+> ⚠️ **exec 超时不杀进程**：exec 的 timeout 只是客户端的等待上限，命令仍在远端 rmux pane 中运行。超时后响应包含 `partial_output`（可见文本）、`terminal_state` 和 `cursor`，可直接判断命令当前状态。不要因为超时就重跑 — 用 `wait_exit` 或 `wait_for_text` 继续等。
 >
-> ⚠️ **collect_until_exit 超时不同**：collect_until_exit 超时后**收集被取消（已收集的字节丢失）**，但远端进程**继续运行**。用 `capture_pane` 查看进度或 `wait_for_text` 等完成标志。不要用于 fire-and-forget 场景（空闲 pane 可用 `shell_command` + `wait_for_text` 替代）。
+> ⚠️ **collect_until_exit 超时不同**：collect_until_exit 超时后**收集被取消**，但远端进程**继续运行**。响应包含 `partial_output`（pane 快照）和 `terminal_state`，可用 `capture_pane` 查看进度。不要用于 fire-and-forget 场景（空闲 pane 可用 `shell_command` + `wait_for_text` 替代）。
 
 ### 实时监控输出（stream_pane）
 ```
@@ -392,7 +392,7 @@ wait_stable(host, session_name, pane_id)
 | `FORBIDDEN` | `host ... not in your group` | API Key 分组隔离：主机不在该 key 可访问的分组 | 联系管理员确认分组分配，不可重试 |
 | `CONNECTION_LOST` | `recv: connection lost` | bridge 重启或网络中断 | 等待后重试 |
 | `PANE_BUSY` | `pane still active` | spawn/shell_command 时 pane 非空闲 | `respawn_pane(kill=true)` 重启，或换用其他 pane（`close_pane` 需用户明确同意） |
-| `TIMEOUT`（执行类） | `timeout waiting for sentinel...` | 命令执行超时 | exec: 增大 `timeout_ms` 或检查命令是否卡住（⚠️ 超时后命令仍在运行！别重跑，用 capture_pane 补捞）。collect_until_exit: 超时后收集被取消（已收集字节丢失），但远端进程继续运行，用 capture_pane 或 wait_for_text 继续跟进。 |
+| `TIMEOUT`（执行类） | `timeout waiting for sentinel...` | 命令执行超时 | 响应含 `partial_output`（可见文本）和 `terminal_state`，直接判断命令当前状态。别重跑 — 用 `wait_exit` / `wait_for_text` 继续等。collect_until_exit 超时含 pane 快照，远端进程仍在运行。 |
 | `PATH_TRAVERSAL` | `path traversal rejected` | 路径包含 `..` | 使用不含 `..` 的绝对路径或相对路径 |
 | `FORWARD_DENIED` | `forward target not in allowed list` | 隧道目标不在白名单中 | 检查 `hosts.yaml` 中的 `allowed_forward_targets` 配置 |
 | `HOST_NOT_FOUND` | `host not found` | 主机名不在 registry 中 | `host_list` 检查可用主机 |

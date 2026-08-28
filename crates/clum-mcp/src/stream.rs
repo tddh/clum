@@ -177,7 +177,11 @@ impl StreamManager {
                 return Ok(json!({"text": text}));
             }
             if Instant::now() >= deadline {
-                return Ok(json!({"text": ""}));
+                return Ok(json!({
+                    "ok": false,
+                    "text": "",
+                    "error": format!("timeout after {}ms — stream_pane again to continue", timeout_ms)
+                }));
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
