@@ -12,6 +12,8 @@ jobs:
   build-macos:
     name: macOS (arm64)
     runs-on: macos-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -33,6 +35,8 @@ jobs:
   build-linux:
     name: Linux (x86_64 musl)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -62,6 +66,8 @@ jobs:
   build-windows:
     name: Windows (x86_64)
     runs-on: windows-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
