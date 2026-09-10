@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.17.1] — 2026-09-10
+
+### Added
+- **exec 命令注入防护**：`exec` 强制校验命令参数——含换行/回车及危险控制字符（`\x00`-`\x1f`、`\x7f`）直接拒绝并提示改用 `shell_command`；管道/重定向/操作符（`|`、`>`、`<`、`&&`、`||`、`;`）告警但放行（向后兼容既有工作流）。`shell_command` 作为复杂命令的安全通道，内部经 rmux SDK 安全转义执行。SECURITY.md 同步记录。
+
+### Security
+- **exec 门控 fail-closed**：terminal_state 预检失败（快照检测不可用或传输错误）时 `exec` 一律拒绝执行（`refused: true`），不再放行——**废除 0.17.0 中的"检测失败则放行"向后兼容策略**。新增 `exec_send_refuses_when_terminal_state_missing`、`exec_send_refuses_on_precheck_transport_failure` 回归测试。
+- **exec keys 控制字符修复**：sentinel 包装序列误用双反斜杠（发出字面文本 `\x15` 而非 Ctrl-U 清行控制字符），破坏 exec marker 机制，已恢复与 0.16.x 一致的单反斜杠字节，新增回归测试 `exec_send_keys_use_real_control_characters`（断言首字符为 `\u{15}` 真实控制字符、含真实换行、无字面 `\\x15` 残留）。
+
+### Changed
+- **wait_for_bytes 超时强制执行**：`timeout_ms` 现已透传至 bridge 并由 `tokio::time::timeout` 包装强制生效，默认 600000ms（新常量 `DEFAULT_BYTES_WAIT_TIMEOUT_MS`，与 exec 家族默认一致）；超时/中断路径经 `fill_partial_fields` 统一回填已捕获的 partial_output。此前 `timeout_ms` 声明了但从不生效，可能无限等待。协议默认值在 MCP 工具层与 bridge 代理层统一为同一常量。
+- **deploy_bridge 拒绝归因**：exec fail-closed 门控拒绝独立归因为 `status: exec_refused`，不再与 `first_time_deploy` 等部署状态混淆。
+
+### Docs
+- README ×2「内置安全防护」与 exec 安全检查说明、TOOLS.md、terminal-state-design.md、SKILL.md ×2 与 fail-closed 行为同步；TOOLS.md 移除 wait_for_bytes「timeout_ms is currently NOT enforced」警示并补默认值说明。
+- 0.17.0 条目中"与 exec 预检『检测失败则放行』的向后兼容策略一致"的表述自本版本起失效（fail-closed 已取代之）。
+
 ## [0.17.0] — 2026-08-27
 
 ### Added
