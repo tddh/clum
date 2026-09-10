@@ -273,7 +273,7 @@ wait_stable(host, session_name, pane_id)
 
 ## exec 安全检查
 
-`exec` 工具在执行命令前会检测终端状态。如果终端不在 `ready` 状态，exec 会拒绝执行并返回 `refused: true` + `error_code: "REFUSED_STATE"`。
+`exec` 工具在执行命令前会检测终端状态。如果终端不在 `ready` 状态，或者**状态检测不可用**（fail-closed：precheck 传输失败、旧版 bridge 响应缺 `terminal_state` 字段），exec 都会拒绝执行并返回 `refused: true` + `error_code: "REFUSED_STATE"`，错误信息引导先 `capture_pane` 检查终端、必要时升级 bridge。
 
 ### 为什么需要安全检查
 
