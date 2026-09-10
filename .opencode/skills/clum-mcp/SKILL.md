@@ -427,7 +427,7 @@ wait_stable(host, session_name, pane_id)
 ├── 等待特定文本 → `wait_for_text`
 ├── 等待进程退出 → `wait_exit`
 ├── 等待终端稳定 → `wait_stable`
-├── 等待特定字节序列 → `wait_for_bytes`（⚠️ timeout 目前不生效，可能无限等待）
+├── 等待特定字节序列 → `wait_for_bytes`（timeout_ms 默认 600s，已强制生效；超时返回 TIMEOUT + partial_output）
 ├── 搜索首个匹配 → `find_pane_text`
 ├── 搜索所有匹配 → `find_text_all`
 └── 截取特定区域 → `capture_region`
