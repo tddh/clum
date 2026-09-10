@@ -417,7 +417,7 @@ let cursor = resp.get("cursor");
    > `error_code` 由统一错误增强层（`enrich_error`）追加；exec 直接返回的是 `refused: true` + `pre_terminal_state`。
 3. Agent 按 `error` 中的建议恢复终端状态（如 `send_keys("\x1b:q!\n")` 退出 vim）后重试。
 
-**设计动机**：防止命令被注入到非 shell 上下文（编辑器、分页器、密码提示、REPL），避免文件损坏或凭据泄露。门禁策略：状态明确为非 ready（包括 `unknown`）时拒绝执行——"宁可误拒、不可误注"；当检测本身失败（无法获取状态，如通信异常）时放行，保持向后兼容。`send_keys` 不设门禁（交互式操作本身就需要向非 ready 终端发送按键）。
+**设计动机**：防止命令被注入到非 shell 上下文（编辑器、分页器、密码提示、REPL），避免文件损坏或凭据泄露。门禁策略：状态明确为非 ready（包括 `unknown`）时拒绝执行——"宁可误拒、不可误注"；检测不可用时（传输失败、旧版 bridge 响应缺 `terminal_state` 字段）**同样拒绝**（fail-closed，SEC-004）——无法证明终端 ready 就不放行，错误信息引导先 `capture_pane` 检查并升级过旧的 bridge。`send_keys` 不设门禁（交互式操作本身就需要向非 ready 终端发送按键）。
 
 ---
 

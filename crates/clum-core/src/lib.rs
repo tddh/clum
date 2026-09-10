@@ -30,6 +30,10 @@ pub const DEFAULT_COLLECT_TIMEOUT_MS: u64 = 60_000;
 /// 命令执行类工具（exec / batch_exec）的默认超时。
 pub const DEFAULT_EXEC_TIMEOUT_MS: u64 = 600_000;
 
+/// wait_for_bytes 的默认超时。字节级等待常伴随长任务（构建/安装/引导），
+/// 与 exec 家族取同样的长默认；调用方可用 timeout_ms 显式缩短。
+pub const DEFAULT_BYTES_WAIT_TIMEOUT_MS: u64 = 600_000;
+
 /// Build a TLS root certificate store. When `ca_cert_path` is provided, load
 /// the custom CA file (self-signed / private PKI). When `None`, fall back to
 /// the system WebPKI roots so public-CA certificates (Let's Encrypt, etc.) are
@@ -74,5 +78,10 @@ mod tests {
     fn build_root_store_empty_nonexistent_dir_path_returns_error() {
         let result = build_root_store(Some(""));
         assert!(result.is_err(), "empty path should return error");
+    }
+
+    #[test]
+    fn bytes_wait_timeout_default_is_600s() {
+        assert_eq!(DEFAULT_BYTES_WAIT_TIMEOUT_MS, 600_000);
     }
 }

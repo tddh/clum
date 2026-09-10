@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 use super::ToolContext;
 use crate::transport::{connect_to_host, recv_json_frame, send_json_frame};
 use clum_core::types::AuditAction;
-use clum_core::DEFAULT_WAIT_TIMEOUT_MS;
+use clum_core::{DEFAULT_BYTES_WAIT_TIMEOUT_MS, DEFAULT_WAIT_TIMEOUT_MS};
 
 pub(crate) async fn wait_exit(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
@@ -114,7 +114,7 @@ pub(crate) async fn wait_for_bytes(ctx: &ToolContext, args: Value) -> Result<Val
     let only_new = args["only_new"].as_bool().unwrap_or(false);
     let timeout_ms = args["timeout_ms"]
         .as_u64()
-        .unwrap_or(DEFAULT_WAIT_TIMEOUT_MS);
+        .unwrap_or(DEFAULT_BYTES_WAIT_TIMEOUT_MS);
     let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
     let (pane_id, auto_resolved) =

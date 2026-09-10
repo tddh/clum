@@ -11,7 +11,10 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
 
 use crate::bridge_audit::BridgeAuditDb;
 use crate::protocol::ProtocolProxy;
-use clum_core::{DEFAULT_COLLECT_TIMEOUT_MS, DEFAULT_WAIT_TIMEOUT_MS, MAX_FRAME_SIZE};
+use clum_core::{
+    DEFAULT_BYTES_WAIT_TIMEOUT_MS, DEFAULT_COLLECT_TIMEOUT_MS, DEFAULT_WAIT_TIMEOUT_MS,
+    MAX_FRAME_SIZE,
+};
 
 /// Main event loop: reads length-prefixed JSON frames from `tls_stream`,
 /// dispatches each request to `protocol_proxy`, and writes back the response.
@@ -596,7 +599,7 @@ where
                 let only_new = request["only_new"].as_bool().unwrap_or(false);
                 let timeout_ms = request["timeout_ms"]
                     .as_u64()
-                    .unwrap_or(DEFAULT_WAIT_TIMEOUT_MS);
+                    .unwrap_or(DEFAULT_BYTES_WAIT_TIMEOUT_MS);
                 protocol_proxy
                     .handle_wait_for_bytes(sn, pane_id, bytes_b64, only_new, timeout_ms)
                     .await

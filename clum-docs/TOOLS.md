@@ -8,7 +8,7 @@
 - `session_name` — 会话名（如 `s1`、`agent`）
 - `pane_id` — 窗格 ID（如 `%0`、`%4`）。大多数工具中可选，省略时自动探测 window 0 中编号最小的 pane。`close_pane`、`paste_buffer`、`respawn_pane` 必须显式指定。省略时响应会附带 `resolved_pane_id`（实际操作的 pane），自动探测时另有 `auto_resolved: true`。
 - `window_index` — 窗口索引，从 0 开始
-- `timeout_ms` — 超时毫秒数，默认 30000（`exec` / `batch_exec` 为 600000）
+- `timeout_ms` — 超时毫秒数，默认 30000（`exec` / `batch_exec` / `wait_for_bytes` 为 600000）
 - 返回值统一为 JSON：`{"ok": true/false, ...}`
 
 ### 错误返回结构
@@ -285,11 +285,11 @@
 | `pane_id` | string | | 可选，省略时自动探测 |
 | `bytes` | string | ✅ | base64 编码的目标字节串 |
 | `only_new` | boolean | | 仅匹配新数据（跳过历史），默认 false |
-| `timeout_ms` | number | | ⚠️ 当前 bridge 侧未强制执行，实际为无限等待。不要依赖此超时 |
+| `timeout_ms` | number | | 默认 600000；超时返回 `ok:false` + 当前屏幕回填 |
 
 **返回** `{"ok": true, "found": true}`
 
-超时（当 bridge 侧实现后）：`{"ok": false, "found": false, "error": "..."}`
+超时：`{"ok": false, "found": false, "error": "timeout waiting for bytes after 600000ms", "partial_output": "...", "terminal_state": "...", "cursor": {...}}`
 
 ---
 

@@ -216,13 +216,32 @@ impl ProtocolProxy {
         }
     }
 
+    /// 超时/错误响应的协议契约回填（partial_output + terminal_state + cursor）：
+    /// schema 承诺失败时返回当前屏幕现场，调用方可据此恢复。
+    async fn fill_partial_fields(pane: &rmux_sdk::Pane, resp: &mut serde_json::Value) {
+        if let Ok(snapshot) = pane.snapshot().await {
+            let raw_text = snapshot.visible_text();
+            resp["partial_output"] = json!(raw_text);
+            resp["terminal_state"] = json!(detect_terminal_state(
+                &raw_text,
+                snapshot.cursor.col,
+                snapshot.cursor.visible,
+            ));
+            resp["cursor"] = json!({
+                "row": snapshot.cursor.row,
+                "col": snapshot.cursor.col,
+                "visible": snapshot.cursor.visible,
+            });
+        }
+    }
+
     pub async fn handle_wait_for_bytes(
         &self,
         session_name: &str,
         pane_id_str: &str,
         bytes_b64: &str,
         only_new: bool,
-        _timeout_ms: u64,
+        timeout_ms: u64,
     ) -> serde_json::Value {
         let pane_id = match Self::parse_pane_id(pane_id_str) {
             Some(id) => id,
@@ -243,42 +262,46 @@ impl ProtocolProxy {
             Err(e) => return json!({"ok": false, "error": format!("invalid base64: {}", e)}),
         };
 
-        let result = if only_new {
-            if self
-                .rmux
-                .has_capability("sdk.waits.armed")
-                .await
-                .unwrap_or(false)
-            {
-                match pane.wait_for_next(&decoded).await {
-                    Ok(armed) => armed.await,
-                    Err(e) => Err(e),
+        let wait = async {
+            if only_new {
+                if self
+                    .rmux
+                    .has_capability("sdk.waits.armed")
+                    .await
+                    .unwrap_or(false)
+                {
+                    match pane.wait_for_next(&decoded).await {
+                        Ok(armed) => armed.await,
+                        Err(e) => Err(e),
+                    }
+                } else {
+                    pane.wait_for(&decoded).await
                 }
             } else {
                 pane.wait_for(&decoded).await
             }
-        } else {
-            pane.wait_for(&decoded).await
         };
+
+        // 超时 → future drop → SDK 向 daemon 发 best-effort 等待取消（waits.rs 契约），daemon 侧无残留。
+        let result =
+            match tokio::time::timeout(std::time::Duration::from_millis(timeout_ms), wait).await {
+                Ok(r) => r,
+                Err(_elapsed) => {
+                    let mut resp = json!({
+                        "ok": false,
+                        "found": false,
+                        "error": format!("timeout waiting for bytes after {timeout_ms}ms"),
+                    });
+                    Self::fill_partial_fields(&pane, &mut resp).await;
+                    return resp;
+                }
+            };
 
         match result {
             Ok(()) => json!({"ok": true, "found": true}),
             Err(e) => {
                 let mut resp = json!({"ok": false, "found": false, "error": e.to_string()});
-                if let Ok(snapshot) = pane.snapshot().await {
-                    let raw_text = snapshot.visible_text();
-                    resp["partial_output"] = json!(raw_text);
-                    resp["terminal_state"] = json!(detect_terminal_state(
-                        &raw_text,
-                        snapshot.cursor.col,
-                        snapshot.cursor.visible,
-                    ));
-                    resp["cursor"] = json!({
-                        "row": snapshot.cursor.row,
-                        "col": snapshot.cursor.col,
-                        "visible": snapshot.cursor.visible,
-                    });
-                }
+                Self::fill_partial_fields(&pane, &mut resp).await;
                 resp
             }
         }

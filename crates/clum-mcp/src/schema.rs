@@ -909,7 +909,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "wait_for_bytes",
-                "description": "Wait for specific raw bytes (base64-encoded) to appear in the pane output stream — matches the raw byte stream including ANSI escape sequences.\n\nUse this when you need to detect terminal sequences not visible as text (e.g. cursor movements, color changes).\n\nDo NOT use for visible text — use wait_for_text. ⚠️ timeout_ms is currently NOT enforced at the bridge level — the wait is effectively unbounded.\n\nOn failure (ok:false): returns partial_output (visible text), terminal_state, and cursor so you can see what the pane currently shows.",
+                "description": "Wait for specific raw bytes (base64-encoded) to appear in the pane output stream — matches the raw byte stream including ANSI escape sequences.\n\nUse this when you need to detect terminal sequences not visible as text (e.g. cursor movements, color changes).\n\nDo NOT use for visible text — use wait_for_text.\n\nOn timeout (ok:false, found:false): returns partial_output (visible text), terminal_state, and cursor so you can see what the pane currently shows.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -918,7 +918,7 @@ pub fn tools_definition() -> Value {
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "bytes": { "type": "string", "description": "Raw bytes to wait for, encoded as base64" },
                         "only_new": { "type": "boolean", "description": "Only match data appearing after this call (skip existing buffer, default: false)" },
-                        "timeout_ms": { "type": "number", "description": "⚠️ Currently NOT enforced at the bridge level — the wait is effectively unbounded. Do not rely on this timeout." }
+                        "timeout_ms": { "type": "number", "description": "Maximum total wait time in milliseconds (default: 600000)" }
                     },
                     "required": ["host", "bytes"]
                 }
