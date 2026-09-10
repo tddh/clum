@@ -45,6 +45,7 @@ fmt-check:
     cargo fmt --all -- --check
 
 lint:
+    cargo fmt
     cargo clippy --workspace -- -D warnings
 
 # ─── 清理 ────────────────────────────
