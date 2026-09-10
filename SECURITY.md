@@ -69,6 +69,27 @@ hosts:
 
 The `exec` tool checks terminal state before executing commands. If the terminal is not in `ready` state (e.g., inside vim, less, password prompt), execution is refused to prevent command injection into non-shell contexts.
 
+**Command Injection Prevention (v0.17.1+)**:
+
+Starting from version 0.17.1, `exec` enforces strict validation of command parameters to prevent command injection attacks:
+
+- **Control Character Rejection**: Commands containing dangerous control characters (`\n`, `\r`, `\x00`-`\x1f`, `\x7f`) are rejected with clear error messages directing users to use `shell_command` for complex scenarios
+- **Shell Metacharacter Warning**: Commands with pipes (`|`), redirects (`>`, `<`), or operators (`&&`, `||`, `;`) trigger warnings but are allowed (for backward compatibility with existing workflows)
+- **Tool Separation**: Use `exec` for simple commands and `shell_command` for complex shell scripts requiring pipes, redirects, or multi-line logic
+
+Example rejection scenarios:
+```bash
+# Blocked - newline injection
+exec: "ls\nrm -rf /"
+Error: "exec rejected: command contains newline/carriage return (0x0a). Use shell_command tool for multi-line scripts or complex commands."
+
+# Blocked - control characters
+exec: "ls\x00foo"
+Error: "exec rejected: command contains unsafe control character 0x00. Control characters are not allowed."
+```
+
+The `shell_command` tool internally uses rmux SDK's shell handling, which safely executes complex commands through proper shell escaping.
+
 ### Sensitive Input Redaction
 
 Input tools (`send_keys`, `send_text`, `broadcast_keys`, `batch_send_keys`) accept a `sensitive` flag that redacts the audit `detail` to `[REDACTED:N bytes]`. When the terminal is in `password` state (detected via a pre-injection snapshot), redaction is enforced server-side regardless of the flag — there is no opt-out. Audit events carry a `redacted` marker; plaintext credentials are never written to the audit database.

@@ -161,6 +161,15 @@ pub(crate) async fn deploy_bridge(
                 "systemctl show rmux-bridge -p ExecStart 2>/dev/null | grep -oP 'path=\\K[^ ;]+' || echo ''",
                 10000, 50).await;
 
+            // fail-closed 门控被拒 ≠ 服务不存在：须在 systemd_path 误判前独立归因
+            if exec_result.refused {
+                return (host_name.clone(), json!({
+                    "ok": false, "status": "exec_refused", "refused": true,
+                    "error": exec_result.error
+                        .unwrap_or_else(|| "exec precheck refused".to_string()),
+                }));
+            }
+
             // exec 输出为完整终端上下文（含提示符与命令回显），按路径特征提取行
             let systemd_path = exec_result
                 .output

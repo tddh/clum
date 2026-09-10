@@ -102,7 +102,7 @@ graph LR
 | **Multi-host orchestration** | Host registry with group/tag/label filtering, broadcast_keys for multi-pane |
 | **Audit logging** | SQLite audit logs + bridge-side PTY recording (asciinema v2) + event log + MCP periodic sync + `clum-cli replay` playback |
 | **Terminal state awareness** | `capture_pane`, `exec`, `wait_for_text`, `wait_stable`, `pane_info` return `terminal_state` (ready/running/editor/pager/password/confirm/repl/unknown) and cursor position, so AI agents know what the terminal is currently doing |
-| **Exec safety check** | `exec` refuses execution when terminal is not in `ready` state (e.g., inside vim, less, password prompt), returning `refused: true` with actionable guidance to prevent command injection |
+| **Exec safety check** | `exec` refuses execution when terminal is not in `ready` state (e.g., inside vim, less, password prompt), returning `refused: true` with actionable guidance to prevent command injection; state-detection failures also refuse (fail-closed) |
 
 ### AI Chat Panel Keybindings
 
@@ -237,7 +237,7 @@ clum-mcp bridge join <hostname>   # Generate a new join token (offline recovery)
 **Built-in protections**:
 - **Path traversal prevention**: File upload/download rejects paths containing `..`
 - **Tunnel target whitelist**: Optional `allowed_forward_targets` in `hosts.yaml` restricts port forwarding targets (glob patterns)
-- **Exec safety check**: `exec` refuses execution when terminal is not in `ready` state (prevents command injection into vim/less/password prompts)
+- **Exec safety check**: `exec` refuses execution when terminal is not in `ready` state (prevents command injection into vim/less/password prompts); detection failures also refuse (fail-closed)
 - **Sensitive input redaction**: Inputs sent while the terminal is in `password` state are auto-redacted in the audit log (`[REDACTED:N bytes]`, server-enforced, no opt-out); the `sensitive` flag on input tools forces redaction for tokens/2FA codes
 
 ## Audit

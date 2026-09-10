@@ -102,7 +102,7 @@ graph LR
 | **多主机编排**   | 主机注册表 + 分组/标签/模式过滤，broadcast_keys 多窗格广播                                    |
 | **操作审计**    | SQLite 审计日志 + bridge 端 PTY 全量录制（asciinema v2）+ 事件日志 + MCP 定期同步 + `clum-cli replay` 回放 |
 | **终端状态感知**  | `capture_pane`、`exec`、`wait_for_text`、`wait_stable`、`pane_info` 返回 `terminal_state`（ready/running/editor/pager/password/confirm/repl/unknown）和光标位置，让 AI Agent 理解终端当前状态 |
-| **exec 安全检查** | `exec` 在终端非 `ready` 状态时拒绝执行（如在 vim、less、密码提示中），返回 `refused: true` 并给出操作建议，防止命令注入到非 shell 上下文 |
+| **exec 安全检查** | `exec` 在终端非 `ready` 状态时拒绝执行（如在 vim、less、密码提示中），状态检测不可用（连接错误或旧版 bridge）时同样拒绝（fail-closed），返回 `refused: true` 并给出操作建议，防止命令注入到非 shell 上下文 |
 
 ### AI 对话面板快捷键
 
