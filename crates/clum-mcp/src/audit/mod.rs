@@ -5,6 +5,7 @@
 
 use anyhow::{Context, Result};
 use rusqlite::Connection;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
@@ -22,6 +23,19 @@ impl AuditDb {
     /// and ensures the `audit_events` table and indexes exist.
     pub fn open(path: &Path) -> Result<Self> {
         let conn = Connection::open(path).context("failed to open audit database")?;
+
+        // Restrict the db (and the WAL/-shm siblings the journal mode creates)
+        // to owner-only regardless of the ambient umask.
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+        if let Some(dir) = path.parent() {
+            for suffix in ["-wal", "-shm"] {
+                let sibling = dir.join(format!(
+                    "{}{suffix}",
+                    path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()
+                ));
+                let _ = std::fs::set_permissions(&sibling, std::fs::Permissions::from_mode(0o600));
+            }
+        }
 
         conn.execute_batch(
             "PRAGMA journal_mode=WAL;
@@ -425,6 +439,19 @@ mod tests {
             result.contains("\"redacted\": true"),
             "旧库迁移后应支持 redacted: {result}"
         );
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn test_open_restricts_db_permissions_to_owner_only() {
+        let path = std::env::temp_dir().join(format!(
+            "clum-audit-perm-test-{}.db",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::write(&path, b"").unwrap();
+        let _ = AuditDb::open(&path).unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "audit db must be owner-only after open");
         std::fs::remove_file(&path).ok();
     }
 }
