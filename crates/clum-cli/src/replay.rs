@@ -49,7 +49,12 @@ pub struct ReplayOptions {
 }
 
 pub fn replay(path: &Path, opts: &ReplayOptions) -> anyhow::Result<()> {
-    let (events, vt, recording_start) = load_and_prepare(path)?;
+    let file = std::fs::File::open(path)?;
+    replay_file(file, opts)
+}
+
+pub fn replay_file(file: std::fs::File, opts: &ReplayOptions) -> anyhow::Result<()> {
+    let (events, vt, recording_start) = load_and_prepare(file)?;
     if events.is_empty() {
         eprintln!("no output events in recording");
         return Ok(());
@@ -77,8 +82,7 @@ pub fn replay(path: &Path, opts: &ReplayOptions) -> anyhow::Result<()> {
     result
 }
 
-fn load_and_prepare(path: &Path) -> anyhow::Result<(Vec<CastEvent>, Vt, i64)> {
-    let file = std::fs::File::open(path)?;
+fn load_and_prepare(file: std::fs::File) -> anyhow::Result<(Vec<CastEvent>, Vt, i64)> {
     let reader = io::BufReader::new(file);
     let mut lines = reader.lines();
 

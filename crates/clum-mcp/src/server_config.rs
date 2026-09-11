@@ -19,6 +19,7 @@ pub struct ServerConfig {
     pub audit_db: Option<String>,
     pub static_dir: Option<String>,
     pub recordings_dir: Option<String>,
+    pub recording_keys_dir: Option<String>,
 
     #[serde(default)]
     pub bridges: Vec<BridgeEntry>,
@@ -183,6 +184,14 @@ impl ServerConfig {
 
     pub fn resolve_recordings_dir(&self) -> Option<PathBuf> {
         expand_opt_path(&self.recordings_dir)
+    }
+
+    pub fn resolve_recording_keys_dir(&self) -> PathBuf {
+        expand_opt_path(&self.recording_keys_dir).unwrap_or_else(|| {
+            dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(".clum/recording-keys")
+        })
     }
 
     pub fn resolve_static_dir(&self) -> Option<PathBuf> {

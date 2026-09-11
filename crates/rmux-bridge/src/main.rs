@@ -58,6 +58,8 @@ async fn main() -> anyhow::Result<()> {
         let fsync_interval_secs = config.recording_fsync_interval_secs;
         let idle_timeout_secs = config.idle_timeout_secs;
         let quic_audit_db = audit_db.clone();
+        let quic_recording_pubkey: Arc<tokio::sync::RwLock<Option<(String, String)>>> =
+            Arc::new(tokio::sync::RwLock::new(None));
         tokio::spawn(async move {
             let conn_limit = quic_conn_limit_pre;
             let tls_cfg =
@@ -111,6 +113,7 @@ async fn main() -> anyhow::Result<()> {
                 let rmux_socket = quic_rmux_socket.clone();
                 let conn_recording_dir = recording_dir.clone();
                 let conn_audit_db = quic_audit_db.clone();
+                let conn_recording_pubkey = quic_recording_pubkey.clone();
                 tokio::spawn(async move {
                     let _permit = _permit;
                     let conn = match incoming.await {
@@ -166,6 +169,7 @@ async fn main() -> anyhow::Result<()> {
                                 let rec_enabled = recording_enabled;
                                 let rec_fsync = fsync_interval_secs;
                                 let stream_audit_db = conn_audit_db.clone();
+                                let rec_pubkey = conn_recording_pubkey.clone();
                                 tokio::spawn(async move {
                                     if let Err(e) = files::handle_quic_stream(
                                         send,
@@ -178,6 +182,7 @@ async fn main() -> anyhow::Result<()> {
                                         rec_fsync,
                                         stream_audit_db,
                                         idle_timeout_secs,
+                                        rec_pubkey,
                                     )
                                     .await
                                     {
@@ -282,6 +287,7 @@ async fn main() -> anyhow::Result<()> {
             recording_fsync_interval_secs: config.recording_fsync_interval_secs,
             idle_timeout_secs: config.idle_timeout_secs,
             audit_db: audit_db.clone(),
+            recording_pubkey: Arc::new(tokio::sync::RwLock::new(None)),
             shutdown: shutdown.clone(),
         };
         let reg_handle = tokio::spawn(register::run_registration_loop(reg_config));

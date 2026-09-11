@@ -225,6 +225,15 @@ async fn sync_host(
                 tokio::fs::create_dir_all(&local_dir).await?;
                 let local_path = local_dir.join(file_name);
                 tokio::fs::write(&local_path, &data).await?;
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ = tokio::fs::set_permissions(
+                        &local_path,
+                        std::fs::Permissions::from_mode(0o600),
+                    )
+                    .await;
+                }
 
                 mark_synced_on_bridge(host, registry, ca_cert_path, file_name, date).await?;
                 synced += 1;

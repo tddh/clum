@@ -658,6 +658,12 @@ mod tests {
             forward_manager: Arc::new(crate::forward::ForwardManager::new()),
             stream_manager: Arc::new(crate::stream::StreamManager::new()),
             recordings_dir: tmp.path().to_path_buf(),
+            recording_keyring: Arc::new(
+                crate::recording_keyring::RecordingKeyring::load_or_create(
+                    &tmp.path().join("rec-keys"),
+                )
+                .unwrap(),
+            ),
             bridge_registry: Arc::new(crate::registry::BridgeRegistry::new()),
             bridge_store: Arc::new(bridge_store),
             file_transfer: crate::server_config::FileTransferConfig::default(),

@@ -26,6 +26,7 @@ pub struct QuicServerConfig {
     /// Preserved across background DB refreshes.
     pub static_token_hashes: HashMap<String, String>,
     pub recordings_dir: std::path::PathBuf,
+    pub recording_keyring: Arc<crate::recording_keyring::RecordingKeyring>,
     pub api_key_store: Option<Arc<crate::api_keys::ApiKeyStore>>,
     pub db_path: std::path::PathBuf,
     pub router: Arc<crate::router::HostRouter>,
@@ -143,10 +144,11 @@ pub async fn run_quic_server(
         let ca_cert = config.ca_cert_path.clone();
         let audit = Arc::clone(&config.audit_db);
         let groups = Arc::clone(&host_groups);
+        let keyring = Arc::clone(&config.recording_keyring);
         tokio::spawn(async move {
             if let Err(e) = handle_connection(
                 connecting, registry, token_map, rec_dir, store, agents, router, ca_cert, audit,
-                groups,
+                groups, keyring,
             )
             .await
             {
@@ -170,6 +172,7 @@ async fn handle_connection(
     ca_cert_path: Option<String>,
     audit_db: Arc<crate::audit::AuditDb>,
     host_groups: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
+    keyring: Arc<crate::recording_keyring::RecordingKeyring>,
 ) -> anyhow::Result<()> {
     let conn = connecting.await?;
     let remote_addr = conn.remote_address();
@@ -191,6 +194,7 @@ async fn handle_connection(
                 token_map,
                 recordings_dir,
                 last_agents,
+                keyring,
             )
             .await
         }
@@ -234,6 +238,7 @@ async fn handle_bridge_registration(
     token_map: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
     recordings_dir: std::path::PathBuf,
     last_agents: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
+    keyring: Arc<crate::recording_keyring::RecordingKeyring>,
 ) -> anyhow::Result<()> {
     let token = reg
         .get("token")
@@ -289,7 +294,9 @@ async fn handle_bridge_registration(
         &serde_json::json!({
             "type": "register_ack",
             "ok": true,
-            "hostname": hostname
+            "hostname": hostname,
+            "recording_pubkey": keyring.current().public_b64(),
+            "recording_key_id": keyring.current().key_id(),
         }),
     )
     .await?;
@@ -417,7 +424,18 @@ async fn handle_push_stream(
 
     let mut file_data = vec![0u8; size];
     recv.read_exact(&mut file_data).await?;
-    tokio::fs::write(&file_path, &file_data).await?;
+    {
+        use tokio::io::AsyncWriteExt;
+        let mut f = tokio::fs::File::create(&file_path).await?;
+        f.write_all(&file_data).await?;
+        f.sync_all().await?;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ =
+            tokio::fs::set_permissions(&file_path, std::fs::Permissions::from_mode(0o600)).await;
+    }
 
     tracing::info!(%hostname, %safe_filename, %agent, size, "recording received");
 

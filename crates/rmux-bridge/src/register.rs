@@ -65,6 +65,7 @@ pub struct RegisterConfig {
     pub recording_fsync_interval_secs: u64,
     pub idle_timeout_secs: u64,
     pub audit_db: Arc<BridgeAuditDb>,
+    pub recording_pubkey: Arc<tokio::sync::RwLock<Option<(String, String)>>>,
     /// SIGTERM 优雅关闭信号。
     pub shutdown: Arc<Shutdown>,
 }
@@ -151,6 +152,13 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
         .get("hostname")
         .and_then(|v| v.as_str())
         .unwrap_or("unknown");
+    if let (Some(pk), Some(kid)) = (
+        ack.get("recording_pubkey").and_then(|v| v.as_str()),
+        ack.get("recording_key_id").and_then(|v| v.as_str()),
+    ) {
+        *config.recording_pubkey.write().await = Some((pk.to_string(), kid.to_string()));
+        tracing::info!(key_id = %kid, "received recording public key from server");
+    }
     tracing::info!(hostname = %hostname, "registered, starting heartbeat + stream handler");
 
     let protocol_proxy = Arc::new(tokio::sync::RwLock::new(
@@ -292,6 +300,7 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
                         let rec_fsync = config.recording_fsync_interval_secs;
                         let audit_db = config.audit_db.clone();
                         let idle_timeout = config.idle_timeout_secs;
+                        let rec_pubkey = config.recording_pubkey.clone();
                         tokio::spawn(async move {
                             if let Err(e) = crate::files::handle_quic_stream(
                                 stream_send,
@@ -304,6 +313,7 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
                                 rec_fsync,
                                 audit_db,
                                 idle_timeout,
+                                rec_pubkey,
                             )
                             .await
                             {

@@ -325,6 +325,7 @@ pub async fn handle_interactive_data(
     recording_dir: PathBuf,
     fsync_interval_secs: u64,
     audit_db: Arc<BridgeAuditDb>,
+    recording_pubkey: Arc<tokio::sync::RwLock<Option<(String, String)>>>,
 ) -> Result<()> {
     let (session_name, socket_path) = {
         let start = std::time::Instant::now();
@@ -513,7 +514,37 @@ pub async fn handle_interactive_data(
             let filename = format!("{safe_session}_{safe_pane}_{epoch}_{client_id}.cast");
             let cast_path = date_dir.join(&filename);
 
-            match CastRecorder::start(cast_path.clone(), cols, rows, fsync_interval_secs).await {
+            let encryptor = {
+                let guard = recording_pubkey.read().await;
+                match guard.as_ref() {
+                    Some((pk, kid)) => {
+                        match clum_core::crypto::RecordingEncryptor::new(pk, kid, &filename) {
+                            Ok(e) => Some(e),
+                            Err(e) => {
+                                tracing::error!(
+                                    "failed to build recording encryptor, storing plaintext: {e}"
+                                );
+                                None
+                            }
+                        }
+                    }
+                    None => {
+                        tracing::warn!(
+                            "recording public key unavailable, storing plaintext (legacy server?)"
+                        );
+                        None
+                    }
+                }
+            };
+            match CastRecorder::start(
+                cast_path.clone(),
+                cols,
+                rows,
+                fsync_interval_secs,
+                encryptor,
+            )
+            .await
+            {
                 Ok(rec) => {
                     tracing::info!(path = %cast_path.display(), "started cast recording");
                     Some(rec)

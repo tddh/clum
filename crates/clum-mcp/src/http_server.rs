@@ -235,6 +235,7 @@ fn build_download_routes(
     static_dir: Option<std::path::PathBuf>,
     download_tokens: DownloadTokenMap,
     token_ttl_hours: u64,
+    keyring: Arc<crate::recording_keyring::RecordingKeyring>,
 ) -> Router {
     if let Some(dir) = static_dir {
         let dir = Arc::new(dir);
@@ -258,7 +259,8 @@ fn build_download_routes(
                 axum::routing::get(
                     move |axum::extract::Path(path): axum::extract::Path<String>| {
                         let dir = Arc::clone(&recordings_dir);
-                        async move { serve_static(dir, &path).await }
+                        let kr = Arc::clone(&keyring);
+                        async move { serve_recording(dir, kr, &path).await }
                     },
                 ),
             );
@@ -307,6 +309,7 @@ pub async fn run_http_server(
         .disable_allowed_hosts();
 
     let key_store_for_auth = Arc::clone(&key_store);
+    let keyring_for_routes = Arc::clone(&ctx.recording_keyring);
     let service = StreamableHttpService::new(
         move || {
             Ok(ClumServer {
@@ -327,6 +330,7 @@ pub async fn run_http_server(
         static_dir,
         Arc::clone(&download_tokens),
         token_ttl_hours,
+        keyring_for_routes,
     );
 
     let auth_state = AuthState {
@@ -358,6 +362,33 @@ pub async fn run_http_server(
         .serve(app.into_make_service())
         .await?;
     Ok(())
+}
+
+async fn serve_recording(
+    dir: Arc<std::path::PathBuf>,
+    keyring: Arc<crate::recording_keyring::RecordingKeyring>,
+    path: &str,
+) -> Result<axum::response::Response, StatusCode> {
+    if path.split('/').any(|c| c == "..") {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let requested = dir.join(path);
+    let canonical_dir = dir.canonicalize().map_err(|_| StatusCode::NOT_FOUND)?;
+    let canonical_path = match requested.canonicalize() {
+        Ok(p) if p.starts_with(&canonical_dir) => p,
+        _ => return Err(StatusCode::NOT_FOUND),
+    };
+    let raw = tokio::fs::read(&canonical_path)
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    let plain = keyring.decrypt_or_passthrough(&raw).map_err(|e| {
+        tracing::warn!(path = %canonical_path.display(), "recording decrypt failed: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    Ok(axum::response::Response::builder()
+        .header("content-type", "application/octet-stream")
+        .body(axum::body::Body::from(plain))
+        .unwrap())
 }
 
 async fn serve_static(
@@ -461,11 +492,18 @@ mod tests {
             );
         }
 
+        let keyring = Arc::new(
+            crate::recording_keyring::RecordingKeyring::load_or_create(
+                &tmp.path().join("rec-keys"),
+            )
+            .unwrap(),
+        );
         let app = build_download_routes(
             Router::new(),
             Some(static_dir),
             Arc::clone(&download_tokens),
             1,
+            keyring,
         );
         let auth_state = AuthState {
             store: key_store,

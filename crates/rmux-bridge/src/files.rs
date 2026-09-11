@@ -44,6 +44,7 @@ pub async fn handle_quic_stream(
     fsync_interval_secs: u64,
     audit_db: Arc<BridgeAuditDb>,
     idle_timeout_secs: u64,
+    recording_pubkey: Arc<tokio::sync::RwLock<Option<(String, String)>>>,
 ) -> anyhow::Result<()> {
     let mut type_buf = [0u8; 1];
     recv.read_exact(&mut type_buf).await?;
@@ -105,6 +106,7 @@ pub async fn handle_quic_stream(
                 recording_dir,
                 fsync_interval_secs,
                 audit_db,
+                recording_pubkey,
             )
             .await
         }

@@ -7,6 +7,7 @@ use anyhow::Context;
 use rustls::pki_types::pem::PemObject;
 
 pub mod backoff;
+pub mod crypto;
 pub mod error_code;
 pub mod quic;
 pub mod rate_limiter;

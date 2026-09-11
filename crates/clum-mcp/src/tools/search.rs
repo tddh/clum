@@ -3,9 +3,9 @@
 
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::sync::LazyLock;
-use tokio::io::{AsyncBufReadExt, BufReader};
 use tracing::warn;
 
 use super::ToolContext;
@@ -77,6 +77,7 @@ pub(crate) async fn search_recordings(ctx: &ToolContext, args: Value) -> Result<
     let mut matches: Vec<Value> = Vec::new();
     let mut scanned_files: usize = 0;
     let mut scanned_bytes: u64 = 0;
+    let mut decrypt_errors: Vec<String> = Vec::new();
 
     for candidate in &candidates {
         if matches.len() >= limit + offset {
@@ -85,6 +86,7 @@ pub(crate) async fn search_recordings(ctx: &ToolContext, args: Value) -> Result<
         let path = candidate["path"].as_str().unwrap_or("");
         let file_matches = match scan_cast_file(
             path,
+            Some(&ctx.recording_keyring),
             &query,
             match_mode,
             search_input,
@@ -96,6 +98,7 @@ pub(crate) async fn search_recordings(ctx: &ToolContext, args: Value) -> Result<
             Ok(matches) => matches,
             Err(e) => {
                 warn!("scan_cast_file failed for {path}: {e}");
+                decrypt_errors.push(format!("{path}: {e}"));
                 Vec::new()
             }
         };
@@ -158,6 +161,7 @@ pub(crate) async fn search_recordings(ctx: &ToolContext, args: Value) -> Result<
         "matches": matches,
         "scanned_files": scanned_files,
         "scanned_bytes": scanned_bytes,
+        "decrypt_errors": decrypt_errors,
     }))
 }
 
@@ -175,6 +179,7 @@ struct FileMatch {
 /// to avoid loading the entire file into a single string allocation.
 async fn scan_cast_file(
     path_str: &str,
+    keyring: Option<&crate::recording_keyring::RecordingKeyring>,
     query: &str,
     match_mode: &str,
     search_input: bool,
@@ -185,30 +190,35 @@ async fn scan_cast_file(
     if !path.exists() {
         return Ok(Vec::new());
     }
-    let file = tokio::fs::File::open(path).await?;
-    let reader = BufReader::new(file);
+    let raw = tokio::fs::read(path).await?;
+    let plain = match keyring {
+        Some(k) => k.decrypt_or_passthrough(&raw)?,
+        None => raw,
+    };
+    let text = String::from_utf8_lossy(&plain);
+    let reader = BufReader::new(text.as_bytes());
     let mut lines = reader.lines();
 
-    match lines.next_line().await {
-        Ok(Some(header)) if !header.is_empty() => {}
-        Ok(Some(_)) => return Ok(Vec::new()),
-        Ok(None) => return Ok(Vec::new()),
-        Err(e) => return Err(e.into()),
+    match lines.next() {
+        Some(Ok(header)) if !header.is_empty() => {}
+        Some(Ok(_)) => return Ok(Vec::new()),
+        Some(Err(e)) => return Err(e.into()),
+        None => return Ok(Vec::new()),
     }
 
     let mut events: Vec<(u64, f64, String, String)> = Vec::new();
     let mut line_num: u64 = 1;
     loop {
-        match lines.next_line().await {
-            Ok(Some(raw)) => {
+        match lines.next() {
+            Some(Ok(raw)) => {
                 if let Some((elapsed, event_type, text)) = parse_event_line(&raw) {
                     let clean = strip_ansi(&text);
                     events.push((line_num, elapsed, event_type, clean));
                 }
                 line_num += 1;
             }
-            Ok(None) => break,
-            Err(e) => return Err(e.into()),
+            Some(Err(e)) => return Err(e.into()),
+            None => break,
         }
     }
 
@@ -366,9 +376,17 @@ mod tests {
         f.write_all(b"[3.5, \"o\", \"done.\"]\n").unwrap();
         f.write_all(b"[4.0, \"exit\", 0]\n").unwrap();
 
-        let results = scan_cast_file(cast_path.to_str().unwrap(), "nginx", "plain", true, true, 1)
-            .await
-            .unwrap();
+        let results = scan_cast_file(
+            cast_path.to_str().unwrap(),
+            None,
+            "nginx",
+            "plain",
+            true,
+            true,
+            1,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].matched_text, "systemctl restart nginx");
@@ -391,6 +409,7 @@ mod tests {
 
         let results = scan_cast_file(
             cast_path.to_str().unwrap(),
+            None,
             "matched",
             "plain",
             true,
@@ -420,6 +439,7 @@ mod tests {
 
         let results = scan_cast_file(
             cast_path.to_str().unwrap(),
+            None,
             r"error: (connection|timeout)",
             "regex",
             true,
@@ -446,6 +466,7 @@ mod tests {
         // Search only input events.
         let results = scan_cast_file(
             cast_path.to_str().unwrap(),
+            None,
             "hello",
             "plain",
             true,
@@ -460,6 +481,7 @@ mod tests {
         // Search only output events.
         let results = scan_cast_file(
             cast_path.to_str().unwrap(),
+            None,
             "hello",
             "plain",
             false,
@@ -488,6 +510,7 @@ mod tests {
 
         let results = scan_cast_file(
             cast_path.to_str().unwrap(),
+            None,
             "systemctl restarted",
             "plain",
             true,
@@ -505,6 +528,7 @@ mod tests {
     async fn test_scan_cast_file_nonexistent_file() {
         let results = scan_cast_file(
             "/nonexistent/path/file.cast",
+            None,
             "test",
             "plain",
             true,
@@ -522,9 +546,17 @@ mod tests {
         let cast_path = dir.path().join("empty.cast");
         std::fs::write(&cast_path, "").unwrap();
 
-        let results = scan_cast_file(cast_path.to_str().unwrap(), "test", "plain", true, true, 0)
-            .await
-            .unwrap();
+        let results = scan_cast_file(
+            cast_path.to_str().unwrap(),
+            None,
+            "test",
+            "plain",
+            true,
+            true,
+            0,
+        )
+        .await
+        .unwrap();
         assert!(results.is_empty());
     }
 }

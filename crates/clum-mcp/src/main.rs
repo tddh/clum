@@ -10,6 +10,7 @@ mod handler;
 mod http_server;
 mod progress;
 mod quic_server;
+mod recording_keyring;
 mod recording_sync;
 mod registry;
 mod router;
@@ -139,6 +140,7 @@ async fn main() -> anyhow::Result<()> {
     // Resolve methods and token map first (they borrow file_config)
     let file_audit_db = file_config.resolve_audit_db();
     let file_recordings_dir = file_config.resolve_recordings_dir();
+    let file_recording_keys_dir = file_config.resolve_recording_keys_dir();
     let file_static_dir = file_config.resolve_static_dir();
     let file_bridge_tokens = file_config.bridge_token_map();
     let token_ttl_hours = file_config.token_ttl_hours;
@@ -246,6 +248,10 @@ async fn main() -> anyhow::Result<()> {
         .or(file_recordings_dir)
         .unwrap_or_else(recording_sync::default_recordings_dir);
 
+    let recording_keyring = Arc::new(recording_keyring::RecordingKeyring::load_or_create(
+        &file_recording_keys_dir,
+    )?);
+
     let sync_config = recording_sync::RecordingSyncConfig {
         interval_secs: sync_interval,
         recordings_dir: recordings_dir.clone(),
@@ -270,6 +276,7 @@ async fn main() -> anyhow::Result<()> {
         forward_manager: Arc::new(forward::ForwardManager::new()),
         stream_manager: Arc::new(stream::StreamManager::new()),
         recordings_dir,
+        recording_keyring: Arc::clone(&recording_keyring),
         bridge_registry: Arc::clone(&bridge_registry),
         bridge_store: Arc::clone(&bridge_store),
         file_transfer: file_config.file_transfer.clone(),
@@ -327,6 +334,7 @@ async fn main() -> anyhow::Result<()> {
                 bridge_token_hashes: hash_map,
                 static_token_hashes: static_hashes,
                 recordings_dir: ctx.recordings_dir.clone(),
+                recording_keyring: Arc::clone(&recording_keyring),
                 api_key_store: Some(api_keys::ApiKeyStore::open(&db_path)?),
                 db_path: db_path.clone(),
                 router: Arc::clone(&ctx.router),

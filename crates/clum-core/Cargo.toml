@@ -17,3 +17,9 @@ tokio = { workspace = true }
 socket2 = "0.6"
 fastrand.workspace = true
 serde_json = { workspace = true }
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+aes-gcm = "0.10"
+hkdf = "0.12"
+base64 = "0.22"
+getrandom = "0.2"
+sha2 = "0.10"

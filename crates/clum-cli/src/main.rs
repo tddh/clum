@@ -15,6 +15,32 @@ fn parse_cc(s: &str) -> Result<CcKind, String> {
         .map_err(|_| format!("invalid congestion control '{s}' (expected auto|bbr|cubic)"))
 }
 
+#[cfg(target_os = "linux")]
+fn create_anon_file() -> anyhow::Result<std::fs::File> {
+    use std::os::unix::io::FromRawFd;
+    let name = std::ffi::CString::new("clum-replay").expect("static name");
+    let fd = unsafe { libc::memfd_create(name.as_ptr(), 0) };
+    if fd < 0 {
+        anyhow::bail!("memfd_create failed: {}", std::io::Error::last_os_error());
+    }
+    Ok(unsafe { std::fs::File::from_raw_fd(fd) })
+}
+
+/// macOS fallback: an unlinked temp file. Unlike Linux memfd this is still
+/// backed by disk (recoverable by privileged tooling) until the fd closes.
+#[cfg(not(target_os = "linux"))]
+fn create_anon_file() -> anyhow::Result<std::fs::File> {
+    use std::os::unix::io::FromRawFd;
+    let mut tmpl: Vec<u8> = b"/tmp/clum-replay-XXXXXX\0".to_vec();
+    let fd = unsafe { libc::mkstemp(tmpl.as_mut_ptr() as *mut libc::c_char) };
+    if fd < 0 {
+        anyhow::bail!("mkstemp failed: {}", std::io::Error::last_os_error());
+    }
+    let path = unsafe { std::ffi::CStr::from_ptr(tmpl.as_ptr() as *const libc::c_char) };
+    let _ = std::fs::remove_file(path.to_string_lossy().to_string());
+    Ok(unsafe { std::fs::File::from_raw_fd(fd) })
+}
+
 #[derive(Parser)]
 #[command(name = "clum-cli", about = "AI Agent 远程运维 CLI")]
 struct Cli {
@@ -314,53 +340,46 @@ async fn main() -> anyhow::Result<()> {
         Commands::Replay { file, speed, idle } => {
             let expanded = expand_tilde(&file);
             let path = std::path::Path::new(&expanded);
-
-            let local_path = if path.exists() {
-                expanded
-            } else if let Some(server) = &cli.server_addr {
-                let url = format!("https://{server}/recordings/{expanded}");
-                eprintln!("Fetching recording from {url} ...");
-                let tmp_file = std::env::temp_dir().join("clum-replay.cast");
-                let tmp_path = tmp_file.to_string_lossy().to_string();
-                let mut cmd = std::process::Command::new("curl");
-                cmd.args(["-fsSL", "-o", &tmp_path]);
-                if let Some(ca) = &cli.ca_cert {
-                    cmd.args(["--cacert", ca]);
-                }
-                if let Some(key) = &cli.api_key {
-                    cmd.args(["-H", &format!("Authorization: Bearer {key}")]);
-                }
-                cmd.arg(&url);
-                let resp = tokio::task::block_in_place(|| cmd.status())?;
-                if !resp.success() {
-                    anyhow::bail!("failed to download recording from {url}");
-                }
-                // Drop guard: always clean up temp file, even on panic.
-                struct TempGuard(String);
-                impl Drop for TempGuard {
-                    fn drop(&mut self) {
-                        let _ = std::fs::remove_file(&self.0);
-                    }
-                }
-                let _guard = TempGuard(tmp_path.clone());
-                return replay::replay(
-                    std::path::Path::new(&tmp_path),
-                    &replay::ReplayOptions {
-                        speed,
-                        idle_limit: idle,
-                    },
-                );
-            } else {
-                anyhow::bail!("file not found: {expanded} (use --server-addr for remote replay)");
+            let opts = replay::ReplayOptions {
+                speed,
+                idle_limit: idle,
             };
 
-            replay::replay(
-                std::path::Path::new(&local_path),
-                &replay::ReplayOptions {
-                    speed,
-                    idle_limit: idle,
-                },
-            )
+            if path.exists() {
+                return replay::replay(path, &opts);
+            }
+
+            let server = cli.server_addr.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("file not found: {expanded} (use --server-addr for remote replay)")
+            })?;
+            let url = format!("https://{server}/recordings/{expanded}");
+            eprintln!("Fetching recording from {url} ...");
+
+            let mut cmd = std::process::Command::new("curl");
+            cmd.args(["-fsSL", "-o", "-"]);
+            if let Some(ca) = &cli.ca_cert {
+                cmd.args(["--cacert", ca]);
+            }
+            if let Some(key) = &cli.api_key {
+                cmd.args(["-H", &format!("Authorization: Bearer {key}")]);
+            }
+            cmd.arg(&url);
+            cmd.stdout(std::process::Stdio::piped());
+            cmd.stderr(std::process::Stdio::inherit());
+
+            let mut child = cmd.spawn()?;
+            let mut anon = create_anon_file()?;
+            {
+                let mut stdout = child.stdout.take().expect("curl stdout piped");
+                std::io::copy(&mut stdout, &mut anon)?;
+            }
+            let status = child.wait()?;
+            if !status.success() {
+                anyhow::bail!("failed to download recording from {url}");
+            }
+            use std::io::Seek;
+            anon.seek(std::io::SeekFrom::Start(0))?;
+            replay::replay_file(anon, &opts)
         }
         Commands::Push {
             host,

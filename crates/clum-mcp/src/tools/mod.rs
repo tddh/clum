@@ -37,6 +37,7 @@ pub struct ToolContext {
     pub forward_manager: Arc<ForwardManager>,
     pub stream_manager: Arc<StreamManager>,
     pub recordings_dir: PathBuf,
+    pub recording_keyring: Arc<crate::recording_keyring::RecordingKeyring>,
     #[allow(dead_code)]
     pub bridge_registry: Arc<crate::registry::BridgeRegistry>,
     pub bridge_store: Arc<crate::bridge_store::BridgeStore>,
@@ -68,6 +69,7 @@ impl Clone for ToolContext {
                     .clone(),
             )),
             forward_manager: Arc::clone(&self.forward_manager),
+            recording_keyring: Arc::clone(&self.recording_keyring),
             stream_manager: Arc::clone(&self.stream_manager),
             recordings_dir: self.recordings_dir.clone(),
             bridge_registry: Arc::clone(&self.bridge_registry),
@@ -401,7 +403,8 @@ pub async fn execute_tool(
                 }
             }
 
-            let result = read_recording_file(&ctx.recordings_dir, path).await;
+            let result =
+                read_recording_file(&ctx.recordings_dir, &ctx.recording_keyring, path).await;
             let duration_ms = start.elapsed().as_millis() as u64;
             match result {
                 Ok(value) => {
@@ -462,7 +465,11 @@ pub async fn execute_tool(
 
 /// Read a recording file's content, ensuring the resolved path stays within
 /// `recordings_dir` (path-traversal protection).
-async fn read_recording_file(recordings_dir: &std::path::Path, path: &str) -> Result<Value> {
+async fn read_recording_file(
+    recordings_dir: &std::path::Path,
+    keyring: &crate::recording_keyring::RecordingKeyring,
+    path: &str,
+) -> Result<Value> {
     if path.is_empty() {
         anyhow::bail!("missing 'path'");
     }
@@ -481,9 +488,11 @@ async fn read_recording_file(recordings_dir: &std::path::Path, path: &str) -> Re
         anyhow::bail!("path outside recordings directory");
     }
 
-    let content = tokio::fs::read_to_string(&canonical_path)
+    let raw = tokio::fs::read(&canonical_path)
         .await
         .map_err(|e| anyhow::anyhow!("failed to read recording: {e}"))?;
+    let plain = keyring.decrypt_or_passthrough(&raw)?;
+    let content = String::from_utf8_lossy(&plain).to_string();
     Ok(json!({
         "path": canonical_path.to_string_lossy(),
         "content": content,

@@ -7,6 +7,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use clum_core::crypto::RecordingEncryptor;
 use sha2::{Digest, Sha256};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
@@ -53,6 +54,7 @@ impl CastRecorder {
         width: u16,
         height: u16,
         fsync_interval_secs: u64,
+        encryptor: Option<RecordingEncryptor>,
     ) -> anyhow::Result<Self> {
         let file = File::create(&path).await?;
         #[cfg(unix)]
@@ -71,6 +73,7 @@ impl CastRecorder {
             width,
             height,
             fsync_interval_secs,
+            encryptor,
         ));
 
         Ok(Self {
@@ -127,6 +130,7 @@ async fn writer_task(
     width: u16,
     height: u16,
     fsync_interval_secs: u64,
+    mut encryptor: Option<RecordingEncryptor>,
 ) {
     let start = Instant::now();
     let mut hasher = Sha256::new();
@@ -147,13 +151,20 @@ async fn writer_task(
             "SHELL": "/bin/bash"
         }
     });
-    let header_line = format!("{}\n", header);
+    let header_bytes: Vec<u8> = match encryptor.as_mut() {
+        Some(enc) => {
+            let mut v = format!("{}\n", enc.header_line()).into_bytes();
+            v.extend_from_slice(&enc.write(format!("{header}\n").as_bytes()));
+            v
+        }
+        None => format!("{header}\n").into_bytes(),
+    };
     if write_and_track(
         &mut file,
         &mut hasher,
         &mut total_bytes,
         &mut bytes_since_sync,
-        header_line.as_bytes(),
+        &header_bytes,
     )
     .await
     .is_err()
@@ -178,12 +189,13 @@ async fn writer_task(
             Some(CastEvent::Output(data)) => {
                 let elapsed = start.elapsed().as_secs_f64();
                 let line = format_event_line(elapsed, "o", &data);
+                let bytes = encode_chunk(&mut encryptor, line.as_bytes());
                 if write_and_track(
                     &mut file,
                     &mut hasher,
                     &mut total_bytes,
                     &mut bytes_since_sync,
-                    line.as_bytes(),
+                    &bytes,
                 )
                 .await
                 .is_err()
@@ -194,12 +206,13 @@ async fn writer_task(
             Some(CastEvent::Input(data)) => {
                 let elapsed = start.elapsed().as_secs_f64();
                 let line = format_event_line(elapsed, "i", &data);
+                let bytes = encode_chunk(&mut encryptor, line.as_bytes());
                 if write_and_track(
                     &mut file,
                     &mut hasher,
                     &mut total_bytes,
                     &mut bytes_since_sync,
-                    line.as_bytes(),
+                    &bytes,
                 )
                 .await
                 .is_err()
@@ -210,12 +223,13 @@ async fn writer_task(
             Some(CastEvent::Exit(code)) => {
                 let elapsed = start.elapsed().as_secs_f64();
                 let line = format!("[{}, \"exit\", {}]\n", elapsed, code);
+                let bytes = encode_chunk(&mut encryptor, line.as_bytes());
                 if write_and_track(
                     &mut file,
                     &mut hasher,
                     &mut total_bytes,
                     &mut bytes_since_sync,
-                    line.as_bytes(),
+                    &bytes,
                 )
                 .await
                 .is_err()
@@ -238,6 +252,20 @@ async fn writer_task(
             }
             bytes_since_sync = 0;
             last_sync = Instant::now();
+        }
+    }
+
+    if let Some(enc) = encryptor.as_mut() {
+        let tail = enc.finish();
+        if !tail.is_empty() {
+            let _ = write_and_track(
+                &mut file,
+                &mut hasher,
+                &mut total_bytes,
+                &mut bytes_since_sync,
+                &tail,
+            )
+            .await;
         }
     }
 
@@ -264,6 +292,13 @@ async fn writer_task(
     };
 
     let _ = done_tx.send(meta);
+}
+
+fn encode_chunk(encryptor: &mut Option<RecordingEncryptor>, plaintext: &[u8]) -> Vec<u8> {
+    match encryptor {
+        Some(enc) => enc.write(plaintext),
+        None => plaintext.to_vec(),
+    }
 }
 
 /// Write data to file, update hasher and byte counters.
@@ -611,7 +646,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let cast_path = dir.path().join("test.cast");
 
-        let recorder = CastRecorder::start(cast_path.clone(), 80, 24, 5)
+        let recorder = CastRecorder::start(cast_path.clone(), 80, 24, 5, None)
             .await
             .unwrap();
 
@@ -663,6 +698,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_recorder_encrypts_when_encryptor_provided() {
+        use clum_core::crypto::{
+            decrypt_recording, is_encrypted, RecordingEncryptor, RecordingKey,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let cast_path = dir.path().join("enc.cast");
+        let filename = "enc.cast";
+        let server = RecordingKey::generate().unwrap();
+        let enc =
+            RecordingEncryptor::new(&server.public_b64(), &server.key_id(), filename).unwrap();
+
+        let recorder = CastRecorder::start(cast_path.clone(), 80, 24, 5, Some(enc))
+            .await
+            .unwrap();
+        recorder.record_output(b"secret output");
+        recorder.record_input(b"ls\n");
+        let meta = recorder.finish(0).await.unwrap();
+
+        let data = tokio::fs::read(&cast_path).await.unwrap();
+        assert!(is_encrypted(&data), "on-disk file must be encrypted");
+
+        let mut h = Sha256::new();
+        h.update(&data);
+        assert_eq!(
+            meta.sha256,
+            hex::encode(h.finalize()),
+            "meta.sha256 must hash the ciphertext bytes on disk"
+        );
+
+        let key = server.clone();
+        let pt = decrypt_recording(&data, &|id| {
+            if id == key.key_id() {
+                Some(key.clone())
+            } else {
+                None
+            }
+        })
+        .unwrap();
+        let text = String::from_utf8_lossy(&pt);
+        assert!(text.contains("secret output"), "plaintext must round-trip");
+    }
+
+    #[tokio::test]
     async fn test_finalize_cast_writes_meta() {
         let dir = tempfile::tempdir().unwrap();
         let cast_path = dir.path().join("session.cast");
@@ -707,7 +785,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let cast_path = dir.path().join("flood.cast");
 
-        let recorder = CastRecorder::start(cast_path.clone(), 80, 24, 5)
+        let recorder = CastRecorder::start(cast_path.clone(), 80, 24, 5, None)
             .await
             .unwrap();
 
