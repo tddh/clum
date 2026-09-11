@@ -94,6 +94,14 @@ The `shell_command` tool internally uses rmux SDK's shell handling, which safely
 
 Input tools (`send_keys`, `send_text`, `broadcast_keys`, `batch_send_keys`) accept a `sensitive` flag that redacts the audit `detail` to `[REDACTED:N bytes]`. When the terminal is in `password` state (detected via a pre-injection snapshot), redaction is enforced server-side regardless of the flag — there is no opt-out. Audit events carry a `redacted` marker; plaintext credentials are never written to the audit database.
 
+This applies to the **audit trail only**. PTY recordings (below) are a separate surface and remain unmasked.
+
+### PTY Session Recordings (Plaintext)
+
+Bridge-side PTY recordings (asciinema v2) faithfully capture **everything typed into and displayed by the terminal — including passwords in cleartext**. Recordings are plaintext JSON files on the bridge host and on the central server; there is no password masking, and none is claimed. Only OS file permissions (0600, see the recordings directory on each host) protect them at rest.
+
+Operational guidance: manage production hosts via `NOPASSWD` sudoers or SSH keys so that credentials never enter a terminal session — anything typed there will exist in cleartext in the recording, in every synced copy, for as long as the file is retained.
+
 ### HTTP Endpoint Protection
 
 - **Static file serving**: The `/releases/` download endpoint rejects path components containing `..`, preventing traversal outside the release directory.
