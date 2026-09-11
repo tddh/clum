@@ -31,7 +31,9 @@ impl AuditDb {
             for suffix in ["-wal", "-shm"] {
                 let sibling = dir.join(format!(
                     "{}{suffix}",
-                    path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()
+                    path.file_name()
+                        .map(|n| n.to_string_lossy())
+                        .unwrap_or_default()
                 ));
                 let _ = std::fs::set_permissions(&sibling, std::fs::Permissions::from_mode(0o600));
             }
@@ -444,10 +446,8 @@ mod tests {
 
     #[test]
     fn test_open_restricts_db_permissions_to_owner_only() {
-        let path = std::env::temp_dir().join(format!(
-            "clum-audit-perm-test-{}.db",
-            uuid::Uuid::new_v4()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("clum-audit-perm-test-{}.db", uuid::Uuid::new_v4()));
         std::fs::write(&path, b"").unwrap();
         let _ = AuditDb::open(&path).unwrap();
         let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
