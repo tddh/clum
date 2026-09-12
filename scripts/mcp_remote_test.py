@@ -3,8 +3,9 @@
 
 Per skill rules: session_name="clum", attach-before-create,
 min pane_id, no session cleanup. Full depth: session/exec/state/
-wait/file transfer/tunnel/batch.
+wait/file transfer/forward/batch.
 """
+
 import json
 import os
 import select
@@ -56,8 +57,11 @@ class Mcp:
         except (TimeoutError, RuntimeError) as e:
             return {"ok": False, "_rpc_error": str(e)}
         if "error" in resp:
-            return {"ok": False, "_rpc_error": resp["error"]["message"],
-                    "_rpc_code": resp["error"]["code"]}
+            return {
+                "ok": False,
+                "_rpc_error": resp["error"]["message"],
+                "_rpc_code": resp["error"]["code"],
+            }
         result = resp["result"]
         text = result["content"][0]["text"]
         try:
@@ -89,13 +93,17 @@ def host_flow(m, host, tunnel_port):
     # 1. attach, create if missing
     r = m.tool("session_attach", {"host": host, "session_name": SESSION}, timeout=30)
     if not ok(r):
-        r = m.tool("session_create", {"host": host, "session_name": SESSION}, timeout=30)
+        r = m.tool(
+            "session_create", {"host": host, "session_name": SESSION}, timeout=30
+        )
         check(f"{pfx}: session_create", ok(r), str(r))
     else:
         check(f"{pfx}: session_attach", True)
 
     # 2. min pane_id
-    r = m.tool("list_window_panes", {"host": host, "session_name": SESSION, "window_index": 0})
+    r = m.tool(
+        "list_window_panes", {"host": host, "session_name": SESSION, "window_index": 0}
+    )
     panes = r.get("panes", [])
     check(f"{pfx}: list_window_panes", len(panes) > 0, str(r))
     if not panes:
@@ -107,14 +115,26 @@ def host_flow(m, host, tunnel_port):
     r = m.tool("pane_info", base)
     check(f"{pfx}: pane_info", ok(r) and "terminal_state" in r, str(r))
     r = m.tool("capture_pane", base)
-    check(f"{pfx}: capture_pane + terminal_state", ok(r) and "terminal_state" in r and "cursor" in r, str(r))
+    check(
+        f"{pfx}: capture_pane + terminal_state",
+        ok(r) and "terminal_state" in r and "cursor" in r,
+        str(r),
+    )
 
     # 4. exec harmless read-only command
     r = m.tool("exec", {**base, "command": "hostname && uptime", "timeout_ms": 15000})
     check(f"{pfx}: exec hostname/uptime", ok(r), str(r))
     state = r.get("terminal_state", "?")
-    check(f"{pfx}: exec returns terminal_state", state in ("ready", "running", "unknown"), str(state))
-    check(f"{pfx}: exec returns cursor", isinstance(r.get("cursor"), dict), str(r.get("cursor")))
+    check(
+        f"{pfx}: exec returns terminal_state",
+        state in ("ready", "running", "unknown"),
+        str(state),
+    )
+    check(
+        f"{pfx}: exec returns cursor",
+        isinstance(r.get("cursor"), dict),
+        str(r.get("cursor")),
+    )
 
     # 5. exec safety refusal: occupy terminal with sleep 30
     m.tool("send_keys", {**base, "keys": "sleep 30\n"})
@@ -142,9 +162,13 @@ def host_flow(m, host, tunnel_port):
     payload = f"clum smoke {host} {MARK}\n"
     with open(local_up, "w") as f:
         f.write(payload)
-    r = m.tool("file_upload", {"host": host, "local_path": local_up, "remote_path": remote})
+    r = m.tool(
+        "file_upload", {"host": host, "local_path": local_up, "remote_path": remote}
+    )
     check(f"{pfx}: file_upload", ok(r), str(r))
-    r = m.tool("file_download", {"host": host, "remote_path": remote, "local_path": local_dn})
+    r = m.tool(
+        "file_download", {"host": host, "remote_path": remote, "local_path": local_dn}
+    )
     check(f"{pfx}: file_download", ok(r), str(r))
     got = open(local_dn).read() if os.path.exists(local_dn) else ""
     check(f"{pfx}: download content matches", got == payload, repr(got))
@@ -152,11 +176,19 @@ def host_flow(m, host, tunnel_port):
     os.unlink(local_dn) if os.path.exists(local_dn) else None
     os.unlink(local_up) if host == HOSTS[-1] else None
 
-    # 8. tunnel create -> SSH banner through tunnel -> close
-    r = m.tool("tunnel_create", {"host": host, "local_port": tunnel_port,
-                                 "remote_host": "127.0.0.1", "remote_port": 22}, timeout=30)
-    tid = r.get("tunnel_id")
-    check(f"{pfx}: tunnel_create", ok(r) and tid, str(r))
+    # 8. forward create -> SSH banner through forward -> close
+    r = m.tool(
+        "forward_create",
+        {
+            "host": host,
+            "local_port": tunnel_port,
+            "remote_host": "127.0.0.1",
+            "remote_port": 22,
+        },
+        timeout=30,
+    )
+    tid = r.get("forward_id")
+    check(f"{pfx}: forward_create", ok(r) and tid, str(r))
     if tid:
         banner = b""
         try:
@@ -165,29 +197,45 @@ def host_flow(m, host, tunnel_port):
                 banner = s.recv(64)
         except OSError as e:
             banner = str(e).encode()
-        check(f"{pfx}: tunnel carries SSH banner", banner.startswith(b"SSH-"), repr(banner))
-        r = m.tool("tunnel_list", {})
+        check(
+            f"{pfx}: forward carries SSH banner",
+            banner.startswith(b"SSH-"),
+            repr(banner),
+        )
+        r = m.tool("forward_list", {})
         listed = tid in json.dumps(r)
-        check(f"{pfx}: tunnel_list contains id", listed, str(r))
-        r = m.tool("tunnel_close", {"tunnel_id": tid})
-        check(f"{pfx}: tunnel_close", ok(r), str(r))
+        check(f"{pfx}: forward_list contains id", listed, str(r))
+        r = m.tool("forward_close", {"forward_id": tid})
+        check(f"{pfx}: forward_close", ok(r), str(r))
 
     # 9. capabilities
     r = m.tool("host_capabilities", {"host": host})
     check(f"{pfx}: host_capabilities", ok(r), str(r))
 
     # 10. error path: bad pane
-    r = m.tool("exec", {**base, "pane_id": "%99", "command": "true", "timeout_ms": 8000})
+    r = m.tool(
+        "exec", {**base, "pane_id": "%99", "command": "true", "timeout_ms": 8000}
+    )
     check(f"{pfx}: exec bad pane -> error", not ok(r), str(r))
-    check(f"{pfx}: bad pane -> PANE_NOT_FOUND envelope",
-          r.get("error_code") == "PANE_NOT_FOUND" and bool(r.get("recovery_hint"))
-          and r.get("_is_error") is True, str(r))
+    check(
+        f"{pfx}: bad pane -> PANE_NOT_FOUND envelope",
+        r.get("error_code") == "PANE_NOT_FOUND"
+        and bool(r.get("recovery_hint"))
+        and r.get("_is_error") is True,
+        str(r),
+    )
 
 
 def main():
     m = Mcp()
-    m.rpc("initialize", {"protocolVersion": "2024-11-05", "capabilities": {},
-                         "clientInfo": {"name": "mcp-remote-test", "version": "0"}})
+    m.rpc(
+        "initialize",
+        {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {"name": "mcp-remote-test", "version": "0"},
+        },
+    )
 
     for i, host in enumerate(HOSTS):
         print(f"--- {host} ---", flush=True)

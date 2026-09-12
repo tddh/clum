@@ -4,6 +4,7 @@
 Spawns the MCP server, speaks newline-delimited JSON-RPC, runs a test
 plan, prints PASS/FAIL per step. Read-only against remote hosts.
 """
+
 import json
 import re
 import subprocess
@@ -43,8 +44,11 @@ class Mcp:
     def tool(self, name, args):
         resp = self.rpc("tools/call", {"name": name, "arguments": args})
         if "error" in resp:
-            return {"ok": False, "_rpc_error": resp["error"]["message"],
-                    "_rpc_code": resp["error"]["code"]}
+            return {
+                "ok": False,
+                "_rpc_error": resp["error"]["message"],
+                "_rpc_code": resp["error"]["code"],
+            }
         result = resp["result"]
         text = result["content"][0]["text"]
         try:
@@ -70,22 +74,36 @@ def main():
     m = Mcp()
 
     # ── 1. protocol layer (no host interaction) ──
-    r = m.rpc("initialize", {
-        "protocolVersion": "2024-11-05",
-        "capabilities": {},
-        "clientInfo": {"name": "mcp-smoke", "version": "0"},
-    })
+    r = m.rpc(
+        "initialize",
+        {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {"name": "mcp-smoke", "version": "0"},
+        },
+    )
     info = r.get("result", {}).get("serverInfo", {})
     check("initialize: serverInfo", info.get("name") == "clum-mcp", str(r))
-    check("initialize: semver version", bool(re.match(r"^\d+\.\d+\.\d+", info.get("version", ""))), str(info))
+    check(
+        "initialize: semver version",
+        bool(re.match(r"^\d+\.\d+\.\d+", info.get("version", ""))),
+        str(info),
+    )
 
     r = m.rpc("tools/list")
     tools = r.get("result", {}).get("tools", [])
     names = [t["name"] for t in tools]
     check("tools/list: returns tools", len(tools) > 0)
-    check("tools/list: 67 tools", len(names) == 67, f"got {len(names)}")
-    for expect in ["exec", "capture_pane", "session_attach", "file_upload",
-                   "tunnel_create", "batch_exec", "reload_config"]:
+    check("tools/list: 69 tools", len(names) == 69, f"got {len(names)}")
+    for expect in [
+        "exec",
+        "capture_pane",
+        "session_attach",
+        "file_upload",
+        "forward_create",
+        "batch_exec",
+        "reload_config",
+    ]:
         check(f"tools/list: has {expect}", expect in names)
 
     r = m.rpc("no/such.method")
@@ -99,13 +117,32 @@ def main():
     hosts = [h["name"] for h in r.get("hosts", [])]
     check("host_list: returns list", isinstance(hosts, list), str(hosts))
 
-    r = m.tool("exec", {"host": "nonexistent-host", "session_name": "clum",
-                        "pane_id": "%0", "command": "true"})
-    check("exec bad host -> structured error", r.get("ok") is False and "_rpc_error" not in r, str(r)[:300])
-    check("exec bad host -> HOST_NOT_FOUND", r.get("error_code") == "HOST_NOT_FOUND", str(r)[:300])
-    check("exec bad host -> hint+retryable+isError",
-          bool(r.get("recovery_hint")) and r.get("retryable") is False and r.get("_is_error") is True,
-          str(r)[:300])
+    r = m.tool(
+        "exec",
+        {
+            "host": "nonexistent-host",
+            "session_name": "clum",
+            "pane_id": "%0",
+            "command": "true",
+        },
+    )
+    check(
+        "exec bad host -> structured error",
+        r.get("ok") is False and "_rpc_error" not in r,
+        str(r)[:300],
+    )
+    check(
+        "exec bad host -> HOST_NOT_FOUND",
+        r.get("error_code") == "HOST_NOT_FOUND",
+        str(r)[:300],
+    )
+    check(
+        "exec bad host -> hint+retryable+isError",
+        bool(r.get("recovery_hint"))
+        and r.get("retryable") is False
+        and r.get("_is_error") is True,
+        str(r)[:300],
+    )
 
     m.close()
 
