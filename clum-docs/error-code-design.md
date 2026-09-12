@@ -2,7 +2,8 @@
 
 > 状态：已评审通过，进入实施
 > 日期：2026-08-14
-> 范围：clum-core（共享分类器）、clum-mcp（MCP 侧分类器与信封）、rmux-bridge（桥侧错误注入）、docs/TOOLS.md（文档同步）
+> 实施后注（2026-09-12 核验）：P0/P1/P2 全部列项已在代码落地（P0-1 空 hosts ok:false、P0-2 透传、P2-9 桥侧帧层 ok:false 等均验证通过）。文中行号引用为 0.13 时代代码布局，现状以 git 为准。
+> 范围：clum-core（共享分类器）、clum-mcp（MCP 侧分类器与信封）、rmux-bridge（桥侧错误注入）、clum-docs/TOOLS.md（文档同步）
 > 原则：错误码**只增不改**——`error` 保留原始字符串，`error_code` 是稳定契约，`recovery_hint` 给恢复动作，`retryable` 给重试决策
 
 ---
@@ -155,7 +156,7 @@ if has("pane id") && has("not found") || has("can't find pane") || has("pane not
 
 **注意**：
 - 参数值域模式**采用锚定子串**（如 `must be 0-65535` 而非宽泛 `must be`），避免未来新增 `"session must be created first"` 这类状态类错误被误归 INVALID_PARAMS（负例测试已覆盖）
-- 修正 error.rs:46 PANE_NOT_FOUND 条件——移除死分支 `has("pane id") && has("not found")`，替换为 `has("invalid pane")`，并加括号明确优先级
+- 修正 error.rs:46 PANE_NOT_FOUND 条件——新增 `has("invalid pane")` 锚定分支，并加括号明确优先级（**实施更正**：`has("pane id") && has("not found")` 分支按 §5"测试注意"保留，与新增分支共存——见 error_code.rs 现状）
 - **不删除** AUTH_FAILED / 现有任何分支（direct 模式仍依赖）
 
 ### 3.2 信封语义修复（`crates/clum-mcp/src/tools/batch.rs`、`deploy.rs`）
@@ -189,7 +190,7 @@ if resp["ok"].as_bool() == Some(false) {
 json!({"ok": false, "error": ...})
 ```
 
-### 3.5 文档同步（`docs/TOOLS.md`）
+### 3.5 文档同步（`clum-docs/TOOLS.md`）
 
 1. 错误码表（L35-49）新增 `CONNECT_TIMEOUT` / `CLI_FAILED` / `PROTOCOL_ERROR` 三行
 2. `AUTH_FAILED` 描述修正为："direct 模式下 bridge token 认证失败；enrolled 模式 token 校验失败表现为连接建立失败（BRIDGE_UNREACHABLE/CONNECT_TIMEOUT）"
@@ -237,7 +238,7 @@ json!({"ok": false, "error": ...})
 | 消息文本兼容 | `error` 字段原始文本不改变；`[UNKNOWN] ` 前缀移除是唯一消息格式变化（P0-2），属内部包装，AI 可见文本变干净 |
 | 行为变更 | 空 hosts 从 ok:true 变 ok:false——**有语义影响**，但这是修正 bug，且 AI 对 INVALID_PARAMS 的处理（补参数重试）本就是正确反应 |
 | bridge 侧风险 | proxy.rs 5 处加 `ok:false` 字段，协议向后兼容（旧 MCP 忽略未知字段） |
-| 测试 | error.rs 现有 14 个单元测试需补充新匹配模式用例；修正 PANE_NOT_FOUND 后现有测试 `"pane id %99 was not found"` 仍应通过（需保留该模式或调整测试） |
+| 测试 | error.rs 评审时有 14 个单元测试需补充新匹配模式用例（实施核验：现为 16 个）；现有测试 `"pane id %99 was not found"` 断言 PANE_NOT_FOUND 已保留通过 |
 
 > 测试注意：现有 `classifies_terminal_objects` 测试用 `"pane id %99 was not found"` 断言 PANE_NOT_FOUND。若移除 `has("pane id") && has("not found")` 分支，该测试将失败。方案：**保留** `"pane id %99 was not found"` 匹配（它确实是 MCP 侧可能产生的格式），同时**新增** `"invalid pane"` 分支——两者共存。
 
@@ -267,7 +268,7 @@ json!({"ok": false, "error": ...})
 | 2 | 信封语义修复（5 处 ok:true→false） | `batch.rs`、`deploy.rs` |
 | 3 | 透传逻辑修正 | `common.rs` |
 | 4 | bridge 帧层格式统一 | `rmux-bridge/src/proxy.rs` |
-| 5 | 文档同步 | `docs/TOOLS.md` |
+| 5 | 文档同步 | `clum-docs/TOOLS.md` |
 | 6 | 验证 | `just check && just test && just lint` |
 
 ---
@@ -328,7 +329,7 @@ async fn send_response(writer: &..., response: &mut serde_json::Value) -> Result
 | 3 | bridge 出口注入 error_code | `rmux-bridge/src/proxy.rs` |
 | 4 | 信封语义修复（5 处 ok:true→false） | `batch.rs`、`deploy.rs` |
 | 5 | 透传逻辑修正 | `common.rs` |
-| 6 | 文档同步 | `docs/TOOLS.md` |
+| 6 | 文档同步 | `clum-docs/TOOLS.md` |
 | 7 | 验证 | `just check && just test && just lint` |
 
 > 原"后续演进"章节内容已并入本节，作为本次实施的最终方案。错误码契约见 §4 表：**19 个共享分类器常量**（`clum_core::error_code.rs`）+ 1 个 MCP 侧特例 `REFUSED_STATE`（`error.rs` 硬编码，不走分类器）。

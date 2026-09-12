@@ -29,11 +29,11 @@ clum consists of four components connected over TLS:
 4. **AI clients** — Connect to Central Server via Streamable HTTP with API Key auth
 
 Security assumptions:
-- AI clients authenticate via API Key (`yk_{name}_{32hex}`, SHA-256 hashed in SQLite)
-- Bridge authentication uses static tokens with constant-time comparison
+- AI clients authenticate via API Key (`yk_{name}_{64hex}`, SHA-256 hashed in SQLite)
+- Bridge authentication uses static tokens: direct-mode connections compare tokens in constant time; enrolled bridges authenticate at registration via a SHA-256 token-hash lookup against the server's token map (revocation evicts the map entry)
 - QUIC transport (Server↔Bridge, Server↔CLI) is TLS 1.3 encrypted (mandatory in the QUIC protocol)
 - The MCP HTTPS endpoint uses rustls (TLS 1.2+, negotiates 1.3 by default); HTTP mode is TLS-only (fail-closed) — startup fails if `--server-cert`/`--server-key` are missing, never falls back to plain HTTP
-- CA certificate is mandatory for server→bridge connections — connections without CA verification are rejected. The former `--insecure` flag has been removed; skipping TLS verification is not supported
+- CA verification is enforced on all connections: server→bridge direct-mode connections require `--ca-cert` and fail closed without it; in pure enrolled deployments (bridges initiate the connection) the server's `--ca-cert` can be omitted. The former `--insecure` flag has been removed; skipping TLS verification is not supported
 
 For production deployments:
 - Use a self-managed CA to sign bridge certificates
@@ -48,11 +48,11 @@ For production deployments:
 Both upload and download operations enforce path safety checks:
 
 - **Bridge-side**: Paths containing `..` are rejected to prevent path traversal attacks. Null bytes are also rejected.
-- **MCP-side**: Relative paths returned from the bridge during directory downloads are validated to ensure they don't contain `..` or start with `/`.
+- **MCP-side**: Relative paths returned from the bridge during directory downloads are validated to ensure they don't contain `..` or start with `/`. The `local_path`/`local_dir` uploads and download destinations are also validated server-side (rejects `..` and null bytes).
 
 ### Tunnel Target Whitelist (SSRF Protection)
 
-Hosts can optionally configure `allowed_forward_targets` in `hosts.yaml` to restrict which remote host:port combinations are allowed for port forwarding forwards. If not configured, all targets are allowed (backward compatible).
+Hosts can optionally configure `allowed_forward_targets` in `hosts.yaml` to restrict which remote host:port combinations are allowed for port forwarding forwards. If not configured, all targets are allowed (backward compatible). Note: the whitelist applies only to hosts defined in `hosts.yaml` — a dynamically-enrolled bridge with no matching `hosts.yaml` entry has no configurable whitelist and allows all targets.
 
 ```yaml
 hosts:
@@ -94,13 +94,15 @@ The `shell_command` tool internally uses rmux SDK's shell handling, which safely
 
 Input tools (`send_keys`, `send_text`, `broadcast_keys`, `batch_send_keys`) accept a `sensitive` flag that redacts the audit `detail` to `[REDACTED:N bytes]`. When the terminal is in `password` state (detected via a pre-injection snapshot), redaction is enforced server-side regardless of the flag — there is no opt-out. Audit events carry a `redacted` marker; plaintext credentials are never written to the audit database.
 
-This applies to the **audit trail only**. PTY recordings (below) are a separate surface and remain unmasked.
+This applies to the **audit trail only**. PTY recordings (below) are a separate surface: their *content* remains unmasked — passwords appear as cleartext input events — but recording files are now encrypted at rest (see below).
 
-### PTY Session Recordings (Plaintext)
+### PTY Session Recordings (Encrypted at rest)
 
-Bridge-side PTY recordings (asciinema v2) faithfully capture **everything typed into and displayed by the terminal — including passwords in cleartext**. Recordings are plaintext JSON files on the bridge host and on the central server; there is no password masking, and none is claimed. Only OS file permissions (0600, see the recordings directory on each host) protect them at rest.
+Bridge-side PTY recordings (asciinema v2 content) faithfully capture everything typed into and displayed by the terminal — **including passwords in cleartext within the recording content**. Since 2026-09-11, recording files are encrypted at rest: each file is an envelope with a plaintext `clum-enc` header line plus per-recording data sealed with X25519 ECDH (server-held keypair, public key delivered to the bridge at registration) and chunked AES-256-GCM. Both the bridge-side files and the server-side synced copies are stored as ciphertext.
 
-Operational guidance: manage production hosts via `NOPASSWD` sudoers or SSH keys so that credentials never enter a terminal session — anything typed there will exist in cleartext in the recording, in every synced copy, for as long as the file is retained.
+Known boundary: in direct mode, or if the server's recording public key is unavailable at bridge startup, the recorder falls back to plaintext recording (a fail-open path with a logged warning). Content masking is intentionally not performed — at-rest encryption protects the file, not the fields inside it.
+
+Operational guidance: manage production hosts via `NOPASSWD` sudoers or SSH keys so that credentials never enter a terminal session — anything typed there appears as cleartext inside the (encrypted) recording, in every synced copy, for as long as the file is retained.
 
 ### HTTP Endpoint Protection
 

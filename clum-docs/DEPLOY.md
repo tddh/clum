@@ -1,6 +1,6 @@
 # clum 部署文档
 
-> 最后更新：2026-08-14
+> 最后更新：2026-09-12
 
 ## 架构（Central Server 模式）
 
@@ -41,7 +41,7 @@ bash deploy/deploy-mcp.sh ./target/x86_64-unknown-linux-musl/release/clum-mcp ro
 脚本自动完成：
 - 上传二进制到 `/usr/local/bin/clum-mcp`
 - 上传证书（ca.crt、server.crt、server.key）到 `/etc/clum/`
-- 上传 `hosts.yaml` 到 `/etc/clum/`
+- 在 `/etc/clum/` 创建默认 `hosts.yaml`（仅首次；已有文件不覆盖——脚本不接收本机 hosts.yaml）
 - 首次部署时生成默认 `server-config.yaml`
 - 创建 `clum-mcp.service` systemd 服务并启动
 
@@ -52,7 +52,7 @@ bash deploy/deploy-mcp.sh ./target/x86_64-unknown-linux-musl/release/clum-mcp ro
 clum-mcp bridge add my-host --tags gpu,web
 # 输出 token 和安装命令
 
-# 目标机器一键安装
+# 目标机器一键安装（<download_token> 与 BRIDGE_TOKEN 是同一个 bridge token）
 curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/releases/install.sh | \
   BRIDGE_TOKEN=<token> SERVER_ADDR=SERVER:9788 sh
 ```
@@ -128,8 +128,9 @@ curl -fsSLk -H "Authorization: Bearer <download_token>" \
   https://SERVER:9788/releases/install.sh | \
   BRIDGE_TOKEN=<token> SERVER_ADDR=SERVER:9788 sh
 
-# 方式 2：手动部署
-bash deploy/deploy-bridge.sh root@<your-bridge-ip>
+# 方式 2：手动部署（先 just release-linux 交叉编译；BRIDGE_TOKEN 必填）
+BRIDGE_TOKEN=<token> just deploy-bridge host=root@<your-bridge-ip>
+# 等价直接调用：BRIDGE_TOKEN=<token> bash deploy/deploy-bridge.sh ./target/x86_64-unknown-linux-musl/release/rmux-bridge root@<your-bridge-ip> hub
 ```
 
 部署脚本自动完成：
@@ -198,7 +199,7 @@ ssh root@<your-bridge-ip> "systemctl status rmux-bridge --no-pager"
 | `--bridge-audit-db` | 自动检测 | Bridge 侧审计数据库路径（`BRIDGE_AUDIT_DB` 环境变量） |
 | `BRIDGE_CC` | `auto` | Bridge 侧拥塞控制（环境变量）：`auto`/`bbr`/`cubic`。`auto` 下注册连接按目标地址自动判定，直连监听回退 BBR |
 
-> **QUIC 协议**：所有通信走 QUIC（UDP :9788），内置 TLS 1.3 加密。确保防火墙放行 UDP 9788（Server）和 9778（Bridge 直连回退）端口。
+> **QUIC 协议**：Bridge/CLI 数据面走 QUIC（UDP :9788，内置 TLS 1.3）；AI 客户端 MCP 走 HTTP/2 over **TCP** :9788。防火墙需放行 **TCP 9788**（Server HTTP）与 **UDP 9788**（Server QUIC），Bridge 直连回退另需 UDP 9778（仅 direct 模式）。
 
 ### 5. MCP Server CLI 参数参考
 
@@ -215,7 +216,7 @@ ssh root@<your-bridge-ip> "systemctl status rmux-bridge --no-pager"
 | `--bridge` | 无 | Bridge token（`HOSTNAME=TOKEN` 格式，可多次指定） |
 | `--static-dir` | 无 | 静态文件服务目录（install.sh、ca.crt、releases 等） |
 | `--hosts-file` | `config/hosts.yaml` | 主机注册表路径（直连回退用） |
-| `--ca-cert` | 无 | CA 证书路径（必填，不传则拒绝连接） |
+| `--ca-cert` | 无 | CA 证书路径（direct 模式必填，缺失则拒绝连接；纯 enrolled 部署可省略） |
 | `--log-level` | `info` | 日志级别：trace/debug/info/warn/error（`RUST_LOG` 环境变量优先） |
 
 > **审计与日志关联（operation_id）**：每次 MCP 工具调用会生成一个 `operation_id`（UUID），同时写入审计事件（`audit_events.operation_id`）与日志行（`op=... tool=... result=... duration_ms=...`）。排查时用同一 ID 即可在 `audit_query` 与 `journalctl` 之间定位同一次操作的全链路记录。
@@ -234,7 +235,7 @@ ssh root@<your-bridge-ip> "systemctl status rmux-bridge --no-pager"
 
 **AI 客户端认证（Central Server 模式）**：
 
-API Key 格式 `yk_{name}_{32hex}`，SHA-256 哈希存储在 SQLite。通过 HTTP Bearer header 传递。
+API Key 格式 `yk_{name}_{64hex}`，SHA-256 哈希存储在 SQLite。通过 HTTP Bearer header 传递。
 
 ```bash
 # Server 侧管理 API Key
@@ -286,7 +287,7 @@ hosts:
     labels:                             # 键值对标签
       dc: shanghai
       rack: a3
-    # 可选：限制隧道目标（不配置 = 全部允许）
+    # 可选：限制隧道目标（不配置 = 全部允许；动态注册主机需在 hosts.yaml 建条目白名单方生效）
     # allowed_forward_targets:
     #   - "127.0.0.1:5432"             # 精确匹配
     #   - "10.0.1.*:*"                 # glob 通配符
@@ -372,19 +373,21 @@ clum-mcp audit cleanup --older-than 30
 ```
 ~/.clum/                      # MCP Server 本地
 ├── audit.db                       # 审计数据库（SQLite）
-└── recordings/                    # PTY 录制文件（Bridge 实时推送 + 定期同步）
+├── recordings/                    # PTY 录制文件（Bridge 推送 + 定期同步；加密信封密文）
+└── recording-keys/                # 录制加密 keyring（current.key；0700 目录 / 0600 文件）
 
 /usr/local/bin/
+├── clum-mcp                      # MCP Server 二进制（部署于 server 机）
 └── rmux-bridge                   # bridge 二进制
 
 /etc/clum/                    # 远程主机配置
-├── bridge.env                    # BRIDGE_AUTH_TOKEN + SERVER_ADDR + CA 路径（权限 600）
+├── bridge.env                    # BRIDGE_AUTH_TOKEN + CLUM_SERVER_ADDR + CA 路径（权限 600）
 ├── ca.crt                        # CA 根证书
 ├── bridge.crt                    # 主机 TLS 证书（可选，直连回退用）
 └── bridge.key                    # TLS 私钥（权限 600，可选）
 
 /opt/clum/                       # 远程主机数据
-├── recordings/                   # PTY 录制文件（asciinema v2）
+├── recordings/                   # PTY 录制文件（X25519 + AES-256-GCM 加密信封；direct 模式 server 公钥不可用时回退明文并告警）
 └── bridge_events.db              # Bridge 侧审计数据库
 
 /etc/systemd/system/
@@ -395,11 +398,13 @@ clum-mcp audit cleanup --older-than 30
 └── clum.sh                  # RMUX_TMPDIR 环境变量
 ```
 
+> Server 机侧另含：`/etc/clum/` 下的 `server.crt` / `server.key` / `hosts.yaml` / `server-config.yaml`，systemd 单元 `/etc/systemd/system/clum-mcp.service`。
+
 ## 故障排查
 
 | 症状 | 检查 |
 |------|------|
-| CLI `term` 后按键无效、终端卡死 | rmux 0.9 将 `allow-passthrough` 默认改为 `off`。项目 `rmux-daemon.service` 通过 `--config-default` 自动启用 passthrough。若使用自定义 service，确认启动参数包含 `--config-default` 或手动 `rmux set -g allow-passthrough on`，然后 `systemctl restart rmux-daemon`。 |
+| CLI `term` 后按键无效、终端卡死 | rmux 0.9 将 `allow-passthrough` 默认改为 `off`。项目 `rmux-daemon.service` 通过 `--config-default` 自动启用 passthrough。若使用自定义 service，确认启动参数包含 `--config-default` 或手动 `rmux set -g allow-passthrough on`，然后 `systemctl restart rmux-daemon`。（注：仓库 `config/rmux.conf` 不会被任何部署脚本安装，仅作参考；passthrough 实际由 daemon 启动参数决定。） |
 | MCP 工具返回 `connection refused` | `systemctl status rmux-bridge`，确认 bridge 在运行 |
 | `authentication failed` | 检查 `bridge.env` 中的 `BRIDGE_AUTH_TOKEN` 与 `hosts.yaml` 中 `bridge_token` 是否一致 |
 | TLS 握手失败 | `--ca-cert` 指向的证书是否与 bridge 端一致 |

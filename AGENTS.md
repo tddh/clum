@@ -33,9 +33,9 @@ clum/
 │   ├── clum-mcp/   # MCP Server（Central Server 模式 / stdio 本地模式）
 │   └── rmux-bridge/   # Bridge proxy
 ├── config/              # 配置文件
-├── docs/                # 文档
+├── clum-docs/           # 文档
 ├── deploy/              # 部署脚本（install.sh, deploy-bridge.sh, deploy-mcp.sh）
-├── scripts/             # 迁移与测试脚本（migrate-to-clum.sh, mcp_smoke.py）
+├── scripts/             # 迁移与测试脚本（migrate-to-clum.sh, migrate-bridge-to-clum.sh, mcp_smoke.py, mcp_remote_test.py）
 ├── .opencode/skills/    # AI 开发辅助 Skills (OpenCode)
 └── .qoder/skills/       # AI 开发辅助 Skills (Qoder)
 ```

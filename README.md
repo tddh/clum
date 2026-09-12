@@ -2,7 +2,7 @@
 
 > *clum* — safe, reliable remote terminals for AI agents. (Renamed from yunying in 0.10.0; lineage: agent-ops → yunying → clum.)
 
-> Secure infrastructure for AI agents and human operators managing Linux hosts — persistent terminal sessions powered by rmux, full-chain audit logging, MCP-native interface for AI clients + CLI PTY passthrough for humans, with file transfer and multi-host orchestration.
+> Secure infrastructure for AI agents and human operators managing Linux hosts — persistent terminal sessions powered by rmux, full-chain audit logging, MCP-native interface for AI clients + CLI PTY passthrough for humans, with file transfer, port forwarding, and multi-host orchestration.
 
 [中文文档](README.zh.md)
 
@@ -86,6 +86,8 @@ graph LR
 | `clum-cli` | Operator machine | Central Server (QUIC, `--server-addr`) |
 
 > 💡 New bridges deploy with one command: `curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/releases/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=SERVER:9788 sh`
+>
+> `<download_token>` and `BRIDGE_TOKEN=xxx` are the **same** bridge token (from `clum-mcp bridge add`) — the install script uses it both for the download header and for registration.
 
 > 💡 During deployment, the bridge auto-detects the RMUX socket path — no manual configuration needed.
 
@@ -100,7 +102,7 @@ graph LR
 | **File transfer** | Upload/download over QUIC (`clum-cli` and MCP tools), recursive directory transfer with concurrency and `--exclude` globs, chunked streaming with SHA-256 verification |
 | **Port forwarding** | Local port forwarding forwards through QUIC to access remote internal services |
 | **Multi-host orchestration** | Host registry with group/tag/label filtering, broadcast_keys for multi-pane |
-| **Audit logging** | SQLite audit logs + bridge-side PTY recording (asciinema v2) + event log + MCP periodic sync + `clum-cli replay` playback |
+| **Audit logging** | SQLite audit logs + bridge-side PTY recording (asciinema v2 content, encrypted at rest via X25519 + AES-256-GCM) + event log + push/periodic sync + `clum-cli replay` playback |
 | **Terminal state awareness** | `capture_pane`, `exec`, `wait_for_text`, `wait_stable`, `pane_info` return `terminal_state` (ready/running/editor/pager/password/confirm/repl/unknown) and cursor position, so AI agents know what the terminal is currently doing |
 | **Exec safety check** | `exec` refuses execution when terminal is not in `ready` state (e.g., inside vim, less, password prompt), returning `refused: true` with actionable guidance to prevent command injection; state-detection failures also refuse (fail-closed) |
 
@@ -236,7 +238,7 @@ clum-mcp bridge join <hostname>   # Generate a new join token (offline recovery)
 
 **Built-in protections**:
 - **Path traversal prevention**: File upload/download rejects paths containing `..`
-- **Tunnel target whitelist**: Optional `allowed_forward_targets` in `hosts.yaml` restricts port forwarding targets (glob patterns)
+- **Tunnel target whitelist**: Optional `allowed_forward_targets` in `hosts.yaml` restricts port forwarding targets (glob patterns) — applies to hosts defined in `hosts.yaml`; dynamically-enrolled bridges without a matching entry have no whitelist (all targets allowed)
 - **Exec safety check**: `exec` refuses execution when terminal is not in `ready` state (prevents command injection into vim/less/password prompts); detection failures also refuse (fail-closed)
 - **Sensitive input redaction**: Inputs sent while the terminal is in `password` state are auto-redacted in the audit log (`[REDACTED:N bytes]`, server-enforced, no opt-out); the `sensitive` flag on input tools forces redaction for tokens/2FA codes
 
@@ -256,7 +258,7 @@ clum-mcp audit stats
 clum-mcp audit cleanup --older-than 30
 ```
 
-Audit data stored at `~/.clum/audit.db`, retained 90 days, max 500 MB.
+Audit data stored at `~/.clum/audit.db`, retained 90 days, 500 MB soft cap (cleanup prunes the oldest events; file size may transiently exceed the cap).
 
 ## Knowledge Base (Design Concept)
 

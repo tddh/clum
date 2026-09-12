@@ -1,6 +1,7 @@
 # 终端状态感知（Terminal State Awareness）设计方案
 
 > 状态：Final v5（经 Oracle 审查 + PiloTY 对比 + E2E 测试验证） | 日期：2026-07-14
+> 实施后注（2026-09-12 核验）：文中"当前/变更后"对照以 `crates/rmux-bridge/src/terminal_state.rs` 实现为准；实现侧另新增 zsh 主题（agnoster/p10k）中线标记、vim 检测等测试用例；§6.1 个别测试期望值已被实现修正（见该测试处更正注）。
 
 ---
 
@@ -63,7 +64,7 @@ pub enum TerminalState {
 | 输入 | 来源 | 成本 |
 |------|------|:----:|
 | `text: &str` | `snapshot.visible_text()` — 已有 | 零 |
-| `cursor_col: u16` | `snapshot.cursor.col` — 已有，当前被丢弃 | 零 |
+| `cursor_col: u16` | `snapshot.cursor.col` — 已有（实现中由规则 6 shell 提示符的 cursor_col==0 二次验证使用） | 零 |
 | `cursor_visible: bool` | `snapshot.cursor.visible` — 已有 | 零 |
 
 ### 3.2 检测时机
@@ -431,7 +432,7 @@ let cursor = resp.get("cursor");
 | `crates/rmux-bridge/src/protocol/output.rs` | **修改**：5 个 handler 的返回值添加 `terminal_state` + `cursor` | 低 |
 | `crates/rmux-bridge/src/main.rs` | **修改**：`mod terminal_state;` 声明 | 极低 |
 | `crates/rmux-bridge/src/terminal_state.rs` | **新增**：单元测试（10+ 测试用例） | 低 |
-| `docs/TOOLS.md` | **修改**：更新 5 个工具的返回值文档 | 低 |
+| `clum-docs/TOOLS.md` | **修改**：更新 5 个工具的返回值文档 | 低 |
 
 ### 5.2 需小幅改动的文件
 
@@ -590,8 +591,8 @@ mod tests {
     #[test]
     fn test_command_output_with_dollar() {
         let text = "total $100\nprice is $50";
-        // 命令输出包含 $ 但不是提示符（无 @ 或 :~，且行较长）
-        assert_eq!(detect_terminal_state(text, 12, true), TerminalState::Running);
+        // 命令输出包含 $，但尾行不以 $ 结尾——以实现为准判 Unknown（v5 原判 Running 有误，实现已修正，见 terminal_state.rs 同名测试）
+        assert_eq!(detect_terminal_state(text, 12, true), TerminalState::Unknown);
     }
 
     #[test]
@@ -664,7 +665,7 @@ mod tests {
 | 4 | `handle_wait_for_text` 成功后添加 snapshot + terminal_state | 步骤 1 | +1 IPC |
 | 5 | `handle_pane_info` 添加 snapshot + terminal_state | 步骤 1 | +1 IPC |
 | 6 | `exec_in_session` 从最后一次 capture_pane 响应中提取 terminal_state | 步骤 2 | 零 |
-| 7 | 更新 `docs/TOOLS.md` 返回值文档 | 步骤 2-6 | - |
+| 7 | 更新 `clum-docs/TOOLS.md` 返回值文档 | 步骤 2-6 | - |
 
 ---
 

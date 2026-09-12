@@ -51,9 +51,9 @@
 | `PROTOCOL_ERROR` | 桥侧帧协议错误（不应发生）：检查 bridge 版本是否过旧，考虑升级 |
 | `UNKNOWN` | 未分类错误，看 `error` 详情 |
 
-> 错误码由 MCP 与 bridge 共用 `clum_core::error_code` 分类器产生：bridge 响应出口自动注入 `error_code`，旧 bridge（无注入）由 MCP 侧消息分类兜底，两者结果一致。
+> 错误码由 MCP 与 bridge 共用 `clum_core::error_code` 分类器产生：bridge 响应出口自动注入 `error_code`，旧 bridge（无注入）由 MCP 侧消息分类兜底，两者结果一致。`REFUSED_STATE` 例外——由 MCP 层在 exec 安全检查拒绗时特判注入，不在共享分类器内。
 >
-> `deploy_bridge` 使用独立的 `status` 字段（`first_time_deploy` / `path_mismatch` 等 8 种，见部署章节状态表）表达部署子状态，其 `error_code` 由通用分类器补充——调用部署工具时优先看 `status`，其余工具看 `error_code`。
+> `deploy_bridge` 使用独立的 `status` 字段（`first_time_deploy` / `path_mismatch` 等 9 种，见部署章节状态表）表达部署子状态，其 `error_code` 由通用分类器补充——调用部署工具时优先看 `status`，其余工具看 `error_code`。
 
 未知工具名按 MCP 规范返回 JSON-RPC `-32602`；未知方法返回 `-32601`。
 
@@ -229,7 +229,7 @@
 
 **返回** `{"ok": true, "found": true, "terminal_state": "ready", "cursor": {"row": 0, "col": 14, "visible": true}}`
 
-超时：`{"ok": false, "found": false, "error": "timeout waiting for: ..."}`
+超时：`{"ok": false, "found": false, "error": "timeout waiting for: ...", "partial_output": "...", "terminal_state": "...", "cursor": {...}}` —— 超时响应同样回填 `partial_output`/`terminal_state`/`cursor`，便于判断终端当前状态而不是盲目重试。
 
 ### `stream_pane`
 
@@ -242,7 +242,9 @@
 | `pane_id` | string | | 可选，省略时自动探测 |
 | `timeout_ms` | number | ❌ (默认 10000) |
 
-**返回** `{"text": "新增输出内容..."}` 或 `{"text": ""}`（超时无数据或流断开）
+**返回** `{"text": "新增输出内容..."}`；超时返回 `{"ok": false, "text": "", "error": "timeout after ...ms — call stream_pane again to continue"}`（再次调用即可继续，不是错误状态）；流断开时错误信息中会说明。
+
+> 服务端为每个 pane 维护最多 10000 帧的内部缓冲——消费不及时会丢弃帧（记日志告警），长时间不调用流将丢失中间输出。
 
 ### `find_pane_text`
 
@@ -399,7 +401,7 @@
 | `max_lines` | integer | | 保留输出的最后 N 行（默认 200，0=不限制）。完整输出始终从 scrollback 捕获，此参数仅截断返回量 |
 | `clear_screen` | boolean | | 执行前是否清屏，默认 false |
 
-> **安全检查**：exec 执行前会检测终端状态。如果终端不在 `ready` 状态（如 vim、less、password prompt、REPL 等），exec 会拒绝执行并返回 `refused: true`。这是为了防止命令注入到非 shell 环境。
+> **安全检查（fail-closed）**：exec 执行前会检测终端状态。如果终端不在 `ready` 状态（如 vim、less、password prompt、REPL 等），exec 会拒绝执行并返回 `refused: true`；**状态检测不可用时（快照失败、传输错误、旧版 bridge 无 terminal_state 字段）同样拒绝，不会缺字段放行**（自 0.17.1 起 fail-closed）。这是为了防止命令注入到非 shell 环境。
 
 **新增响应字段**：
 - `pre_terminal_state`：执行前检测到的终端状态（`ready` / `running` / `password` / `confirm` / `repl` / `editor` / `pager` / `unknown`）
@@ -414,7 +416,7 @@
 {"ok": false, "refused": true, "error": "Terminal is in editor (vim/nano). Use send_keys to interact with editor, or exit editor first.", "pre_terminal_state": "editor"}
 ```
 
-> `terminal_state`、`pre_terminal_state` 和 `cursor` 仅在 bridge 支持时返回（向后兼容）。
+> `terminal_state`、`pre_terminal_state` 和 `cursor` 由 bridge 检测后返回；旧版 bridge（无 `terminal_state` 能力）下 exec 直接拒绝（见上方 fail-closed），不会以缺字段的方式"向后兼容"放行。
 
 ✅ 适用：一次性会自行退出的命令（`ls`、`cat`、`grep`、`systemctl`、`kubectl`、`apt-get`、`curl` 等）
 ❌ 不适用：交互式程序（`vim`、`htop`、`less`）、不自动退出的命令（`tail -f`、`nc -l`、`ping`）
@@ -437,6 +439,8 @@
 | `timeout_ms` | number | | 超时毫秒数，默认 30000 |
 
 **返回** `{"ok": true, "exited": true, "exit_code": 0, "signal": null}`
+
+超时同样回填 `partial_output`/`terminal_state`/`cursor`（终端此刻的可见文本与状态）。
 
 ### `collect_until_exit`
 
@@ -473,7 +477,7 @@
 
 **返回** `{"ok": true, "stable": true, "terminal_state": "ready", "cursor": {"row": 5, "col": 14, "visible": true}}`
 
-超时：`{"ok": false, "stable": false, "error": "timeout: pane did not stabilize within ..."}`
+超时：`{"ok": false, "stable": false, "error": "timeout: pane did not stabilize within ...", "partial_output": "...", "terminal_state": "...", "cursor": {...}}` —— 回填字段同 `wait_for_text`。
 
 ---
 
@@ -855,6 +859,7 @@
 | `remote_path` | string | ✅ | 远程目标路径 |
 | `overwrite` | string | | 覆盖策略: `overwrite`(默认) / `skip` / `rename` / `error`（=放弃，文件已存在时报错） |
 | `exclude` | string[] | | glob 排除模式，如 `["*.log", "target/**/*"]` |
+| `bandwidth_limit_mbps` | integer | | 限速 Mbps（默认 0 = 不限速，本流上传/下载各自计算） |
 
 **返回** `{"ok": true, "files": [...], "total": N, "uploaded": N, "skipped": N, "failed": 0}`
 
@@ -873,6 +878,7 @@
 | `host` | string | ✅ | 主机名称 |
 | `remote_path` | string | ✅ | 远程文件或目录路径 |
 | `local_path` | string | ✅ | Server 上的保存路径（⚠️ 非客户端本地；目录下载时为本地根目录） |
+| `bandwidth_limit_mbps` | integer | | 限速 Mbps（默认 0 = 不限速，本流上传/下载各自计算） |
 
 **单文件返回** `{"ok": true, "file": {"uri": "...", "local_path": "...", "size": N, "sha256": "..."}}`
 
@@ -993,7 +999,7 @@ Execute the same command on multiple hosts concurrently. Sends the command to al
 
 ```json
 {
-  "ok": true,
+  "ok": false,
   "command": "uptime",
   "total": 3,
   "success": 2,
@@ -1021,7 +1027,8 @@ Execute the same command on multiple hosts concurrently. Sends the command to al
 - 单台主机故障（连接失败/超时/命令错误）不抛异常，在对应 result 中标记 `ok: false` + `error`
 - `total_duration_ms` 是墙钟时间（所有主机中最长的那台），反映并发效果
 - 非零 exit_code 会导致对应主机的 `ok: false`，但输出始终会捕获——检查 per-host 的 `exit_code` 字段判断命令实际结果
-- 内部通过 `clum` session 的默认 pane `%0` 执行，行为与 `exec` 一致
+- 顶层 `ok` 仅当所有主机成功（`failed == 0`）时为 `true`，任一主机失败即为 `false`（见上方示例）
+- 内部为每台主机创建（或复用）`clum` 会话并在其默认 pane 执行，命令语义与 `exec` 一致（sentinel 等待与输出截取）；主机级失败（连接/会话创建失败）直接标记 per-host `ok: false`，不做单机 `exec` 的断连重连续等
 
 ### `batch_upload`
 
@@ -1044,7 +1051,7 @@ Upload a file or directory to multiple hosts concurrently.
 
 ```json
 {
-  "ok": true,
+  "ok": false,
   "total": 3,
   "success": 2,
   "failed": 1,
@@ -1082,7 +1089,7 @@ Download a file from multiple hosts concurrently. Each host's file is saved to `
 
 ```json
 {
-  "ok": true,
+  "ok": false,
   "total": 2,
   "success": 1,
   "failed": 1,
@@ -1271,6 +1278,7 @@ forward_create host="tf01" local_port=8080 remote_host="api.internal" remote_por
 | `path_mismatch` | 指定的路径与 systemd ExecStart 不一致 |
 | `upload_failed` | 文件传输失败 |
 | `replace_failed` | 替换二进制文件失败 |
+| `exec_refused` | exec fail-closed 门控拒绝（终端非 `ready` 或预检不可用）——安全拒绝而非部署失败，确认终端状态后重试 |
 
 ---
 
@@ -1435,7 +1443,7 @@ forward_create host="tf01" local_port=8080 remote_host="api.internal" remote_por
 }
 ```
 
-**限制**：单次最多扫描 100 个录制文件，单文件最大 64MB。不可解析的行（损坏/binary）静默跳过。
+**限制**：单次最多扫描 100 个录制文件（按 mtime 从新到旧遍历）。不可解析的行（损坏/binary）静默跳过；解密失败的文件计入响应中的 `decrypt_errors` 字段（其余文件正常返回匹配）。
 
 ---
 

@@ -5,6 +5,9 @@
 
 # ─── Network ───
 listen: "0.0.0.0:9788"
+# The server's externally reachable address. Required — `clum-mcp bridge add`
+# uses it when generating the one-line bridge install command.
+server_addr: "<server-ip>:9788"
 
 # ─── TLS ───
 server_cert: "/etc/clum/server.crt"
@@ -28,6 +31,9 @@ audit_sync_interval_secs: 300
 # ─── Recording settings ───
 recordings_retention_days: 90
 recordings_max_size_mb: 5000
+# Keyring directory for PTY recording encryption (X25519 envelope + AES-256-GCM).
+# Created automatically with owner-only permissions if missing.
+# recording_keys_dir: "/root/.clum/recording-keys"
 
 # ─── Token settings ───
 token_ttl_hours: 24

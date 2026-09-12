@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **PTY 录制加密**：bridge 端录制改为加密信封格式（明文 `clum-enc` 头行 + 加密的 asciinema v2 内容）——X25519 ECDH 信封封装 per-recording DEK + 分块 AES-256-GCM。公钥由 Server 在 bridge 注册（`register_ack`）时下发；keyring 持久化为 `current.key`（0700 目录 / 0600 文件）。`search_recordings`/`get_recording`/`list_recordings` 自动解密。设计文档 `clum-docs/recording-encryption-design.md`（v2.2，标注已实施）。
+
+### Security
+- **审计数据库属主权限收紧**（`clum-mcp/src/audit/mod.rs`）：打开 audit.db 及其 `-wal`/`-shm` 兄弟文件时强制 owner-only（0600），越权模式直接报错。
+
+### Docs
+- SECURITY.md 曾声明 PTY 录制为明文存储并界定审计脱敏边界；同日随后落地录制加密，取代该声明（SECURITY.md 已更新为加密表述）。
+- SKILL.md：移除 wait_for_bytes 过期的"timeout_ms 未强制生效"警示（0.17.1 起已端到端强制）。
+
 ## [0.17.1] — 2026-09-10
 
 ### Added
