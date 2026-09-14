@@ -9,6 +9,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+pub mod chain;
 pub mod cleanup;
 pub mod log;
 pub mod query;
