@@ -258,9 +258,14 @@ clum-mcp audit stats
 
 # Manual cleanup
 clum-mcp audit cleanup --older-than 30
+
+# Verify hash-chain integrity (Chain head can be copied to an external
+# system for offline comparison — see INVARIANTS.md §8)
+clum-mcp audit verify
+# Chain check: OK / Hashed events: 12345 / Chain head: <hex64>
 ```
 
-Audit data stored at `~/.clum/audit.db`, retained 90 days, 500 MB soft cap (cleanup prunes the oldest events; file size may transiently exceed the cap).
+Audit data stored at `~/.clum/audit.db`, retained 90 days, 500 MB soft cap (cleanup prunes the oldest events; file size may transiently exceed the cap). Every event is sealed into a forward hash chain (`entry_hash = SHA256(prev_hash ‖ payload)`); `audit verify` recomputes the full chain and exits non-zero on the first tampered or missing record.
 
 ## Knowledge Base (Design Concept)
 

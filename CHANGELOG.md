@@ -4,6 +4,7 @@
 
 ### Added
 - **PTY 录制加密**：bridge 端录制改为加密信封格式（明文 `clum-enc` 头行 + 加密的 asciinema v2 内容）——X25519 ECDH 信封封装 per-recording DEK + 分块 AES-256-GCM。公钥由 Server 在 bridge 注册（`register_ack`）时下发；keyring 持久化为 `current.key`（0700 目录 / 0600 文件）。`search_recordings`/`get_recording`/`list_recordings` 自动解密。设计文档 `clum-docs/recording-encryption-design.md`（v2.2，标注已实施）。
+- **审计哈希链（tamper-evident）**：`audit_events` 新增 `prev_hash`/`entry_hash` 前向哈希链（`chain.rs` 长度前缀 payload 编码，不经 serde，写入与校验两侧共用同一实现；幂等迁移，旧行不回填、不参与校验）；新增 `clum-mcp audit verify` 子命令（全链重算 + 链头输出，非零退出码报首个断点，对被篡改数据报告 BROKEN 而非 panic）；cleanup 删除哈希行时先探测链尾并记录 `audit_chain_checkpoints` 断点再删除（管理删除承认机制）+ 删除后自检 warn。建链统一在 MCP 侧（中央库单点串行写入，天然全局有序），bridge 无改动。链保证"存在的内容未被改"（篡改/删行/塞垃圾 prev_hash 均 verify 可检），不保证"该发生的都已记录"（fail-open 债务另计）；整库回滚/重算整链的检测靠链头外置比对（verify 输出 chain head，外置自动化为后续批次）。
 
 ### Fixed（评审收尾）
 - **生产实测语义核准（全功能测试发现，文档同步对齐）**：`shell_command` 实际仅适用于 **dead pane**——idle 交互 shell 也被 daemon 视为活进程拒绝（`PANE_BUSY`），无 kill 选项，替换活进程须用 `respawn_pane(kill=true)`；`respawn_pane` 无 `command` 参数时**原样重跑该 pane 当前的进程规格**（非回退默认 shell）；`break_pane` 返回体 `pane_id`/`window_index` 未回填（known issue，以 `pane_info` 确认归属）；`cmd_escape` 需真实 TTY，bridge 自动化上下文回报 `open terminal failed: not a terminal`（`exit_code:1`）。schema/TOOLS/SKILL（PANE_BUSY 行）/INVARIANTS（§2/§3 实测核准注）同步更新，TOOLS.md `cmd_escape` 限制注与 `break_pane` 返回注新增。
