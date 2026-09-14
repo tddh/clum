@@ -14,14 +14,14 @@ pub fn instructions() -> String {
 ## Tool Selection Rules\n\
 1. If the target host is in the clum registry (`host_list`), **prefer clum tools** — they provide audit trails, session persistence, and security management.\n\
 2. If the target host is **NOT in the registry**, or the user **explicitly asks for SSH/SCP/rsync**, use SSH directly. clum is not a universal tool — it only works with registered hosts.\n\
-3. Default session name: `\"clum\"`. Always `session_attach` first to check if it exists; `session_create` if not found.\n\
+3. Default session name: `\"clum\"`. `session_create` is idempotent (reuses an existing session); call `session_attach` only when you need to inspect an existing session.\n\
 4. File transfer: `file_upload` / `file_download` (registered hosts); SSH/SCP (unregistered hosts). Commands: `exec` for one-shot (auto-waits, default 200 lines / 600s=10min timeout, set `max_lines=0` for full output), `send_keys` for interactive programs.\n\
 5. Use `wait_for_text` to block until specific text appears — do NOT poll `capture_pane` in a loop.\n\
 6. For long-running commands (tail -f, builds): use `stream_pane` for incremental output instead of polling `capture_pane`.\n\
 7. On failure (`ok:false`), branch on `error_code` (stable contract) and follow `recovery_hint`; `retryable:false` means never blindly retry (e.g. exec TIMEOUT — the command may still be running remotely).\n\
 8. Package managers (`apt-get`, `yum`, `dnf`) may display ncurses dialogs (kernel upgrade notices, config file conflicts, restart prompts) that block `exec` even with `-y`. Always prefix with `DEBIAN_FRONTEND=noninteractive` (Debian/Ubuntu) or equivalent. If blocked by a dialog, `capture_pane` to see it, `send_keys` to dismiss, then `wait_for_text` for the prompt.\n\n\
 ## Basic Workflow\n\
-`host_list` → `session_attach host=<h> session_name=\"clum\"` (or `session_create`) → `exec`/`send_keys` → `capture_pane`/`wait_for_text`.\n\
+`host_list` → `session_create host=<h> session_name=\"clum\"` (idempotent) → `exec`/`send_keys` → `capture_pane`/`wait_for_text`.\n\
 - `pane_id` is optional for most tools. If omitted, the server auto-detects the first pane in window 0. The response includes `resolved_pane_id` and `auto_resolved: true` when auto-detected.\n\
 - Destructive tools (`close_pane`, `paste_buffer`, `respawn_pane`) still require explicit `pane_id`.\n\
 - `exec` supports `clear_screen: true` and `timeout_ms` for long commands.\n\
@@ -117,7 +117,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "session_create",
-                "description": "Create a new detached terminal session on a remote host. Sessions persist across disconnects.\n\nUse this when the default session 'clum' doesn't exist yet — first session_attach to check. If the session already exists, an error is returned.",
+                "description": "Create a new detached terminal session on a remote host. Sessions persist across disconnects.\n\nIdempotent: if the session already exists it is reused and the first pane id is returned.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -201,7 +201,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "shell_command",
-                "description": "Run a command via /bin/sh -c in a pane, REPLACING the current shell process. The pane should be idle — no code-level check is performed; if a process is already running, behavior depends on the rmux daemon.\n\nUse this for complex shell one-liners (pipes, redirects, variable expansion) where you want the command to own the pane.\n\nDo NOT use for simple commands that need output captured — use exec. Unlike exec, this does NOT wait for completion or capture output — monitor with stream_pane or capture_pane.",
+                "description": "Run a command via /bin/sh -c in a pane, REPLACING the pane's process. Required pane state: DEAD (process exited; keep such a pane via split_pane_with/respawn_pane with keep_alive_on_exit=true). Any live foreground process — INCLUDING an idle interactive shell waiting at a prompt — is rejected by the rmux daemon (stable message `pane still active`, error_code: PANE_BUSY); this tool has no kill option, so to replace a live process use respawn_pane with kill=true instead. Complex one-liners (pipes, redirects, variable expansion) are fine once accepted. Does NOT wait for completion or capture output — monitor with stream_pane / capture_pane / wait_for_text / wait_exit. Do NOT use for simple commands that need output captured — use exec.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -215,7 +215,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "respawn_pane",
-                "description": "Respawn a pane's process — restart the default shell or launch a custom command.\n\nUse this when a process has exited and you want to reuse the pane, the shell needs a reset, or you want to replace the running process. If the pane has a running process, set kill=true to force-kill it first. Supports custom command, cwd, env, and keep_alive_on_exit.",
+                "description": "Respawn a pane's process; the pane keeps its id. WITHOUT `command`, the pane's CURRENT process specification is re-run — a pane originally spawned with `sleep 300` runs `sleep 300` again (it does NOT fall back to a default shell). Pass `command` to run something else. If the pane still has a live process, set kill=true to force-kill it first. Supports cwd, env, and keep_alive_on_exit.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {

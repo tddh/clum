@@ -36,7 +36,7 @@
 |-----------|------|
 | `HOST_NOT_FOUND` | 主机名不在注册表，用 `host_list` 核对 |
 | `INVALID_PARAMS` | 缺少/非法参数（`missing 'x'`、`invalid direction`、`must be`、`unknown layout` 等），对照该工具的 inputSchema |
-| `SESSION_NOT_FOUND` / `SESSION_EXISTS` | 会话不存在 / 已存在 |
+| `SESSION_NOT_FOUND` / `SESSION_EXISTS` | 会话不存在 / 同名会话已存在（**注意：MCP 的 `session_create` 幂等复用，`SESSION_EXISTS` 对 MCP 路径不可达**，按"只增不改"契约保留） |
 | `PANE_NOT_FOUND` / `PANE_BUSY` | pane 无效/不存在（含 `invalid pane_id`）/ 非空闲 |
 | `WINDOW_NOT_FOUND` / `FORWARD_NOT_FOUND` | 窗口 / 隧道不存在 |
 | `PATH_TRAVERSAL` | 路径含 `..` / null 字节 / 目录过深被拒绝 |
@@ -116,7 +116,7 @@
 
 ### `session_create`
 
-在指定主机上创建新的终端会话。
+在指定主机上创建新的终端会话。**幂等：会话已存在则复用，并返回首个 pane id。**
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
@@ -578,6 +578,8 @@
 | `destination_window` | integer | | 目标窗口索引（省略则创建新窗口） |
 | `detached` | boolean | | 不切换焦点到新窗口（默认 false） |
 
+> ⚠️ **已知实现瑕疵（2026-09-13 生产实测）**：返回体中的 `pane_id` / `window_index` 字段当前未回填（为空），操作本身成功。操作后用 `pane_info` 确认 pane 实际归属的窗口（`window_id:` 字段）。
+
 ### `join_pane`
 
 将 pane 移动到另一个窗口，拆分到目标 pane 旁边。
@@ -742,7 +744,7 @@
 
 ### `shell_command`
 
-通过 shell 执行命令（`/bin/sh -c`），替换当前 pane 的进程。Pane 必须空闲。
+通过 shell 执行命令（`/bin/sh -c`），替换 pane 的进程。**pane 必须处于 dead 状态**（进程已退出、经 `keep_alive_on_exit` 保留）——门槛比"空闲"严格：只要前台有活进程（**包括空闲等待输入的交互 shell**）就会被 rmux daemon 以稳定错误信息拒绝（`error_code: PANE_BUSY`）；本工具没有 kill 选项，要替换活进程请改用 `respawn_pane(kill=true)`。被接受后命令接管 pane，不等待完成、不捕获输出，需配合 `stream_pane` / `capture_pane` / `wait_for_text` / `wait_exit` 监控。
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
@@ -753,14 +755,14 @@
 
 ### `respawn_pane`
 
-重新 spawn 窗格进程。用于 pane 中进程已退出或需要重置 shell 环境时。支持自定义命令、环境变量、工作目录等。
+重新 spawn 窗格进程，pane ID 保持不变。**不传 `command` 时会原样重跑该 pane 当前的进程规格**（例如先前用 `split_pane_with(sleep 300)` 起的 pane 会再跑一次 `sleep 300`，而不是回到默认 shell）；需运行别的内容请显式传 `command`。若进程仍在运行，先以 `kill=true` 强制结束。支持工作目录、环境变量、`keep_alive_on_exit`。
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `host` | string | ✅ | |
 | `session_name` | string | | default `clum` |
 | `pane_id` | string | ✅ | |
-| `command` | string | | 替换默认 shell（可选） |
+| `command` | string | | 要运行的命令（省略则**原样重跑 pane 当前的进程规格**） |
 | `args` | string[] | | 命令参数（`shell=false` 时使用） |
 | `shell` | boolean | | 通过 `/bin/sh -c` 执行（默认 false） |
 | `cwd` | string | | 工作目录 |
@@ -790,12 +792,14 @@
 
 直接调用 rmux 命令行工具。当 bridge 协议未覆盖某些操作时使用。
 
+> ⚠️ **已知限制（2026-09-13 生产实测）**：rmux CLI 多数子命令需要真实 TTY 上下文，经 bridge 调用时回报 `open terminal failed: not a terminal`（`exit_code: 1`）。本工具在自动化场景普遍不可用，使用前先对目标子命令做一次单台验证。
+
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | `host` | string | ✅ |
 | `args` | string[] | | rmux CLI 参数（如 `["list-sessions"]`） |
 
-**返回** `{"ok": true, "stdout": "...", "stderr": "", "exit_code": 0}`
+**返回** `{"ok": true, "stdout": "...", "stderr": "", "exit_code": 0}`（stdout/stderr 为字节数组，可按 ASCII 解码）
 
 ---
 

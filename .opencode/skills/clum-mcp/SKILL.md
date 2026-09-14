@@ -68,8 +68,7 @@ You are an SRE engineer operating remote Linux hosts via clum MCP tools. You do 
 ### 3. 操作流程
 
 ```
-session_attach(host, session_name="clum")
-→ 如果不存在：session_create(host, session_name="clum")
+session_create(host, session_name="clum")  // 幂等：已存在则复用并返回首个 pane，无需先 attach 探测
 → exec(host, session_name, command="ls")  // pane_id 可省略
 ```
 
@@ -198,11 +197,11 @@ DROP TABLE users;
 ### ✅ 正确示例
 
 ```
-# 1. 检查会话是否存在
-session_attach(host="tf01", session_name="clum")
-
-# 2. 如果不存在，创建会话
+# 1. 幂等创建会话（已存在则复用并返回首个 pane id）
 session_create(host="tf01", session_name="clum")
+
+# 2. 需要 inspect 已有会话时才调用 session_attach（可选的只读存在性检查）
+session_attach(host="tf01", session_name="clum")
 
 # 3. 直接执行命令（pane_id 可省略，自动探测）
 exec(host="tf01", session_name="clum", command="ls -la")
@@ -372,7 +371,7 @@ wait_stable(host, session_name, pane_id)
   "ok": false,
   "error": "pane id %99 was not found",
   "error_code": "PANE_NOT_FOUND",
-  "recovery_hint": "list_window_panes 确认当前 pane_id（pane 可能已关闭）",
+  "recovery_hint": "confirm the current pane_id with list_window_panes (the pane may have been closed)",
   "retryable": false
 }
 ```
@@ -391,14 +390,14 @@ wait_stable(host, session_name, pane_id)
 | `AUTH_FAILED` | `authentication failed` | 直连（direct）模式 token 认证失败；enrolled 模式 token 校验失败表现为 `CONNECT_TIMEOUT`/`BRIDGE_UNREACHABLE` | 检查 `hosts.yaml` 中的 `bridge_token` |
 | `FORBIDDEN` | `host ... not in your group` | API Key 分组隔离：主机不在该 key 可访问的分组 | 联系管理员确认分组分配，不可重试 |
 | `CONNECTION_LOST` | `recv: connection lost` | bridge 重启或网络中断 | 等待后重试 |
-| `PANE_BUSY` | `pane still active` | spawn/shell_command 时 pane 非空闲 | `respawn_pane(kill=true)` 重启，或换用其他 pane（`close_pane` 需用户明确同意） |
+| `PANE_BUSY` | `pane still active` | shell_command **只接受 dead pane**——任何活进程（**idle 交互 shell 也算**）都被拒绝；respawn 无 `kill=true` 遇活进程同理 | 换用 dead pane（`keep_alive_on_exit` 保留的），或 `respawn_pane(kill=true)` 替换活进程（`close_pane` 需用户明确同意） |
 | `TIMEOUT`（执行类） | `timeout waiting for sentinel...` | 命令执行超时 | 响应含 `partial_output`（可见文本）和 `terminal_state`，直接判断命令当前状态。别重跑 — 用 `wait_exit` / `wait_for_text` 继续等。collect_until_exit 超时含 pane 快照，远端进程仍在运行。 |
 | `PATH_TRAVERSAL` | `path traversal rejected` | 路径包含 `..` | 使用不含 `..` 的绝对路径或相对路径 |
 | `FORWARD_DENIED` | `forward target not in allowed list` | 隧道目标不在白名单中 | 检查 `hosts.yaml` 中的 `allowed_forward_targets` 配置 |
 | `HOST_NOT_FOUND` | `host not found` | 主机名不在 registry 中 | `host_list` 检查可用主机 |
 | `REFUSED_STATE` | （exec 安全拒绝，附具体建议） | 终端非 ready 状态 | 按 `error` 中的建议恢复终端状态后重试 |
 | `INVALID_PARAMS` | `missing 'pane_id'` 等 | 缺少必填参数 | 对照该工具的 inputSchema.required 补全 |
-| `SESSION_EXISTS` | `session already exists` | 同名会话已存在 | 直接 `session_attach` 或换个名称 |
+| `SESSION_EXISTS` | `session already exists` | 同名会话已存在（**MCP 的 `session_create` 幂等复用，此码对 MCP 路径实际不可达**，按"只增不改"契约保留） | 直接 `session_attach` 或换个名称 |
 | `WINDOW_NOT_FOUND` | `window not found` | 窗口不存在 | `window_info` / `select_window` 确认窗口 |
 | `FORWARD_NOT_FOUND` | `forward not found` | 隧道 ID 不存在 | `forward_list` 确认隧道 ID |
 | `CLI_FAILED` | `rmux CLI failed` | bridge 端 rmux CLI 回退失败 | 检查 rmux 安装完整性（`rmux list-commands`） |

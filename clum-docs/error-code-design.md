@@ -212,7 +212,7 @@ json!({"ok": false, "error": ...})
 | `INVALID_PARAMS` | 缺少/非法参数 | false | MCP `missing 'x'` 106 处 + bridge 参数校验族 |
 | `SESSION_NOT_FOUND` / `SESSION_EXISTS` | 会话不存在/已存在 | false | bridge session/pane 消息 |
 | `PANE_NOT_FOUND` | pane 不存在/无效 | false | bridge `invalid pane_id` 30+ 处 + `pane not found` 等 |
-| `PANE_BUSY` | pane 非空闲 | false | bridge `pane still active` |
+| `PANE_BUSY` | pane 非空闲 | false | bridge `pane still active`（完整稳定消息 `pane still active; use -k to force respawn`＝rmux-proto `PANE_STILL_ACTIVE_MESSAGE`；2026-09-13 补该完整文案回归测试） |
 | `WINDOW_NOT_FOUND` | 窗口不存在 | false | bridge `window not found in info snapshot` |
 | `FORWARD_NOT_FOUND` | 隧道不存在 | false | ForwardManager |
 | `PATH_TRAVERSAL` | 路径穿越/不安全路径 | false | bridge `sanitize_path` + MCP `sanitize_local_path`（Server 侧 local_path 校验）+ null byte + directory too deep |
