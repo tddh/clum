@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """clum-mcp remote functional test.
 
-Per skill rules: session_name="clum", attach-before-create,
-min pane_id, no session cleanup. Full depth: session/exec/state/
-wait/file transfer/forward/batch.
+Per skill rules: session_name="clum", session_create is
+idempotent (create-or-reuse, attach only to inspect an existing
+session), min pane_id, no session cleanup. Full depth: session/
+exec/state/wait/file transfer/forward/batch.
 """
 
 import json

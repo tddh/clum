@@ -236,6 +236,16 @@ mod tests {
     }
 
     #[test]
+    fn classifies_rmx_pane_still_active_stable_message() {
+        // rmux-proto 0.10 `PANE_STILL_ACTIVE_MESSAGE = "pane still active; use -k to force respawn"`
+        // ——daemon 拒绝替换运行中 pane 时返回的确定性消息，必须稳定归入 PANE_BUSY。
+        assert_eq!(
+            classify_error_message("pane still active; use -k to force respawn"),
+            CODE_PANE_BUSY
+        );
+    }
+
+    #[test]
     fn classifies_security_denials() {
         assert_eq!(
             classify_error_message("path traversal rejected: ../../etc"),

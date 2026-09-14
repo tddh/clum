@@ -29,87 +29,87 @@ fn lookup(code: &str) -> Classified {
     match code {
         CODE_FORBIDDEN => c(
             "FORBIDDEN",
-            "该主机不在你的分组内，联系管理员确认分组分配",
+            "host not in your group — ask an admin to check your group assignment",
             false,
         ),
-        CODE_HOST_NOT_FOUND => c("HOST_NOT_FOUND", "host_list 检查可用主机名", false),
+        CODE_HOST_NOT_FOUND => c("HOST_NOT_FOUND", "check available host names with host_list", false),
         CODE_INVALID_PARAMS => c(
             "INVALID_PARAMS",
-            "缺少或非法参数，对照 tools/list 中该工具的 inputSchema.required",
+            "missing or invalid parameter — check this tool's inputSchema.required in tools/list",
             false,
         ),
         CODE_PANE_NOT_FOUND => c(
             "PANE_NOT_FOUND",
-            "list_window_panes 确认当前 pane_id（pane 可能已关闭）",
+            "confirm the current pane_id with list_window_panes (the pane may have been closed)",
             false,
         ),
         CODE_SESSION_EXISTS => c(
             "SESSION_EXISTS",
-            "会话已存在，直接 session_attach 或换个名称",
+            "session already exists — use session_attach directly, or choose another name",
             false,
         ),
-        CODE_SESSION_NOT_FOUND => c("SESSION_NOT_FOUND", "session_create 创建会话", false),
+        CODE_SESSION_NOT_FOUND => c("SESSION_NOT_FOUND", "create the session with session_create", false),
         CODE_WINDOW_NOT_FOUND => c(
             "WINDOW_NOT_FOUND",
-            "window_info / select_window 确认窗口存在",
+            "confirm the window with window_info / select_window",
             false,
         ),
-        CODE_FORWARD_NOT_FOUND => c("FORWARD_NOT_FOUND", "forward_list 确认转发 ID", false),
+        CODE_FORWARD_NOT_FOUND => c("FORWARD_NOT_FOUND", "confirm the forward id with forward_list", false),
         CODE_PANE_BUSY => c(
             "PANE_BUSY",
-            "pane 非空闲：先 close_pane 或换 pane，或 respawn_pane(kill=true)",
+            "pane is busy with a running process — use close_pane / pick another pane, or respawn_pane(kill=true) when replacement is intentional",
             false,
         ),
         CODE_PATH_TRAVERSAL => c(
             "PATH_TRAVERSAL",
-            "路径不能包含 '..' 且下载需相对路径：修正路径后重试",
+            "paths must not contain '..' and downloads require relative paths — fix the path and retry",
             false,
         ),
         CODE_FORWARD_DENIED => c(
             "FORWARD_DENIED",
-            "转发目标不在白名单：检查 hosts.yaml 的 allowed_forward_targets",
+            "forward target not whitelisted — check allowed_forward_targets in hosts.yaml",
             false,
         ),
         CODE_AUTH_FAILED => c(
             "AUTH_FAILED",
-            "检查 hosts.yaml 的 bridge_token 与 bridge 一致（direct 模式）",
+            "check that the bridge_token in hosts.yaml matches the bridge (direct mode)",
             false,
         ),
         CODE_BRIDGE_UNREACHABLE => c(
             "BRIDGE_UNREACHABLE",
-            "bridge 未运行：systemctl status rmux-bridge 确认后重试",
+            "bridge not running — verify with systemctl status rmux-bridge, then retry",
             true,
         ),
         CODE_CONNECTION_LOST => c(
             "CONNECTION_LOST",
-            "bridge 重启或网络中断，等待几秒后重试",
+            "bridge restart or network drop — wait a few seconds and retry",
             true,
         ),
         CODE_CONNECT_TIMEOUT => c(
             "CONNECT_TIMEOUT",
-            "连接超时：确认主机在线、Server 9788 端口可达后重试",
+            "connect timeout — confirm the host is up and Server port 9788 reachable, then retry",
             true,
         ),
         CODE_TIMEOUT => c(
             "TIMEOUT",
-            "exec 超时不杀进程：capture_pane 查看进度、wait_for_text 等完成，不要盲目重跑；若是连接超时则确认主机在线、Server 9788 端口可达",
+            "exec timeout does NOT kill the process — check progress with capture_pane and wait with wait_for_text; do not blindly re-run",
             false,
         ),
         CODE_CLI_FAILED => c(
             "CLI_FAILED",
-            "bridge 端 rmux CLI 回退失败：检查 rmux 安装完整性（rmux list-commands）",
+            "bridge rmux CLI fallback failed — check the rmux install (rmux list-commands)",
             false,
         ),
         CODE_PROTOCOL_ERROR => c(
             "PROTOCOL_ERROR",
-            "桥侧帧协议错误：检查 bridge 版本是否过旧，考虑升级",
+            "frame protocol error — check the bridge version and consider upgrading",
             false,
         ),
         // 兜底：未知 code（如新 bridge 注入旧 MCP 不认识的码）。error_code 原值保留
         // （or_insert 不覆盖），retryable 按不可重试处理——版本偏差时可能丢失重试信号。
         _ => c(
             "UNKNOWN",
-            "查看 error 详情；必要时 capture_pane 检查终端状态后重试",
+            "inspect the error detail; if needed, check terminal state with capture_pane before retrying",
             false,
         ),
     }
@@ -238,7 +238,7 @@ mod tests {
         let r = classify_message("timeout waiting for sentinel after 15000ms");
         assert_eq!(r.code, "TIMEOUT");
         assert!(!r.retryable);
-        assert!(r.hint.contains("不要盲目重跑"));
+        assert!(r.hint.contains("do not blindly re-run"));
     }
 
     #[test]
@@ -299,7 +299,7 @@ mod tests {
             json!({"ok": false, "error": "recv: connection lost", "error_code": "CONNECTION_LOST"});
         enrich_error(&mut v);
         assert_eq!(v["error_code"], "CONNECTION_LOST");
-        assert!(v["recovery_hint"].as_str().unwrap().contains("重试"));
+        assert!(v["recovery_hint"].as_str().unwrap().contains("retry"));
         assert_eq!(v["retryable"], true);
     }
 
@@ -318,7 +318,7 @@ mod tests {
         let r = classify_message("host tf01 not in your group");
         assert_eq!(r.code, "FORBIDDEN");
         assert!(!r.retryable);
-        assert!(r.hint.contains("分组"));
+        assert!(r.hint.contains("group assignment"));
 
         let r = classify_message("forbidden: 'list_recordings' requires superadmin");
         assert_eq!(r.code, "FORBIDDEN");
