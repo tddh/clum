@@ -410,7 +410,7 @@ wait_stable(host, session_name, pane_id)
 跑命令？
 ├── 会自行退出（ls, cat, grep）→ `exec`
 │   💡 多个只读诊断命令用 `&&` 合并（如 `df -h && free -m && uptime`），可能触发 pager 的加 `--no-pager` 或 `| cat`
-├── 长程任务（ansible-playbook, terraform, 编译）→ `shell_command`（替换 shell，需 pane 空闲）+ `wait_for_text` / `stream_pane`
+├── 长程任务（ansible-playbook, terraform, 编译）→ `shell_command`（替换 shell，需 **dead pane**——idle 交互 shell 也算活进程会被 PANE_BUSY 拒；活进程先 `respawn_pane(kill=true)`）+ `wait_for_text` / `stream_pane`
 ├── 不会退出（tail -f, ping）→ `send_keys`（向已有 shell 发按键）+ `stream_pane`
 │   ⚠️ send_keys 不检查终端状态，会盲目发送。不确定终端状态时先 `capture_pane` 确认
 ├── 大输出命令（find, du）→ `send_keys` + `collect_until_exit`
@@ -563,6 +563,28 @@ clum-cli replay tf001/2026-08-06/tddh_clum__0_1785987395_e79d.cast
 路径中的 `<date>` 必须与 `list_recordings` 返回的 `date` 字段一致（`YYYY-MM-DD` 格式）。
 
 播放控制：←→ seek ±30s、↑↓ 调速、Space 暂停、q 退出。
+
+## 审计哈希链校验（clum-mcp server 上的 CLI）
+
+中央审计库（server 侧 `~/.clum/audit.db`）带前向哈希链：`entry_hash = SHA256(prev_hash ‖ payload)`，写入侧（log.rs）与校验侧（verify.rs）共用同一实现。在 **server 所在主机**执行（其上的 clum-mcp 二进制；生产部署路径为 `/usr/local/bin/clum-mcp`）：
+
+```bash
+clum-mcp audit verify [--db /root/.clum/audit.db]
+# Chain check: OK
+# Hashed events: N          ← 链上记录数
+# Pre-hash legacy rows: N   ← 哈希链上线前的旧行（不参与校验，属预期）
+# Chain segments: N         ← 合法断点数 = 创世锚(1) + 累计管理清理 checkpoint 数
+# Chain head: <hex64>       ← 当前链头，每次写入前进
+```
+
+**输出解读**：
+- `BROKEN at event id=<n>` + **非零退出码** = 检测到断点；`computed: <malformed prev_hash>` 表示 prev_hash 列被塞了非法值（非 64-hex）——verify 对被篡改数据绝不 panic
+- `Chain segments` 正常应为 1（无 cleanup）；**无 cleanup 却 >1 = 强可疑**——伪造 checkpoint 窗口的指纹之一（另一指纹：chain head 偏离外置记录的演化序列）
+- 演练实锚（2026-09-14，生产数据副本）：改内容/删中间行/垃圾 prev/类型混淆/改脸重算五类攻击全数检出且精确定位
+
+**使用场景**：server 升级/迁移收尾验证、巡检（入 cron，非零退出码天然适配告警联动）、怀疑审计被篡改时的取证第一步。
+
+**备份/演练注意**：拷贝审计库做演练或分析时用 python3 `sqlite3` 的 `backup()` API（在线一致快照，自动合并 WAL）；**禁止在线 cp 三件套**（撕裂风险）；任何对审计库的直改演练先做快照副本，产物用毕清理；生产机不为此安装 sqlite3 CLI。
 
 ## 经验沉淀
 
