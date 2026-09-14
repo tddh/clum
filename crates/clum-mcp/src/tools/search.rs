@@ -19,7 +19,11 @@ const MAX_CONTEXT: usize = 10;
 /// Maximum total matches per call.
 const MAX_MATCHES: usize = 200;
 
-pub(crate) async fn search_recordings(ctx: &ToolContext, args: Value) -> Result<Value> {
+pub(crate) async fn search_recordings(
+    ctx: &ToolContext,
+    args: Value,
+    allowed_hosts: Option<&[String]>,
+) -> Result<Value> {
     let start = std::time::Instant::now();
     let query = args["query"]
         .as_str()
@@ -45,6 +49,10 @@ pub(crate) async fn search_recordings(ctx: &ToolContext, args: Value) -> Result<
 
     // Get candidate recording files.
     let mut candidates = list_local_recordings(&ctx.recordings_dir, host, None, session).await?;
+
+    // Enforce caller-group isolation: keep only recordings whose host is in the
+    // caller's group. `None` means unrestricted (superadmin).
+    retain_allowed_hosts(&mut candidates, allowed_hosts);
 
     // Apply date range filter on top of list_local_recordings.
     candidates.retain(|r| {
@@ -163,6 +171,20 @@ pub(crate) async fn search_recordings(ctx: &ToolContext, args: Value) -> Result<
         "scanned_bytes": scanned_bytes,
         "decrypt_errors": decrypt_errors,
     }))
+}
+
+/// Keep only candidates whose `host` is present in `allowed_hosts`.
+/// `None` means unrestricted (no group scoping). Shared by the dispatch path
+/// and unit tests so the filter logic has a single implementation.
+fn retain_allowed_hosts(candidates: &mut Vec<Value>, allowed_hosts: Option<&[String]>) {
+    if let Some(allowed) = allowed_hosts {
+        candidates.retain(|r| {
+            r["host"]
+                .as_str()
+                .map(|h| allowed.iter().any(|a| a == h))
+                .unwrap_or(false)
+        });
+    }
 }
 
 struct FileMatch {
@@ -313,6 +335,7 @@ fn strip_ansi(text: &str) -> String {
 mod tests {
     use super::*;
     use std::io::Write;
+    use std::sync::Arc;
 
     #[test]
     fn test_strip_ansi_removes_color_codes() {
@@ -558,5 +581,95 @@ mod tests {
         .await
         .unwrap();
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_retain_allowed_hosts_filters_by_host() {
+        let mut candidates = vec![
+            json!({"host": "hostA", "file": "a.cast"}),
+            json!({"host": "hostB", "file": "b.cast"}),
+            json!({"file": "no-host.cast"}),
+        ];
+        let allowed = vec!["hostA".to_string()];
+        retain_allowed_hosts(&mut candidates, Some(allowed.as_slice()));
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0]["host"], json!("hostA"));
+    }
+
+    #[test]
+    fn test_retain_allowed_hosts_none_is_unrestricted() {
+        let mut candidates = vec![json!({"host": "hostA"}), json!({"host": "hostB"})];
+        retain_allowed_hosts(&mut candidates, None);
+        assert_eq!(candidates.len(), 2);
+    }
+
+    fn test_grouped_ctx(caller_group: &str) -> (ToolContext, tempfile::TempDir) {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let hosts_path = tmp.path().join("hosts.yaml");
+        std::fs::write(
+            &hosts_path,
+            "hosts:\n  - name: hostA\n    group: teamA\n  - name: hostB\n    group: teamB\n",
+        )
+        .expect("write hosts.yaml");
+        let router = crate::router::HostRouter::from_file(&hosts_path).expect("load router");
+        let audit_db =
+            crate::audit::AuditDb::open(&tmp.path().join("audit.db")).expect("open audit db");
+        let bridge_store = crate::bridge_store::BridgeStore::open(&tmp.path().join("bridge.db"))
+            .expect("open bridge store");
+        let ctx = ToolContext {
+            router: Arc::new(router),
+            ca_cert_path: None,
+            audit_db: Arc::new(audit_db),
+            agent_name: Arc::new(std::sync::Mutex::new("test".to_string())),
+            caller_group: Arc::new(std::sync::Mutex::new(Some(caller_group.to_string()))),
+            current_op: Arc::new(std::sync::Mutex::new(None)),
+            forward_manager: Arc::new(crate::forward::ForwardManager::new()),
+            stream_manager: Arc::new(crate::stream::StreamManager::new()),
+            recordings_dir: tmp.path().join("recordings"),
+            recording_keyring: Arc::new(
+                crate::recording_keyring::RecordingKeyring::load_or_create(
+                    &tmp.path().join("rec-keys"),
+                )
+                .unwrap(),
+            ),
+            bridge_registry: Arc::new(crate::registry::BridgeRegistry::new()),
+            bridge_store: Arc::new(bridge_store),
+            file_transfer: crate::server_config::FileTransferConfig::default(),
+        };
+        (ctx, tmp)
+    }
+
+    fn write_cast(root: &Path, host: &str, needle: &str) {
+        let date_dir = root.join(host).join("2026-08-06");
+        std::fs::create_dir_all(&date_dir).unwrap();
+        let cast_path = date_dir.join(format!("root_clum__%0_1723000000_{host}.cast"));
+        let content =
+            format!("{{\"version\":2,\"width\":80,\"height\":24}}\n[1.0, \"o\", \"{needle}\"]\n");
+        std::fs::write(&cast_path, content).unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_execute_tool_group_scopes_recording_search() {
+        let (ctx, _tmp) = test_grouped_ctx("teamA");
+        write_cast(&ctx.recordings_dir, "hostA", "needle-group-a");
+        write_cast(&ctx.recordings_dir, "hostB", "needle-group-b");
+
+        let mut progress = crate::progress::ProgressReporter::new_stdout(
+            None,
+            Arc::new(tokio::sync::Mutex::new(tokio::io::stdout())),
+        );
+        let result = super::super::execute_tool(
+            &ctx,
+            "search_recordings",
+            json!({"query": "needle"}),
+            &mut progress,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result["ok"], json!(true));
+        let matches = result["matches"].as_array().unwrap();
+        assert!(!matches.is_empty());
+        assert!(matches.iter().all(|m| m["host"] == json!("hostA")));
     }
 }

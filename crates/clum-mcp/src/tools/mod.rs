@@ -160,6 +160,18 @@ async fn authorize(ctx: &ToolContext, tool_name: &str, args: &Value) -> Result<(
     Ok(())
 }
 
+/// Audit/recordings 类工具集。工具面已冻结在 68 个（clum-docs/INVARIANTS.md §13，
+/// 不再扩张）；若未来解冻并新增访问审计或录制数据的工具，必须用 hosts_in_group
+/// 强制 caller-group 过滤，且覆盖"不传 host 参数"的场景（历史教训：search_recordings
+/// 曾遗漏导致跨组越权）。本清单是文档锚点 + debug 自检（防清单名写错），
+/// 不构成运行时拦截——四个工具各自的分发分支内实现组过滤的强制。
+const GROUP_SCOPED_TOOLS: &[&str] = &[
+    "audit_query",
+    "list_recordings",
+    "get_recording",
+    "search_recordings",
+];
+
 pub async fn execute_tool(
     ctx: &ToolContext,
     tool_name: &str,
@@ -167,6 +179,14 @@ pub async fn execute_tool(
     progress: &mut crate::progress::ProgressReporter,
 ) -> Result<Value> {
     authorize(ctx, tool_name, &args).await?;
+
+    debug_assert!(
+        GROUP_SCOPED_TOOLS.iter().all(|t| matches!(
+            *t,
+            "audit_query" | "list_recordings" | "get_recording" | "search_recordings"
+        )),
+        "GROUP_SCOPED_TOOLS 含未知工具名，请勿随意增删"
+    );
 
     let op = uuid::Uuid::now_v7().to_string();
     *ctx.current_op.lock().unwrap_or_else(|e| e.into_inner()) = Some(op.clone());
@@ -442,7 +462,34 @@ pub async fn execute_tool(
                 }
             }
         }
-        "search_recordings" => search::search_recordings(ctx, args).await,
+        "search_recordings" => {
+            let caller_group = ctx
+                .caller_group
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            match caller_group {
+                None => search::search_recordings(ctx, args, None).await,
+                Some(cg) => {
+                    let allowed: Vec<String> = hosts_in_group(ctx, &cg).await.into_iter().collect();
+                    if allowed.is_empty() {
+                        // No hosts in this group — return nothing; an empty
+                        // filter would otherwise match every recording
+                        // (same semantics as audit_query above).
+                        Ok(json!({
+                            "ok": true,
+                            "total": 0,
+                            "matches": [],
+                            "scanned_files": 0,
+                            "scanned_bytes": 0,
+                            "decrypt_errors": [],
+                        }))
+                    } else {
+                        search::search_recordings(ctx, args, Some(allowed.as_slice())).await
+                    }
+                }
+            }
+        }
         _ => anyhow::bail!("unknown tool: {}", tool_name),
     };
 
