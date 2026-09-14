@@ -73,6 +73,8 @@
 
 **2026-09 哈希链增量**：每条审计写入携带 `entry_hash = SHA256(prev_hash ‖ payload)`（payload 为 14 值列长度前缀串接，`chain.rs` 单一实现供写入与校验两侧共用）；`clum-mcp audit verify` 全链重算，篡改/删除可检测（对被篡改数据报告 BROKEN 而非 panic）。cleanup 删除哈希行前在 `audit_chain_checkpoints` 记录断点（管理删除承认机制）；自检 warn 为事后检测，不能恢复已删数据。链保证"存在的内容未被改"，不保证"该发生的都已记录"——后者仍是下述 fail-open 债务。chain head 打印在 verify 输出中，供外置比对；外置自动化（WORM/objstore）为后续批次。
 
+**2026-09-14 篡改演练注（生产数据副本 T1–T6，全部检出）**：两点实测发现须与上段语义合并理解——① `prev_hash` 列为 TEXT affinity，攻击者写入的非字符串值（如 INTEGER）被 SQLite 自动转为文本再落盘，"类型混淆绕过格式预判"路径**不存在**（恒 BROKEN）；② checkpoint 白名单伪造（§风险披露的 R1 窗口）在本地 verify 看似 OK，但必然留下两个可观测指纹：`Chain segments` 计数跳变（无 cleanup 却多段）与 chain head 偏离外置演化序列——巡检两项即把该窗口的可利用性压到"还需要同时伪造段数与链头史"。风险等级由"中"降为"低（依赖外置对账习惯）"。
+
 **理由**：fail-open 当前取舍是可用性优先。但项目以"审计即卖点"，此债务与叙事冲突。
 
 **重审时机**：任何合规/企业部署需求出现时，优先级提到 P1（fail-closed 选项或双写告警）。

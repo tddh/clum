@@ -115,6 +115,16 @@ Known boundary: in direct mode, or if the server's recording public key is unava
 
 Operational guidance: manage production hosts via `NOPASSWD` sudoers or SSH keys so that credentials never enter a terminal session — anything typed there appears as cleartext inside the (encrypted) recording, in every synced copy, for as long as the file is retained.
 
+### Audit Hash Chain (Tamper-evident)
+
+Since 2026-09-14, every event written to the central audit database carries `entry_hash = SHA256(prev_hash ‖ payload)` — a forward hash chain over the 14 value columns (length-prefixed encoding, `crates/clum-mcp/src/audit/chain.rs`). `clum-mcp audit verify` recomputes the full chain and exits non-zero on the first broken link. Management deletions via `audit cleanup` record chain checkpoints and are accepted as legitimate segment boundaries.
+
+What it detects: value tampering without recomputing the hash; **any** in-place edit even when the attacker recomputes that row's hash (the next row's `prev_hash` bites); middle-row deletion; garbage/typed-corrupted `prev_hash` values (reported as BROKEN, never a panic). Verified in a live tamper drill on a production-data snapshot (2026-09-14): all five attack classes detected at the exact tampered row.
+
+Known boundary (disclosed): a local root who fully recomputes the chain from a forged row, or rolls back the whole database, can keep the local check green. Two fingerprints still leak: `Chain segments` jumps (no cleanup happened? investigate) and the chain head diverges from an off-site copy of this value. **Operational baseline**: the check's trust anchor is local — copy `Chain head` to an external system daily (cron `clum-mcp audit verify | grep 'Chain head'`); a missing, rolled-back, or mismatching head is the tamper signal that closes this boundary.
+
+Note: the audit write path itself remains fail-open (a failed audit write logs an error and does not block the operation — see INVARIANTS.md §8); the chain guarantees that what exists was not altered, not that everything that happened was recorded.
+
 ### HTTP Endpoint Protection
 
 - **Static file serving**: The `/releases/` download endpoint rejects path components containing `..`, preventing traversal outside the release directory.
