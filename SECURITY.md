@@ -43,6 +43,17 @@ For production deployments:
 
 ## Security Features
 
+### Bootstrap Mode (Empty API Key Store)
+
+On a fresh deployment the API key store is empty until an administrator runs `clum-mcp agent add <name> --admin` on the server host. In that state (a "bootstrap" server) the following applies:
+
+- **Loopback callers keep the historic free superadmin pass** — connections from `127.0.0.0/8`, IPv6 `::1`, or the IPv4-mapped `::ffff:127.0.0.1` are allowed without credentials so the operator can provision keys locally. A one-time `[BOOTSTRAP]` warning is logged.
+- **Non-loopback callers no longer become superadmin automatically.** Requests whose peer address is not loopback must present a valid credential. Bridge tokens and download tokens (`dl_*`) still authorize downloads under `/releases/*`, so first-time bridge installation via `curl .../releases/install.sh` keeps working; everything else (including `/mcp`, `/recordings`, and `/admin/download-token`) is rejected with `401`.
+- **QUIC agent connections** (`agent_connect`) follow the same rule: with an empty store, a non-loopback peer is refused with `bootstrap mode: server has no API keys ...` and the connection is closed; only loopback peers are granted the superadmin pass.
+- **Exiting bootstrap mode**: run `clum-mcp agent add <name> --admin` (or with `--group`) on the server host. As soon as the store is non-empty, normal API key / group validation applies to every connection.
+
+Because the guard relies on the TCP/UDP **peer address** (it does not consume `X-Forwarded-For` or PROXY protocol), do **not** put the server behind a reverse proxy while in bootstrap mode: if the proxy connects from loopback, every proxied remote client inherits the loopback superadmin pass. Terminate TLS directly on the server, or create the first API key **before** exposing the server through a proxy.
+
 ### File Path Protection
 
 Both upload and download operations enforce path safety checks:

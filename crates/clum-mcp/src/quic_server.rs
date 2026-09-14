@@ -466,21 +466,41 @@ async fn handle_agent_connection(
     // Validate API key if auth is enabled
     let mut agent_name = "unknown".to_string();
     let mut caller_group: Option<String> = None;
-    if let Some(store) = &api_key_store {
-        if !store.is_empty().await {
-            let key = msg.get("api_key").and_then(|v| v.as_str()).unwrap_or("");
-            match store.validate(key).await {
-                Some(identity) => {
-                    agent_name = identity.name;
-                    caller_group = identity.group;
-                }
-                None => {
-                    write_frame(&mut send, &serde_json::json!({"type": "agent_ack", "ok": false, "error": "invalid api key"})).await?;
-                    conn.close(quinn::VarInt::from_u32(0), b"auth failed");
-                    anyhow::bail!("agent auth failed from {remote_addr}");
-                }
+    let store_empty = match &api_key_store {
+        Some(store) => store.is_empty().await,
+        None => true,
+    };
+    if !store_empty {
+        let store = api_key_store
+            .as_ref()
+            .expect("store known to be Some when store_empty is false");
+        let key = msg.get("api_key").and_then(|v| v.as_str()).unwrap_or("");
+        match store.validate(key).await {
+            Some(identity) => {
+                agent_name = identity.name;
+                caller_group = identity.group;
+            }
+            None => {
+                write_frame(&mut send, &serde_json::json!({"type": "agent_ack", "ok": false, "error": "invalid api key"})).await?;
+                conn.close(quinn::VarInt::from_u32(0), b"auth failed");
+                anyhow::bail!("agent auth failed from {remote_addr}");
             }
         }
+    } else if !crate::http_server::is_loopback_socket(&remote_addr) {
+        // Bootstrap mode: no API keys configured. Only loopback callers may
+        // act as superadmin; any other peer is refused until an admin key
+        // exists (mirrors the HTTP auth middleware).
+        write_frame(&mut send, &serde_json::json!({"type": "agent_ack", "ok": false, "error": "bootstrap mode: server has no API keys — non-loopback clients are rejected until 'clum-mcp agent add' is run on the server host"})).await?;
+        conn.close(
+            quinn::VarInt::from_u32(0),
+            b"bootstrap mode: non-loopback rejected",
+        );
+        anyhow::bail!("agent_connect rejected in bootstrap mode (no API keys) from {remote_addr}");
+    } else {
+        tracing::warn!(
+            %remote_addr,
+            "[BOOTSTRAP] no API keys configured — loopback agent connection granted superadmin access"
+        );
     }
 
     let host = msg

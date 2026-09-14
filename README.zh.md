@@ -228,6 +228,8 @@ clum-mcp bridge remove <hostname>
 clum-mcp bridge join <hostname>   # 生成新 join token（离线恢复用）
 ```
 
+> 全新部署且尚无 API Key 时进入 bootstrap 模式：回环连接视为超管（供服务器本机完成初始化）；非回环请求将被拒绝，执行 agent add 创建首个 Key 后解除。
+
 ## 安全
 
 | 模式 | 说明 |

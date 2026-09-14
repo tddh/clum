@@ -228,6 +228,8 @@ clum-mcp bridge remove <hostname>
 clum-mcp bridge join <hostname>   # Generate a new join token (offline recovery)
 ```
 
+> When no API keys exist yet (fresh install), the server runs in bootstrap mode: loopback connections act as superadmin (console access on the server host); non-loopback requests are rejected until the first `agent add` creates a key.
+
 ## Security
 
 | Mode | Description |

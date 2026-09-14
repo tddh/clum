@@ -233,6 +233,8 @@ ssh root@<your-bridge-ip> "systemctl status rmux-bridge --no-pager"
 
 ### 6. 认证模式
 
+> **先建 Key，再暴露端口**：全新部署时 API Key 库为空（bootstrap 模式）。此状态下**仅回环连接**（127.0.0.0/8、`::1`、`::ffff:127.0.0.1`）保留免凭证的超管放行；非回环连接不再自动成为超管，必须持有效凭证，否则 `401`（bridge/download token 仅可下载 `/releases/*`，用于首次安装）。建议在把端口暴露到公网前，先在 Server 本机执行 `clum-mcp agent add <name> --admin` 建好超管 Key，以退出 bootstrap 模式。
+
 **AI 客户端认证（Central Server 模式）**：
 
 API Key 格式 `yk_{name}_{64hex}`，SHA-256 哈希存储在 SQLite。通过 HTTP Bearer header 传递。

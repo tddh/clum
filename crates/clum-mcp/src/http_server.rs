@@ -46,6 +46,23 @@ fn is_download_path(path: &str) -> bool {
     path.starts_with("/releases/")
 }
 
+/// True when `addr` is a loopback peer: any 127.0.0.0/8 address, IPv6 `::1`,
+/// or an IPv4-mapped IPv6 loopback (`::ffff:127.0.0.1` — how a loopback IPv4
+/// peer is often reported on a dual-stack listener).
+pub(crate) fn is_loopback_socket(addr: &std::net::SocketAddr) -> bool {
+    match addr.ip() {
+        std::net::IpAddr::V4(ip) => ip.is_loopback(),
+        std::net::IpAddr::V6(ip) => {
+            ip.is_loopback() || ip.to_ipv4_mapped().is_some_and(|v4| v4.is_loopback())
+        }
+    }
+}
+
+/// Emitted at most once per process for each bootstrap-mode decision, so an
+/// unauthenticated remote cannot spam the logs by probing a fresh server.
+static BOOTSTRAP_LOOPBACK_WARNED: std::sync::Once = std::sync::Once::new();
+static BOOTSTRAP_NON_LOOPBACK_WARNED: std::sync::Once = std::sync::Once::new();
+
 /// Gate for bridge tokens and download tokens: only `/releases/*` is in
 /// scope. Denials are logged so probing attempts show up in server logs.
 async fn authorize_download_path(
@@ -167,7 +184,32 @@ async fn auth_middleware(
     next: Next,
 ) -> Result<Response, StatusCode> {
     if auth.store.is_empty().await {
-        return Ok(next.run(request).await);
+        // Bootstrap mode: no API keys configured yet (fresh deployment,
+        // `agent add` never run). Loopback callers keep the historic free
+        // superadmin pass; every other peer must present a real credential
+        // and falls through to the token checks below.
+        let remote = request
+            .extensions()
+            .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+            .map(|ci| ci.0);
+        if let Some(addr) = remote.filter(is_loopback_socket) {
+            BOOTSTRAP_LOOPBACK_WARNED.call_once(|| {
+                tracing::warn!(
+                    %addr,
+                    "[BOOTSTRAP] no API keys configured — loopback connections act as superadmin; non-loopback requests are rejected until 'clum-mcp agent add <name> --admin' is run"
+                );
+            });
+            return Ok(next.run(request).await);
+        }
+        BOOTSTRAP_NON_LOOPBACK_WARNED.call_once(|| {
+            tracing::warn!(
+                remote = ?remote,
+                path = %request.uri().path(),
+                "[BOOTSTRAP] no API keys configured — non-loopback request must present a credential; falling through to token validation"
+            );
+        });
+        // No free pass: bridge/download tokens still authorize /releases/*
+        // so a first-time deployment can bootstrap.
     }
 
     let token = headers
@@ -309,6 +351,11 @@ pub async fn run_http_server(
         .disable_allowed_hosts();
 
     let key_store_for_auth = Arc::clone(&key_store);
+    if key_store_for_auth.is_empty().await {
+        tracing::warn!(
+            "[BOOTSTRAP] no API keys configured — loopback connections act as superadmin; non-loopback requests are rejected until 'clum-mcp agent add <name> --admin' is run"
+        );
+    }
     let keyring_for_routes = Arc::clone(&ctx.recording_keyring);
     let service = StreamableHttpService::new(
         move || {
@@ -359,7 +406,7 @@ pub async fn run_http_server(
     let addr: std::net::SocketAddr = listen_addr.parse()?;
     tracing::info!("clum-mcp HTTPS server listening on {listen_addr}");
     axum_server::bind_rustls(addr, rustls_config)
-        .serve(app.into_make_service())
+        .serve(app.into_make_service_with_connect_info::<std::net::SocketAddr>())
         .await?;
     Ok(())
 }
@@ -456,6 +503,10 @@ mod tests {
     }
 
     async fn setup() -> TestEnv {
+        setup_with_key(true).await
+    }
+
+    async fn setup_with_key(with_api_key: bool) -> TestEnv {
         let tmp = tempfile::tempdir().unwrap();
 
         let static_dir = tmp.path().join("static");
@@ -469,7 +520,11 @@ mod tests {
         std::fs::write(static_dir.join("recordings/tf01.cast"), b"cast").unwrap();
 
         let key_store = ApiKeyStore::open(&tmp.path().join("keys.db")).unwrap();
-        let api_key = key_store.add("admin", None).await.unwrap();
+        let api_key = if with_api_key {
+            key_store.add("admin", None).await.unwrap()
+        } else {
+            String::new()
+        };
 
         let bridge_store = Arc::new(
             crate::bridge_store::BridgeStore::open(&tmp.path().join("bridges.db")).unwrap(),
@@ -533,6 +588,23 @@ mod tests {
             .await
             .unwrap();
         resp.status()
+    }
+
+    async fn request_from(
+        env: &TestEnv,
+        method: &str,
+        uri: &str,
+        token: Option<&str>,
+        remote: std::net::SocketAddr,
+    ) -> StatusCode {
+        let mut builder = Request::builder().method(method).uri(uri);
+        if let Some(t) = token {
+            builder = builder.header("authorization", format!("Bearer {t}"));
+        }
+        let mut req = builder.body(Body::empty()).unwrap();
+        req.extensions_mut()
+            .insert(axum::extract::ConnectInfo(remote));
+        env.app.clone().oneshot(req).await.unwrap().status()
     }
 
     #[test]
@@ -689,6 +761,141 @@ mod tests {
             )
             .await,
             StatusCode::UNAUTHORIZED
+        );
+    }
+
+    #[test]
+    fn loopback_detection() {
+        let lo = |s: &str| -> std::net::SocketAddr { s.parse().unwrap() };
+        assert!(is_loopback_socket(&lo("127.0.0.1:5555")));
+        assert!(is_loopback_socket(&lo("127.255.1.9:1")));
+        assert!(is_loopback_socket(&lo("[::1]:5555")));
+        assert!(is_loopback_socket(&lo("[::ffff:127.0.0.1]:5555")));
+        assert!(!is_loopback_socket(&lo("10.0.0.1:5555")));
+        assert!(!is_loopback_socket(&lo("192.168.1.20:443")));
+        assert!(!is_loopback_socket(&lo("8.8.8.8:53")));
+        assert!(!is_loopback_socket(&lo("[::ffff:10.0.0.1]:5555")));
+        assert!(!is_loopback_socket(&lo("[2001:db8::1]:443")));
+    }
+
+    #[tokio::test]
+    async fn bootstrap_loopback_keeps_superadmin() {
+        let env = setup_with_key(false).await;
+        let lo: std::net::SocketAddr = "127.0.0.1:5555".parse().unwrap();
+        assert_eq!(
+            request_from(&env, "POST", "/admin/download-token", None, lo).await,
+            StatusCode::OK
+        );
+        assert_eq!(
+            request_from(&env, "GET", "/recordings/tf01.cast", None, lo).await,
+            StatusCode::OK
+        );
+    }
+
+    #[tokio::test]
+    async fn bootstrap_non_loopback_requires_credential() {
+        let env = setup_with_key(false).await;
+        let wan: std::net::SocketAddr = "10.0.0.1:5555".parse().unwrap();
+        assert_eq!(
+            request_from(&env, "GET", "/releases/rmux-bridge-linux-x86_64", None, wan).await,
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            request_from(&env, "POST", "/admin/download-token", None, wan).await,
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            request_from(&env, "GET", "/recordings/tf01.cast", None, wan).await,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+
+    #[tokio::test]
+    async fn bootstrap_non_loopback_bridge_token_still_downloads() {
+        let env = setup_with_key(false).await;
+        let wan: std::net::SocketAddr = "10.0.0.1:5555".parse().unwrap();
+        assert_eq!(
+            request_from(
+                &env,
+                "GET",
+                "/releases/rmux-bridge-linux-x86_64",
+                Some(&env.bridge_token),
+                wan
+            )
+            .await,
+            StatusCode::OK
+        );
+        assert_eq!(
+            request_from(
+                &env,
+                "GET",
+                "/recordings/tf01.cast",
+                Some(&env.bridge_token),
+                wan
+            )
+            .await,
+            StatusCode::FORBIDDEN
+        );
+    }
+
+    #[tokio::test]
+    async fn bootstrap_non_loopback_download_token_still_downloads() {
+        let env = setup_with_key(false).await;
+        let wan: std::net::SocketAddr = "8.8.4.4:5555".parse().unwrap();
+        assert_eq!(
+            request_from(
+                &env,
+                "GET",
+                "/releases/rmux-bridge-linux-x86_64",
+                Some(&env.download_token),
+                wan
+            )
+            .await,
+            StatusCode::OK
+        );
+        assert_eq!(
+            request_from(
+                &env,
+                "POST",
+                "/admin/download-token",
+                Some(&env.download_token),
+                wan
+            )
+            .await,
+            StatusCode::FORBIDDEN
+        );
+    }
+
+    #[tokio::test]
+    async fn axum_server_injects_connect_info() {
+        async fn probe(
+            axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<std::net::SocketAddr>,
+        ) -> String {
+            addr.ip().to_string()
+        }
+
+        let app = Router::new().route("/probe", axum::routing::get(probe));
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let _ = axum_server::from_tcp(listener)
+                .serve(app.into_make_service_with_connect_info::<std::net::SocketAddr>())
+                .await;
+        });
+
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+        stream
+            .write_all(b"GET /probe HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+            .await
+            .unwrap();
+        let mut buf = Vec::new();
+        stream.read_to_end(&mut buf).await.unwrap();
+        let raw = String::from_utf8_lossy(&buf);
+        assert!(
+            raw.contains("127.0.0.1"),
+            "axum_server did not inject ConnectInfo: {raw}"
         );
     }
 }
