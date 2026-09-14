@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.18.0] — 2026-09-14
 
 ### Added
 - **PTY 录制加密**：bridge 端录制改为加密信封格式（明文 `clum-enc` 头行 + 加密的 asciinema v2 内容）——X25519 ECDH 信封封装 per-recording DEK + 分块 AES-256-GCM。公钥由 Server 在 bridge 注册（`register_ack`）时下发；keyring 持久化为 `current.key`（0700 目录 / 0600 文件）。`search_recordings`/`get_recording`/`list_recordings` 自动解密。设计文档 `clum-docs/recording-encryption-design.md`（v2.2，标注已实施）。
