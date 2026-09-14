@@ -13,6 +13,47 @@ pub mod cleanup;
 pub mod log;
 pub mod query;
 
+/// audit_events 建表语句——open 与 open_in_memory 共用，勿再复制第二份。
+/// prev_hash / entry_hash 为哈希链列，旧库由 migrate_hash_columns 幂等补列。
+const AUDIT_EVENTS_SCHEMA: &str = "
+    CREATE TABLE IF NOT EXISTS audit_events (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id       TEXT NOT NULL UNIQUE,
+        timestamp      TEXT NOT NULL,
+        agent_name     TEXT NOT NULL DEFAULT 'unknown',
+        host_name      TEXT NOT NULL,
+        session_name   TEXT NOT NULL DEFAULT '',
+        pane_id        TEXT,
+        operation_id   TEXT,
+        action         TEXT NOT NULL,
+        detail         TEXT NOT NULL DEFAULT '',
+        redacted       INTEGER NOT NULL DEFAULT 0,
+        output_summary TEXT,
+        success        INTEGER NOT NULL DEFAULT 1,
+        duration_ms    INTEGER NOT NULL DEFAULT 0,
+        error_message  TEXT,
+        created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+        prev_hash      TEXT,
+        entry_hash     TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_audit_timestamp
+        ON audit_events(timestamp);
+    CREATE INDEX IF NOT EXISTS idx_audit_host_action
+        ON audit_events(host_name, action);
+    CREATE INDEX IF NOT EXISTS idx_audit_agent_time
+        ON audit_events(agent_name, timestamp);
+    CREATE INDEX IF NOT EXISTS idx_audit_success
+        ON audit_events(success);
+
+    CREATE TABLE IF NOT EXISTS audit_chain_checkpoints (
+        id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at              TEXT NOT NULL DEFAULT (datetime('now')),
+        last_deleted_entry_hash TEXT,
+        first_remaining_id      INTEGER
+    );
+";
+
 /// Thread-safe wrapper around a SQLite connection holding the audit events table.
 pub struct AuditDb {
     conn: Arc<Mutex<Connection>>,
@@ -45,39 +86,12 @@ impl AuditDb {
         )
         .context("failed to set WAL mode")?;
 
-        conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS audit_events (
-                id             INTEGER PRIMARY KEY AUTOINCREMENT,
-                event_id       TEXT NOT NULL UNIQUE,
-                timestamp      TEXT NOT NULL,
-                agent_name     TEXT NOT NULL DEFAULT 'unknown',
-                host_name      TEXT NOT NULL,
-                session_name   TEXT NOT NULL DEFAULT '',
-                pane_id        TEXT,
-                operation_id   TEXT,
-                action         TEXT NOT NULL,
-                detail         TEXT NOT NULL DEFAULT '',
-                redacted       INTEGER NOT NULL DEFAULT 0,
-                output_summary TEXT,
-                success        INTEGER NOT NULL DEFAULT 1,
-                duration_ms    INTEGER NOT NULL DEFAULT 0,
-                error_message  TEXT,
-                created_at     TEXT NOT NULL DEFAULT (datetime('now'))
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_audit_timestamp
-                ON audit_events(timestamp);
-            CREATE INDEX IF NOT EXISTS idx_audit_host_action
-                ON audit_events(host_name, action);
-            CREATE INDEX IF NOT EXISTS idx_audit_agent_time
-                ON audit_events(agent_name, timestamp);
-            CREATE INDEX IF NOT EXISTS idx_audit_success
-                ON audit_events(success);",
-        )
-        .context("failed to create audit schema")?;
+        conn.execute_batch(AUDIT_EVENTS_SCHEMA)
+            .context("failed to create audit schema")?;
 
         migrate_operation_id(&conn)?;
         migrate_redacted(&conn)?;
+        migrate_hash_columns(&conn)?;
 
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
@@ -91,35 +105,7 @@ impl AuditDb {
             "PRAGMA journal_mode=WAL;
              PRAGMA synchronous=NORMAL;",
         )?;
-        conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS audit_events (
-                id             INTEGER PRIMARY KEY AUTOINCREMENT,
-                event_id       TEXT NOT NULL UNIQUE,
-                timestamp      TEXT NOT NULL,
-                agent_name     TEXT NOT NULL DEFAULT 'unknown',
-                host_name      TEXT NOT NULL,
-                session_name   TEXT NOT NULL DEFAULT '',
-                pane_id        TEXT,
-                operation_id   TEXT,
-                action         TEXT NOT NULL,
-                detail         TEXT NOT NULL DEFAULT '',
-                redacted       INTEGER NOT NULL DEFAULT 0,
-                output_summary TEXT,
-                success        INTEGER NOT NULL DEFAULT 1,
-                duration_ms    INTEGER NOT NULL DEFAULT 0,
-                error_message  TEXT,
-                created_at     TEXT NOT NULL DEFAULT (datetime('now'))
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_audit_timestamp
-                ON audit_events(timestamp);
-            CREATE INDEX IF NOT EXISTS idx_audit_host_action
-                ON audit_events(host_name, action);
-            CREATE INDEX IF NOT EXISTS idx_audit_agent_time
-                ON audit_events(agent_name, timestamp);
-            CREATE INDEX IF NOT EXISTS idx_audit_success
-                ON audit_events(success);",
-        )?;
+        conn.execute_batch(AUDIT_EVENTS_SCHEMA)?;
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
         })
@@ -153,6 +139,23 @@ fn migrate_redacted(conn: &Connection) -> Result<()> {
         Err(e) if e.to_string().contains("duplicate column") => Ok(()),
         Err(e) => Err(e).context("failed to migrate audit schema (redacted)"),
     }
+}
+
+/// Add `prev_hash` / `entry_hash` columns to databases created before the
+/// hash-chain feature. Idempotent: pre-existing columns are silently kept.
+fn migrate_hash_columns(conn: &Connection) -> Result<()> {
+    for col in ["prev_hash", "entry_hash"] {
+        let result =
+            conn.execute(&format!("ALTER TABLE audit_events ADD COLUMN {col} TEXT"), []);
+        match result {
+            Ok(_) => {}
+            Err(e) if e.to_string().contains("duplicate column") => {}
+            Err(e) => {
+                return Err(e).context(format!("failed to migrate audit schema ({col})"));
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -452,6 +455,66 @@ mod tests {
         let _ = AuditDb::open(&path).unwrap();
         let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600, "audit db must be owner-only after open");
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn test_schema_has_hash_columns() {
+        let db = AuditDb::open_in_memory().unwrap();
+        let conn = db.conn_ref().lock().unwrap_or_else(|e| e.into_inner());
+        let cols: Vec<String> = {
+            let mut stmt = conn
+                .prepare("SELECT name FROM pragma_table_info('audit_events')")
+                .unwrap();
+            stmt.query_map([], |r| r.get::<_, String>(0))
+                .unwrap()
+                .map(Result::unwrap)
+                .collect()
+        };
+        assert!(cols.contains(&"prev_hash".to_string()), "cols: {cols:?}");
+        assert!(cols.contains(&"entry_hash".to_string()), "cols: {cols:?}");
+    }
+
+    #[test]
+    fn test_migrate_hash_columns_on_legacy_db() {
+        let path = std::env::temp_dir()
+            .join(format!("clum-audit-hash-legacy-{}.db", uuid::Uuid::new_v4()));
+        {
+            let conn = rusqlite::Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE audit_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_id TEXT NOT NULL UNIQUE,
+                    timestamp TEXT NOT NULL,
+                    agent_name TEXT NOT NULL DEFAULT 'unknown',
+                    host_name TEXT NOT NULL,
+                    session_name TEXT NOT NULL DEFAULT '',
+                    pane_id TEXT,
+                    operation_id TEXT,
+                    action TEXT NOT NULL,
+                    detail TEXT NOT NULL DEFAULT '',
+                    redacted INTEGER NOT NULL DEFAULT 0,
+                    output_summary TEXT,
+                    success INTEGER NOT NULL DEFAULT 1,
+                    duration_ms INTEGER NOT NULL DEFAULT 0,
+                    error_message TEXT,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );",
+            )
+            .unwrap();
+        }
+        // open() 应幂等补上两列；二次 open 应不报错
+        let _db = AuditDb::open(&path).unwrap();
+        let db = AuditDb::open(&path).unwrap();
+        let conn = db.conn_ref().lock().unwrap_or_else(|e| e.into_inner());
+        let n: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('audit_events') WHERE name IN ('prev_hash','entry_hash')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 2);
         std::fs::remove_file(&path).ok();
     }
 }
