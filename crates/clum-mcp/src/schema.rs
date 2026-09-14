@@ -138,19 +138,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "session_attach",
-                "description": "Check if a session exists on a remote host (read-only, does NOT attach or modify state). Returns ok=true if the session exists.\n\nUse this before session_create to avoid 'already exists' errors. Typical workflow: session_attach → if not found → session_create.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name to check, e.g. 'clum'" }
-                    },
-                    "required": ["host"]
-                }
-            },
-            {
-                "name": "session_detach",
-                "description": "Check if a session exists on a remote host — functionally identical to session_attach (read-only existence check, does NOT detach).\n\nUse session_attach or session_detach interchangeably for existence checks. The name 'detach' is historical.",
+                "description": "Check if a session exists on a remote host (read-only, does NOT attach or modify state). Returns ok=true if the session exists.\n\nOptional check — session_create is idempotent, so calling attach first is only needed when you want to inspect an existing session.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {

@@ -94,7 +94,7 @@ def main():
     tools = r.get("result", {}).get("tools", [])
     names = [t["name"] for t in tools]
     check("tools/list: returns tools", len(tools) > 0)
-    check("tools/list: 69 tools", len(names) == 69, f"got {len(names)}")
+    check("tools/list: 68 tools", len(names) == 68, f"got {len(names)}")
     for expect in [
         "exec",
         "capture_pane",

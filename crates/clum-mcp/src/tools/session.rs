@@ -128,34 +128,6 @@ pub(crate) async fn session_attach(ctx: &ToolContext, args: Value) -> Result<Val
     Ok(response)
 }
 
-pub(crate) async fn session_detach(ctx: &ToolContext, args: Value) -> Result<Value> {
-    let host_name = args["host"].as_str().context("missing 'host'")?;
-    let session_name = args["session_name"].as_str().unwrap_or("clum");
-    let host = super::common::resolve_host_config(ctx, host_name).await?;
-    let mut tls = connect_to_host(ctx, &host).await?;
-
-    send_json_frame(
-        &mut tls,
-        &json!({ "type": "detach_session", "session_name": session_name }),
-    )
-    .await?;
-    let response = recv_json_frame(&mut tls).await?;
-    super::audit(
-        ctx,
-        AuditAction::SessionDetach,
-        host_name,
-        session_name,
-        None,
-        session_name,
-        None,
-        response["ok"].as_bool().unwrap_or(false),
-        0,
-        None,
-    )
-    .await;
-    Ok(response)
-}
-
 pub(crate) async fn kill_session(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
     let session_name = args["session_name"].as_str().unwrap_or("clum");

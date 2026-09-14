@@ -200,7 +200,6 @@ pub async fn execute_tool(
         "session_create" => session::session_create(ctx, args).await,
         "session_list" => session::session_list(ctx, args).await,
         "session_attach" => session::session_attach(ctx, args).await,
-        "session_detach" => session::session_detach(ctx, args).await,
         "send_keys" => pane::send_keys(ctx, args).await,
         "capture_pane" => pane::capture_pane(ctx, args).await,
         "wait_for_text" => output::wait_for_text(ctx, args).await,

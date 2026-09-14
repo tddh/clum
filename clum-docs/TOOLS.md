@@ -144,18 +144,9 @@
 | `host` | string | ✅ |
 | `session_name` | string | | default `clum` |
 
-> **注意**：当前仅检查存在性，不执行真正的 attach。
+> **注意**：当前仅检查存在性，不执行真正的 attach。此为可选的前置检查——`session_create` 幂等，需查看已有会话时才需先调用本工具。
 
-### `session_detach`
-
-检查会话是否存在。
-
-| 参数 | 类型 | 必填 |
-|------|------|:---:|
-| `host` | string | ✅ |
-| `session_name` | string | | default `clum` |
-
-> **注意**：当前仅检查存在性，不执行真正的 detach。
+> **迁移提示**：`session_detach` 已移除；存在性检查请使用 `session_attach`。
 
 ---
 

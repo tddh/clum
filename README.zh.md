@@ -71,7 +71,7 @@ graph LR
     C3 <-->|Unix Socket| D3[RMUX daemon]
 ```
 
-- **clum-mcp（Central Server）** — 中央 MCP Server：HTTP :9788 面向 AI 客户端（MCP 协议）+ QUIC :9788 面向 Bridge 注册和 CLI 数据平面。提供 69 个工具、集中审计、API Key 认证、静态文件服务。
+- **clum-mcp（Central Server）** — 中央 MCP Server：HTTP :9788 面向 AI 客户端（MCP 协议）+ QUIC :9788 面向 Bridge 注册和 CLI 数据平面。提供 68 个工具、集中审计、API Key 认证、静态文件服务。
 - **clum-cli** — 命令行工具：PTY 透传（`term`）、文件传输（`push`/`pull`，支持文件与目录、分块流式传输 + SHA-256 校验；`push` 支持目录 `--exclude` 过滤）、端口转发（`forward`，断网自动重连，`--give-up-after` 控制放弃时限）、会话列表（`list`）、录制回放（`replay`）。内置 AI 对话面板（Ctrl+G）。拥塞控制默认 `auto`：内网目标→BBR，公网目标→CUBIC（丢包退避，避免带宽打满断连）；可用 `--cc bbr|cubic|auto`（或 `CLUM_CC` 环境变量）显式覆盖。
 - **rmux-bridge** — 部署在每台 Linux 主机的 Agent。主动连接 Central Server 注册，处理工具执行、文件 I/O、PTY 会话、录制推送。
 - **RMUX daemon** — 每台 Linux 主机上的终端多路复用器（基于 rmux）。
@@ -335,12 +335,12 @@ echo "$(cat)" >> knowledge.jsonl && git commit -am "新增排障经验条目"
 
 ## 工具列表
 
-共 69 个 MCP 工具，覆盖完整终端生命周期；另有 `audit query/stats/cleanup` CLI 子命令供人类直接查询审计日志：
+共 68 个 MCP 工具，覆盖完整终端生命周期；另有 `audit query/stats/cleanup` CLI 子命令供人类直接查询审计日志：
 
 | 类别 | 工具 |
 |------|------|
 | 主机管理 | `host_list`, `host_filter`, `host_set_meta`, `reload_config` |
-| 会话管理 | `session_create`, `session_list`, `session_attach`, `session_detach`, `kill_session` |
+| 会话管理 | `session_create`, `session_list`, `session_attach`, `kill_session` |
 | 终端输入 | `send_keys`, `send_text`, `broadcast_keys` |
 | 终端输出 | `capture_pane`, `capture_region`, `wait_for_text`, `wait_for_bytes`, `find_pane_text`, `find_text_all`, `stream_pane` |
 | 命令执行 | `exec`, `wait_exit`, `wait_stable`, `collect_until_exit`, `shell_command`, `respawn_pane`, `cmd_escape` |
@@ -398,7 +398,7 @@ just release-linux  # 交叉编译 Linux x86_64 musl
 
 ## 文档
 
-- [工具文档](clum-docs/TOOLS.md) — 69 个 MCP 工具的完整参数与返回值
+- [工具文档](clum-docs/TOOLS.md) — 68 个 MCP 工具的完整参数与返回值
 - [部署文档](clum-docs/DEPLOY.md) — 架构、构建、部署、运维、安全
 - [终端状态感知设计](clum-docs/terminal-state-design.md) — 终端状态启发式检测引擎
 - [贡献指南](CONTRIBUTING.md)

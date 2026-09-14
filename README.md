@@ -71,7 +71,7 @@ graph LR
     C3 <-->|Unix Socket| D3[RMUX daemon]
 ```
 
-- **clum-mcp (Central Server)** — Central MCP Server: HTTP :9788 for AI clients (MCP protocol) + QUIC :9788 for Bridge registration and CLI data plane. Provides 69 tools, centralized audit, API Key auth, and static file serving.
+- **clum-mcp (Central Server)** — Central MCP Server: HTTP :9788 for AI clients (MCP protocol) + QUIC :9788 for Bridge registration and CLI data plane. Provides 68 tools, centralized audit, API Key auth, and static file serving.
 - **clum-cli** — CLI for humans: PTY passthrough (`term`), file transfer (`push`/`pull` — files or directories, chunked streaming with SHA-256; `push` supports `--exclude` globs for directories), port forwarding (`forward` — auto-reconnects on network loss, `--give-up-after`), session listing (`list`), recording playback (`replay`). Built-in AI chat panel (Ctrl+G). Congestion control default `auto`: BBR on private targets, CUBIC on public targets (loss-adaptive, avoids disconnects at full bandwidth); override with `--cc bbr|cubic|auto` (or `CLUM_CC` env var).
 - **rmux-bridge** — Agent deployed on each Linux host. Reverse-connects to the Central Server, handles tool execution, file I/O, PTY sessions, and recording push.
 - **RMUX daemon** — Terminal multiplexer on each Linux host (rmux-based).
@@ -336,12 +336,12 @@ This design keeps clum focused on operations while enabling teams to build their
 
 ## Tools
 
-69 MCP tools covering the full terminal lifecycle, plus `audit query/stats/cleanup` CLI subcommands for human operators:
+68 MCP tools covering the full terminal lifecycle, plus `audit query/stats/cleanup` CLI subcommands for human operators:
 
 | Category | Tools |
 |----------|-------|
 | Host | `host_list`, `host_filter`, `host_set_meta`, `reload_config` |
-| Session | `session_create`, `session_list`, `session_attach`, `session_detach`, `kill_session` |
+| Session | `session_create`, `session_list`, `session_attach`, `kill_session` |
 | Input | `send_keys`, `send_text`, `broadcast_keys` |
 | Output | `capture_pane`, `capture_region`, `wait_for_text`, `wait_for_bytes`, `find_pane_text`, `find_text_all`, `stream_pane` |
 | Execution | `exec`, `wait_exit`, `wait_stable`, `collect_until_exit`, `shell_command`, `respawn_pane`, `cmd_escape` |
@@ -399,7 +399,7 @@ just release-linux  # cross-compile Linux x86_64 musl
 
 ## Docs
 
-- [Tool Reference](clum-docs/TOOLS.md) — 69 MCP tools with parameters and return values
+- [Tool Reference](clum-docs/TOOLS.md) — 68 MCP tools with parameters and return values
 - [Deployment Guide](clum-docs/DEPLOY.md) — Architecture, build, deploy, operations, security
 - [Terminal State Design](clum-docs/terminal-state-design.md) — Terminal state awareness heuristic engine
 - [Contributing](CONTRIBUTING.md)
