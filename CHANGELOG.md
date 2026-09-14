@@ -5,12 +5,30 @@
 ### Added
 - **PTY 录制加密**：bridge 端录制改为加密信封格式（明文 `clum-enc` 头行 + 加密的 asciinema v2 内容）——X25519 ECDH 信封封装 per-recording DEK + 分块 AES-256-GCM。公钥由 Server 在 bridge 注册（`register_ack`）时下发；keyring 持久化为 `current.key`（0700 目录 / 0600 文件）。`search_recordings`/`get_recording`/`list_recordings` 自动解密。设计文档 `clum-docs/recording-encryption-design.md`（v2.2，标注已实施）。
 
+### Fixed（评审收尾）
+- **生产实测语义核准（全功能测试发现，文档同步对齐）**：`shell_command` 实际仅适用于 **dead pane**——idle 交互 shell 也被 daemon 视为活进程拒绝（`PANE_BUSY`），无 kill 选项，替换活进程须用 `respawn_pane(kill=true)`；`respawn_pane` 无 `command` 参数时**原样重跑该 pane 当前的进程规格**（非回退默认 shell）；`break_pane` 返回体 `pane_id`/`window_index` 未回填（known issue，以 `pane_info` 确认归属）；`cmd_escape` 需真实 TTY，bridge 自动化上下文回报 `open terminal failed: not a terminal`（`exit_code:1`）。schema/TOOLS/SKILL（PANE_BUSY 行）/INVARIANTS（§2/§3 实测核准注）同步更新，TOOLS.md `cmd_escape` 限制注与 `break_pane` 返回注新增。
+- **评审发现的同步遗漏**（5 处）：`scripts/mcp_smoke.py` 的 tools/list 计数断言 69→68（删 `session_detach` 后原断言必失败）；`.opencode/skills/clum-mcp/SKILL.md` 同步幂等工作流（操作流程与示例两处 "先 attach 后 create"）+ `recovery_hint` 示例改为英文实际值 + `SESSION_EXISTS` 表标注 MCP 路径不可达（`.qoder/skills` 副本被 .gitignore，需手动同步）；`scripts/mcp_remote_test.py` 头部注释对齐幂等语义；SECURITY.md Bootstrap 反代备注修正为与实现一致——护栏只认 TCP/UDP 对端地址、不消费 X-Forwarded-For/PROXY protocol，bootstrap（空库）窗口内禁止置于反代后（原文"preserve the real client address"的缓解凭现有实现不可达成）。
+- **文档对齐 pass（按"工具面冻结"决策校正表述）**：`GROUP_SCOPED_TOOLS` 相关表述统一为"清单锚点 + debug 自检，非运行时拦截"（`tools/mod.rs` 注释 / CHANGELOG / INVARIANTS §6）；INVARIANTS 新增 **§13 工具面冻结**不变量（68 个，不再扩张，后续以质量与减法为主线）；`error-code-design.md` `PANE_BUSY` 行补记完整稳定消息（rmux-proto `PANE_STILL_ACTIVE_MESSAGE = "pane still active; use -k to force respawn"`，2026-09-13 加回归测试）；TOOLS.md 错误码表 `SESSION_EXISTS` 标注对 MCP 路径不可达（与 SKILL.md 对齐）。
+
 ### Security
 - **审计数据库属主权限收紧**（`clum-mcp/src/audit/mod.rs`）：打开 audit.db 及其 `-wal`/`-shm` 兄弟文件时强制 owner-only（0600），越权模式直接报错。
+- **search_recordings 组隔离修复（越权）**：受限 group 的 API Key 此前调用 `search_recordings` **不传 host 参数**时，可解密检索**所有主机**的终端会话录制——`audit_query`/`list_recordings`/`get_recording` 均有组过滤，唯独 `search_recordings`（`tools/mod.rs` 分发处）遗漏。现于分发层强制 caller-group 过滤：组内无主机返回同构空结果（语义对齐 audit_query 的"空过滤会匹配全部事件"注释）；显式传 host 的场景由既有 `authorize()` 覆盖。新增 `GROUP_SCOPED_TOOLS` 清单锚点（文档对照 + `debug_assert` 自检防清单名写错；注意其非运行时拦截——组过滤的实际强制在各工具分发分支内实现）及回归测试（含走完整 `execute_tool` 分发的集成级用例：受限 ctx 无 host 参数只返回组内主机录制）。可选 host 过滤参数从此**不论出现在哪个工具都不能作为授权边界**。
+- **bootstrap 模式环回护栏**：API key 库为空（全新部署，从未 `agent add`）时，非回环连接不再自动获得超管身份——回环连接（127.0.0.0/8、::1、IPv4-mapped）保持原放行语义供服务器本机完成初始化，非回环请求必须持有效凭证（bridge/download token 的 `/releases` 部署下载路径不受影响），否则 401。HTTP 面（`auth_middleware`）与 QUIC 面（`agent_connect`）同步加固；serve 改用 `into_make_service_with_connect_info` 注入对端地址（已实测 axum_server 0.7 运行时注入生效）；启动与首命中输出 `[BOOTSTRAP]` 告警。空库=管理员的 bootstrap 设计意图不变，环境假设改由机制保护。SECURITY.md 新增 Bootstrap mode 小节，DEPLOY.md 认证模式同步。
+
+### Changed
+- **recovery_hint 英文化**（`clum-mcp/src/error.rs`）：19 条 recovery_hint（18 具名 code + 兜底 UNKNOWN）从中文统一为英文，与英文 instructions/工具描述一致——错误码名、`error` 原文、retryable 语义全部不变（retryable=true 仍仅 BRIDGE_UNREACHABLE/CONNECTION_LOST/CONNECT_TIMEOUT）。中文断言测试同步更新（含任务清单未点名的一处 `contains("分组")` 残留断言）。
+- **shell_command/SESSION_EXISTS 契约描述修正**（schema 只改文字，零实现改动）：
+  - shell_command 描述中"behavior depends on the rmux daemon"的模糊表述改为确定性事实：rmux daemon 以稳定消息 `pane still active; use -k to force respawn`（rmux-proto `PANE_STILL_ACTIVE_MESSAGE`）拒绝替换运行中前台进程，归类 `PANE_BUSY`——`error_code.rs` 补该完整文案的回归测试。
+  - session_create 描述去掉"已存在返回错误"（与桥侧 `CreateOrReuse` 幂等实现矛盾），改为幂等语义；`session_attach` 描述改为可选存在性检查；server instructions 中"必须先 attach 探测"的陈旧工作流指引同步修正。`SESSION_EXISTS` 错误码对 MCP 路径不可达，按"只增不改"原则保留。
+
+### Removed
+- **移除 `session_detach` 工具（breaking）**：与 `session_attach` 桥侧实现逐字相同（均为只读存在性检查），为误名冗余工具。存在性检查请改用 `session_attach`（TOOLS.md 已留迁移提示）。`AuditAction::SessionDetach` 枚举保留（历史审计数据兼容）。MCP 工具数 69 → 68，README/TOOLS 计数同步。
 
 ### Docs
 - SECURITY.md 曾声明 PTY 录制为明文存储并界定审计脱敏边界；同日随后落地录制加密，取代该声明（SECURITY.md 已更新为加密表述）。
 - SKILL.md：移除 wait_for_bytes 过期的"timeout_ms 未强制生效"警示（0.17.1 起已端到端强制）。
+- 新增 `clum-docs/INVARIANTS.md`：12 条设计不变量（bootstrap 语义、exec/shell_command 双通道威胁模型、daemon 运行中进程拒绝、session_create 幂等、错误码只增不改、组隔离工具清单、QUIC-only、审计 fail-open 现状、录制不脱敏边界、执行状态远端化、单实例部署边界、rmux-sdk 依赖集中）+ "不再重复踩的坑"来源清单。
+- README/README.zh：Server Management 节补 bootstrap 模式说明（空库时回环=超管、非回环拒绝、创建首个 Key 解除）。
 
 ## [0.17.1] — 2026-09-10
 
