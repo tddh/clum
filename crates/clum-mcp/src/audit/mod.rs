@@ -13,6 +13,7 @@ pub mod chain;
 pub mod cleanup;
 pub mod log;
 pub mod query;
+pub mod verify;
 
 /// audit_events 建表语句——open 与 open_in_memory 共用，勿再复制第二份。
 /// prev_hash / entry_hash 为哈希链列，旧库由 migrate_hash_columns 幂等补列。
