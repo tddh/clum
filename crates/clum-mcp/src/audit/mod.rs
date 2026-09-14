@@ -147,8 +147,10 @@ fn migrate_redacted(conn: &Connection) -> Result<()> {
 /// hash-chain feature. Idempotent: pre-existing columns are silently kept.
 fn migrate_hash_columns(conn: &Connection) -> Result<()> {
     for col in ["prev_hash", "entry_hash"] {
-        let result =
-            conn.execute(&format!("ALTER TABLE audit_events ADD COLUMN {col} TEXT"), []);
+        let result = conn.execute(
+            &format!("ALTER TABLE audit_events ADD COLUMN {col} TEXT"),
+            [],
+        );
         match result {
             Ok(_) => {}
             Err(e) if e.to_string().contains("duplicate column") => {}
@@ -479,8 +481,10 @@ mod tests {
 
     #[test]
     fn test_migrate_hash_columns_on_legacy_db() {
-        let path = std::env::temp_dir()
-            .join(format!("clum-audit-hash-legacy-{}.db", uuid::Uuid::new_v4()));
+        let path = std::env::temp_dir().join(format!(
+            "clum-audit-hash-legacy-{}.db",
+            uuid::Uuid::new_v4()
+        ));
         {
             let conn = rusqlite::Connection::open(&path).unwrap();
             conn.execute_batch(

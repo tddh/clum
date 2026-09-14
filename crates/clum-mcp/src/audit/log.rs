@@ -22,8 +22,9 @@ impl AuditDb {
                     |r| r.get(0),
                 )
                 .ok(); // 无哈希行 → 创世
-            let prev_input =
-                prev_hash.clone().unwrap_or_else(|| GENESIS_PREV.to_string());
+            let prev_input = prev_hash
+                .clone()
+                .unwrap_or_else(|| GENESIS_PREV.to_string());
 
             let row = ChainRow::from_event(&event);
             let entry = chain::entry_hash(&prev_input, &row);

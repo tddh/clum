@@ -113,7 +113,9 @@ pub(crate) fn verify_conn(conn: &Connection) -> ChainReport {
             duration_ms: r.get(13).unwrap_or(0),
             error_message: r.get(14).ok(),
         };
-        let prev_input = prev_hash.clone().unwrap_or_else(|| chain::GENESIS_PREV.to_string());
+        let prev_input = prev_hash
+            .clone()
+            .unwrap_or_else(|| chain::GENESIS_PREV.to_string());
         let recomputed = chain::entry_hash(&prev_input, &row);
         if recomputed != stored {
             report.ok = false;
@@ -239,7 +241,10 @@ mod tests {
         log(&db, "a").await;
         log(&db, "b").await;
         conn(&db)
-            .execute("UPDATE audit_events SET prev_hash='deadbeef' WHERE id=2", [])
+            .execute(
+                "UPDATE audit_events SET prev_hash='deadbeef' WHERE id=2",
+                [],
+            )
             .unwrap();
         // 不得 panic；被篡改数据 = BROKEN
         let report = db.verify_chain().await.unwrap();

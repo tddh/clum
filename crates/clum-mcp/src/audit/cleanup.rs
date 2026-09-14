@@ -1,5 +1,5 @@
-use crate::audit::AuditDb;
 use crate::audit::verify::verify_conn;
+use crate::audit::AuditDb;
 use anyhow::Result;
 
 impl AuditDb {
@@ -140,11 +140,9 @@ mod tests {
 
     fn checkpoint_count(db: &AuditDb) -> i64 {
         let conn = db.conn_ref().lock().unwrap_or_else(|e| e.into_inner());
-        conn.query_row(
-            "SELECT COUNT(*) FROM audit_chain_checkpoints",
-            [],
-            |r| r.get(0),
-        )
+        conn.query_row("SELECT COUNT(*) FROM audit_chain_checkpoints", [], |r| {
+            r.get(0)
+        })
         .unwrap()
     }
 
@@ -161,11 +159,7 @@ mod tests {
             "删除哈希行时必须记录 checkpoint"
         );
         let report = db.verify_chain().await.unwrap();
-        assert!(
-            report.ok,
-            "保留段必须仍可校验: {:?}",
-            report.first_failure
-        );
+        assert!(report.ok, "保留段必须仍可校验: {:?}", report.first_failure);
         assert_eq!(report.hashed_rows, 1);
     }
 
@@ -196,6 +190,10 @@ mod tests {
         let db = AuditDb::open_in_memory().unwrap();
         log_at(&db, "keep-1", ts(2099, 1, 1)).await;
         db.cleanup(90, 500).await.unwrap();
-        assert_eq!(checkpoint_count(&db), 0, "未删除任何行时不得产生 checkpoint");
+        assert_eq!(
+            checkpoint_count(&db),
+            0,
+            "未删除任何行时不得产生 checkpoint"
+        );
     }
 }
