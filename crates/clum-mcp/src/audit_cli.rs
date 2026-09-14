@@ -72,6 +72,10 @@ pub async fn run_audit_command() -> anyhow::Result<()> {
             #[arg(long)]
             max_size: Option<u64>,
         },
+        Verify {
+            #[arg(long)]
+            db: Option<PathBuf>,
+        },
     }
 
     let cli = AuditCli::parse_from(
@@ -145,6 +149,33 @@ pub async fn run_audit_command() -> anyhow::Result<()> {
                 format!("older_than_days={} max_size_mb={}", days, size),
             )
             .await;
+        }
+        AuditCommand::Verify { db } => {
+            let db_path = resolve_audit_db_path(db);
+            let audit_db = audit::AuditDb::open(&db_path)?;
+            let report = audit_db.verify_chain().await?;
+            match report.first_failure {
+                None => {
+                    println!("Chain check: OK");
+                    println!("Hashed events: {}", report.hashed_rows);
+                    println!("Pre-hash legacy rows: {}", report.pre_hash_rows);
+                    println!("Chain segments: {}", report.segments);
+                    println!(
+                        "Chain head: {}",
+                        report.chain_head.as_deref().unwrap_or("<empty>")
+                    );
+                }
+                Some((id, expected, actual)) => {
+                    println!("Chain check: BROKEN at event id={id}");
+                    println!("  computed: {expected}");
+                    println!("  stored:   {actual}");
+                    // Verify 不写审计事件（只读校验，不扩 AuditAction 面）；
+                    // Err 上抛 → 进程非零退出，适合 cron/告警联动。
+                    return Err(anyhow::anyhow!(
+                        "audit chain verification failed at event id={id}"
+                    ));
+                }
+            }
         }
     }
     Ok(())
