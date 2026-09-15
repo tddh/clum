@@ -23,7 +23,8 @@ pub struct ApiKeyInfo {
     pub key_prefix: String,
     pub created_at: String,
     pub last_used_at: Option<String>,
-    /// Recorded for key expiry; `agent list` does not display it yet.
+    /// Surfaced for operator listings. Key expiry is enforced on the auth path
+    /// via `KeyRecord`, not through this DTO field.
     #[allow(dead_code)]
     pub expires_at: Option<String>,
     pub revoked: bool,
