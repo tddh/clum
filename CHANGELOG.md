@@ -49,7 +49,7 @@
 ### Docs
 - SECURITY.md 曾声明 PTY 录制为明文存储并界定审计脱敏边界；同日随后落地录制加密，取代该声明（SECURITY.md 已更新为加密表述）。
 - SKILL.md：移除 wait_for_bytes 过期的"timeout_ms 未强制生效"警示（0.17.1 起已端到端强制）。
-- 新增 `clum-docs/INVARIANTS.md`：12 条设计不变量（bootstrap 语义、exec/shell_command 双通道威胁模型、daemon 运行中进程拒绝、session_create 幂等、错误码只增不改、组隔离工具清单、QUIC-only、审计 fail-open 现状、录制不脱敏边界、执行状态远端化、单实例部署边界、rmux-sdk 依赖集中）+ "不再重复踩的坑"来源清单。
+- 新增 `clum-docs/INVARIANTS.md`：13 条设计不变量（bootstrap 语义、exec/shell_command 双通道威胁模型、daemon 运行中进程拒绝、session_create 幂等、错误码只增不改、组隔离工具清单、QUIC-only、审计 fail-open 现状、录制不脱敏边界、执行状态远端化、单实例部署边界、rmux-sdk 依赖集中、工具面冻结）+ "不再重复踩的坑"来源清单。
 - README/README.zh：Server Management 节补 bootstrap 模式说明（空库时回环=超管、非回环拒绝、创建首个 Key 解除）。
 
 ## [0.17.1] — 2026-09-10
@@ -370,7 +370,7 @@
 - **Token 自动轮换**：24h TTL，Server 通过 QUIC 控制流推送新 token，Bridge 持久化到 `/etc/yunying/token`。
 
 ### Changed
-- **MCP 协议升级**：rmcp v3.0.0（2026-07-28 spec），Streamable HTTP 传输。
+- **MCP 协议升级**：rmcp v3.0.0（协商至 2025-11-25；2026-07-28 的无状态核心未启用），Streamable HTTP 传输。
 - **架构文档更新**：SKILL.md、MCP instructions 同步 Hub 架构 + CLI 命令。
 
 ## [0.8.0] — 2026-07-29
