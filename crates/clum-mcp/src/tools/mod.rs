@@ -38,7 +38,6 @@ pub struct ToolContext {
     pub stream_manager: Arc<StreamManager>,
     pub recordings_dir: PathBuf,
     pub recording_keyring: Arc<crate::recording_keyring::RecordingKeyring>,
-    #[allow(dead_code)]
     pub bridge_registry: Arc<crate::registry::BridgeRegistry>,
     pub bridge_store: Arc<crate::bridge_store::BridgeStore>,
     pub file_transfer: crate::server_config::FileTransferConfig,
