@@ -47,14 +47,9 @@ token_ttl_hours: 24
 #   global_upload_bandwidth_mbps: 0       # total upload across all streams (0=unlimited)
 #   global_download_bandwidth_mbps: 0     # total download across all streams (0=unlimited)
 #   max_upload_concurrency: 16            # concurrent uploads per host
-#   max_download_concurrency: 0           # concurrent downloads per host (0=unlimited)
 
 # ─── Inline bridge enrollment (optional) ───
 # Bridges can also be enrolled dynamically via the bridge_store SQLite DB.
 # bridges:
 #   - hostname: tf01
 #     token: "8f3a..."
-#     tags: [gpu, training]
-#     labels:
-#       dc: shanghai
-#       rack: A03

@@ -63,16 +63,8 @@ pub struct FileTransferConfig {
     #[serde(default)]
     pub global_download_bandwidth_mbps: u64,
     /// Max concurrent file uploads per host. 0 = unlimited.
-    /// Parsed but not applied: the upload path uses the hardcoded
-    /// `MAX_UPLOAD_CONCURRENCY` constant (16) in `files.rs`.
     #[serde(default = "default_upload_concurrency")]
-    #[allow(dead_code)]
     pub max_upload_concurrency: usize,
-    /// Max concurrent file downloads per host. 0 = unlimited.
-    /// Parsed but not applied: no semaphore currently consumes this value.
-    #[serde(default)]
-    #[allow(dead_code)]
-    pub max_download_concurrency: usize,
 }
 
 impl Default for FileTransferConfig {
@@ -83,7 +75,6 @@ impl Default for FileTransferConfig {
             global_upload_bandwidth_mbps: 0,
             global_download_bandwidth_mbps: 0,
             max_upload_concurrency: default_upload_concurrency(),
-            max_download_concurrency: 0,
         }
     }
 }
@@ -119,14 +110,6 @@ impl FileTransferConfig {
 pub struct BridgeEntry {
     pub hostname: String,
     pub token: String,
-    /// Parsed but not applied: `bridge_token_map()` consumes only `hostname`
-    /// and `token`.
-    #[serde(default)]
-    #[allow(dead_code)]
-    pub tags: Vec<String>,
-    #[serde(default)]
-    #[allow(dead_code)]
-    pub labels: HashMap<String, String>,
 }
 
 fn default_listen() -> String {
