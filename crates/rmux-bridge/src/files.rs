@@ -32,6 +32,7 @@ fn sanitize_path(raw: &str) -> anyhow::Result<String> {
 /// 0x05 = port forward, 0x08 = directory listing (for parallel download).
 #[allow(clippy::too_many_arguments)]
 pub async fn handle_quic_stream(
+    conn: quinn::Connection,
     send: quinn::SendStream,
     mut recv: quinn::RecvStream,
     protocol_proxy: std::sync::Arc<tokio::sync::RwLock<crate::protocol::ProtocolProxy>>,
@@ -44,7 +45,7 @@ pub async fn handle_quic_stream(
     fsync_interval_secs: u64,
     audit_db: Arc<BridgeAuditDb>,
     idle_timeout_secs: u64,
-    recording_pubkey: Arc<tokio::sync::RwLock<Option<(String, String)>>>,
+    recording_pubkey: std::sync::Arc<tokio::sync::RwLock<Option<(String, String)>>>,
 ) -> anyhow::Result<()> {
     let mut type_buf = [0u8; 1];
     recv.read_exact(&mut type_buf).await?;
@@ -96,6 +97,7 @@ pub async fn handle_quic_stream(
             let client_id = String::from_utf8(cid_buf)
                 .map_err(|_| anyhow::anyhow!("invalid client_id on 0x07 stream"))?;
             crate::interactive::handle_interactive_data(
+                conn,
                 send,
                 recv,
                 protocol_proxy,

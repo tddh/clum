@@ -1,4 +1,9 @@
 pub mod ai_panel;
+mod alt_guard;
+mod kitty_filter;
+
+use alt_guard::AltScreenGuard;
+use kitty_filter::KittyEnableFilter;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -37,11 +42,94 @@ use self::ai_panel::{AiPanel, Message, Role};
 const MOUSE_ON: &[u8] = b"\x1b[?1003l\x1b[?1015l\x1b[?1000h\x1b[?1002h\x1b[?1006h";
 const MOUSE_OFF: &[u8] = b"\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1015l\x1b[?1006l";
 
+/// 远端 TUI 程序（vim/htop，kitty 协商型）会把本地终端切进各种增强模式；
+/// 其退出恢复序列（kitty disable 等）在流断/时序异常时可能丢失，导致
+/// Ghostty 这类完整实现 kitty keyboard 协议的终端按键被永久编码为 CSI u
+/// ——实测症状：字符能输入、回车（CSI 13 u）bash 收不到行终结符；
+/// CLI 退出后本地 shell 同样假死。进入连接前与退出时强制拉回基线
+/// （tmux/mosh 的 paranoid reset 同款做法）。
+///   \x1b[<100u   kitty keyboard 栈整清（FlagStack 深度 8，pop ≥ 深度即整栈重置——
+///               单层 pop 清不净嵌套 push，实测假死源之一）
+///   \x1b[=0u     kitty flags 归零（SET 0 兜底）
+///   \x1b[?2004l  bracketed paste off
+///   MOUSE_OFF    鼠标捕获全关
+///   \x1b[?1049l  离开 alternate screen（已不在时无副作用）
+///   \x1b[?1004l  焦点事件 off
+///   \x1b[?25h    光标显示
+const TERMINAL_BASELINE_RESET: &[u8] =
+    b"\x1b[<100u\x1b[=0u\x1b[?2004l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1015l\x1b[?1006l\x1b[?1049l\x1b[?1004l\x1b[?25h";
+
 fn write_mouse(seq: &[u8]) -> std::io::Result<()> {
     use std::io::Write as _;
     let mut out = std::io::stdout();
     out.write_all(seq)?;
     out.flush()
+}
+
+fn write_terminal_baseline_reset() {
+    let _ = write_mouse(TERMINAL_BASELINE_RESET);
+}
+
+// stdout 写节奏策略（raw 与 --mux 共用）：只改「一次 write 拿多少字节」，
+// 字节内容与顺序不变。原先每 4KiB 一块各自 write+flush，终端 I/O 事件被打成
+// 高频小包，解析线程反复抢锁饿死 renderer → surface 停止绘制（输入仍通）；
+// 同类现象见 ghostty-org/ghostty#13257。
+const STDOUT_COALESCE_MAX: usize = 64 * 1024;
+const STDOUT_SPLIT_THRESHOLD: usize = 32 * 1024;
+const STDOUT_SPLIT_CHUNK: usize = 16 * 1024;
+const STDOUT_SPLIT_GAP: Duration = Duration::from_millis(1);
+
+/// 分片区间；按序拼接后与输入逐字节相等，未超阈值时返回单个整片。
+fn stdout_split_ranges(len: usize) -> Vec<std::ops::Range<usize>> {
+    let step = if len > STDOUT_SPLIT_THRESHOLD {
+        STDOUT_SPLIT_CHUNK
+    } else {
+        len
+    };
+    if step == 0 {
+        return Vec::new();
+    }
+    (0..len)
+        .step_by(step)
+        .map(|s| s..(s + step).min(len))
+        .collect()
+}
+
+/// 超大块分片写出（片间让出），普通输出一次写出。
+async fn paced_stdout_write(data: &[u8]) -> std::io::Result<()> {
+    let mut stdout = tokio::io::stdout();
+    for (i, r) in stdout_split_ranges(data.len()).into_iter().enumerate() {
+        if i > 0 {
+            tokio::time::sleep(STDOUT_SPLIT_GAP).await;
+        }
+        stdout.write_all(&data[r]).await?;
+        stdout.flush().await?;
+    }
+    Ok(())
+}
+
+/// 启动时审计本地 tty 的 termios（模拟 iTerm2 的检测修复行为，比其更彻底：
+/// 不提示、直接修）——上次异常退出若把 raw termios 遗留在内核 tty 上，
+/// 本地 shell 会敲键无回显（假死的内核侧成因）。ECHO 被关是 raw 遗留的标志。
+#[cfg(unix)]
+fn audit_and_restore_termios() {
+    use std::os::fd::AsRawFd as _;
+    let stdin = std::io::stdin();
+    unsafe {
+        let mut t: libc::termios = std::mem::zeroed();
+        if libc::tcgetattr(stdin.as_raw_fd(), &mut t) != 0 {
+            return;
+        }
+        if t.c_lflag & libc::ECHO != 0 {
+            return; // 非 raw 遗留，无需修复
+        }
+        t.c_lflag |= libc::ECHO | libc::ICANON | libc::ISIG | libc::IEXTEN;
+        t.c_iflag |= libc::ICRNL | libc::IXON | libc::BRKINT;
+        t.c_oflag |= libc::OPOST;
+        libc::tcsetattr(stdin.as_raw_fd(), libc::TCSANOW, &t);
+        let _ = libc::tcflush(stdin.as_raw_fd(), libc::TCIFLUSH);
+        eprintln!("term: restored stale raw-mode termios left by a previous crash");
+    }
 }
 
 /// Windows: raw mode 下启用 `ENABLE_VIRTUAL_TERMINAL_INPUT`，否则 ReadFile
@@ -383,6 +471,9 @@ enum SessionOutcome {
     Exit,
     /// 连接丢失，可以重连。
     Lost(quinn::ConnectionError),
+    /// 0x07 输入写入超时（背压冻结的客户端侧表现：bridge 不读、server 停读、
+    /// 流控塞满）。等价 Lost——backoff 重连重建输入通道。
+    InputStalled,
     /// 远端 rmux 子进程退出（用户在远端 Ctrl+B D 卸载、pane 进程结束等），
     /// 不应重连；退出码可能缺失（ctrl 流被干净关闭但没收到 0x83）。
     RemoteExited(Option<i32>),
@@ -410,12 +501,38 @@ pub async fn run_connect_with_ai(
     session_name: &str,
     pane_id: &str,
     watch: bool,
+    mux: bool,
     opencode_dir: &str,
     server: Option<(String, String)>,
     api_key: Option<&str>,
     cc: CcKind,
 ) -> Result<()> {
     crate::ai::init_opencode_dir(opencode_dir);
+
+    // 进程入口级终端守卫（模拟 iTerm2 的检测修复，见函数注释）
+    #[cfg(unix)]
+    audit_and_restore_termios();
+
+    // panic 兜底：任何崩溃路径也必须恢复终端（raw mode + ANSI 模式），
+    // 否则崩溃一次本地 shell 就假死一次
+    {
+        let default_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            #[cfg(unix)]
+            {
+                use crossterm::terminal::disable_raw_mode;
+                // ANSI 模式层（kitty 栈/鼠标/备用屏）的深复位
+                write_terminal_baseline_reset();
+                let _ = disable_raw_mode();
+            }
+            #[cfg(not(unix))]
+            {
+                write_terminal_baseline_reset();
+                let _ = crossterm::terminal::disable_raw_mode();
+            }
+            default_hook(info);
+        }));
+    }
 
     // AI panel (persists across reconnects)
     let ai = AiPanel::new();
@@ -437,6 +554,7 @@ pub async fn run_connect_with_ai(
             session_name,
             pane_id,
             watch,
+            mux,
             &server,
             api_key,
             cc,
@@ -459,7 +577,20 @@ pub async fn run_connect_with_ai(
                 println!("\nterm: connection lost ({reason})");
                 backoff.reset();
             }
+            Ok(SessionOutcome::InputStalled) => {
+                println!("\nterm: input channel stalled (daemon/relay backpressure), reconnecting");
+                backoff.reset();
+            }
             Err(e) => {
+                // raw 模式被 bridge/daemon 拒（daemon 缺 capability）：重试无意义，
+                // 直接终止并引导 --mux 回退
+                let msg = e.to_string();
+                if msg.contains("raw pane mode requires") || msg.contains("sdk.pane.raw_recovery") {
+                    return Err(e.context(
+                        "term: raw pane mode unavailable on this host — retry with --mux \
+                         or upgrade the remote rmux daemon",
+                    ));
+                }
                 if first_attempt {
                     return Err(e);
                 }
@@ -484,6 +615,7 @@ async fn run_session(
     session_name: &str,
     pane_id: &str,
     watch: bool,
+    mux: bool,
     server: &Option<(String, String)>,
     api_key: Option<&str>,
     cc: CcKind,
@@ -491,6 +623,12 @@ async fn run_session(
     is_ai_mode: &Arc<AtomicBool>,
     pty_buffer: &Arc<Mutex<Vec<String>>>,
 ) -> Result<SessionOutcome> {
+    // raw（默认）透传 pane 字节流；--mux 走 legacy `rmux attach-session` UI
+    let attach_mode = if mux {
+        crate::protocol::ATTACH_MODE_MUX
+    } else {
+        crate::protocol::ATTACH_MODE_RAW
+    };
     // host 为命令行传入的注册名（Central Server 模式取 server 元组，Direct 模式取 HostConfig.name），零成本。
     let hostname = match server {
         Some((_, host)) => host.as_str(),
@@ -535,6 +673,7 @@ async fn run_session(
         pane_id,
         cols,
         rows,
+        attach_mode,
     )
     .await?;
     // session 不存在时自动创建后重试一次 attach（attach 错误通过 0x82 返回）
@@ -559,6 +698,7 @@ async fn run_session(
                 pane_id,
                 cols,
                 rows,
+                attach_mode,
             )
             .await?;
             read_attached_response(&mut ctrl_recv).await?
@@ -569,9 +709,12 @@ async fn run_session(
 
     // 恢复当前屏幕内容（首次进入与断线重连都适用）
     if !scrollback.is_empty() {
-        tokio::io::stdout().write_all(&scrollback).await?;
-        tokio::io::stdout().flush().await?;
+        paced_stdout_write(&scrollback).await?;
     }
+
+    // 拉回终端基线（kitty keyboard / 括号粘贴 / 鼠标 / 备用屏等）——
+    // 防上一连接里远端 TUI 程序残留的增强模式污染本次输入编码
+    write_terminal_baseline_reset();
 
     enable_raw_mode()?;
     #[cfg(windows)]
@@ -588,14 +731,59 @@ async fn run_session(
     let is_ai_mode = is_ai_mode.clone();
     let pty_buffer = pty_buffer.clone();
 
-    // PTY reader task: reads PTY output continuously
-    // In PTY mode: writes to stdout (raw passthrough) + updates buffer
-    // In AI mode: only updates buffer (ratatui handles display)
+    // ─── stdout 泵解耦 ───
+    // reader 只读+分发，独立 writer 负责写出（含合并/分片，见上）；通道满时
+    // reader 阻塞在 send 上，把反压传回网络与远端——与 ssh 行为一致，不丢
+    // 字节、不主动断连。
+    const STDOUT_CHANNEL_CAP: usize = 64; // 64 × 4KiB ≈ 256KiB 挂载上限
+
+    let (vis_tx, mut vis_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(STDOUT_CHANNEL_CAP);
+
+    // 独立 stdout writer（kitty filter 视觉路径在此，默认关闭）
+    let stdout_writer = {
+        let mut kitty_filter = KittyEnableFilter::new(KittyEnableFilter::opt_in_requested());
+        let mut alt_guard = AltScreenGuard::new(attach_mode == crate::protocol::ATTACH_MODE_RAW);
+        tokio::spawn(async move {
+            let mut acc: Vec<u8> = Vec::with_capacity(STDOUT_COALESCE_MAX);
+            let mut filtered: Vec<u8> = Vec::with_capacity(8 * 1024);
+            let mut guarded: Vec<u8> = Vec::with_capacity(8 * 1024);
+            loop {
+                let Some(first) = vis_rx.recv().await else {
+                    break;
+                };
+                acc.clear();
+                filtered.clear();
+                guarded.clear();
+                kitty_filter.feed(&first, &mut filtered);
+                alt_guard.feed(&filtered, &mut guarded);
+                acc.extend_from_slice(&guarded);
+                while acc.len() < STDOUT_COALESCE_MAX {
+                    let Ok(chunk) = vis_rx.try_recv() else {
+                        break;
+                    };
+                    filtered.clear();
+                    guarded.clear();
+                    kitty_filter.feed(&chunk, &mut filtered);
+                    alt_guard.feed(&filtered, &mut guarded);
+                    acc.extend_from_slice(&guarded);
+                }
+                if acc.is_empty() {
+                    continue;
+                }
+                if paced_stdout_write(&acc).await.is_err() {
+                    break;
+                }
+            }
+            Ok::<_, anyhow::Error>(())
+        })
+    };
+
+    // PTY reader：读远端输出 → AI 面板行缓冲 → 视觉块分发
     let pty_reader = {
         let mode_flag = is_ai_mode.clone();
         let buffer = pty_buffer.clone();
+        let vis_tx_reader = vis_tx.clone();
         tokio::spawn(async move {
-            let mut stdout = tokio::io::stdout();
             let mut buf = [0u8; 4096];
             let mut pending = String::new();
             while let Ok(Some(n)) = pty_recv_raw.read(&mut buf).await {
@@ -616,10 +804,10 @@ async fn run_session(
                         lines.push(line);
                     }
                 }
-                // Write to stdout in PTY mode only
-                if !mode_flag.load(Ordering::Relaxed) {
-                    stdout.write_all(&buf[..n]).await?;
-                    stdout.flush().await?;
+                if !mode_flag.load(Ordering::Relaxed)
+                    && vis_tx_reader.send(buf[..n].to_vec()).await.is_err()
+                {
+                    break;
                 }
             }
             Ok::<_, anyhow::Error>(())
@@ -767,9 +955,14 @@ async fn run_session(
                 }
                 if !forward.is_empty() {
                     let mut s = pty_send.lock().await;
-                    if s.write_all(&forward).await.is_err() {
+                    match tokio::time::timeout(Duration::from_secs(3), s.write_all(&forward)).await
+                    {
+                        Ok(Ok(())) => {}
                         // 写失败几乎必然是连接已死：拿到关闭原因再退出
-                        break SessionOutcome::Lost(conn.closed().await);
+                        Ok(Err(_)) => break SessionOutcome::Lost(conn.closed().await),
+                        // 3 秒写不进去 = 下游（bridge/server 背压）不再消费——
+                        // 主循环此刻已冻结，必须逃生重连
+                        Err(_elapsed) => break SessionOutcome::InputStalled,
                     }
                 }
                 if detach {
@@ -779,12 +972,64 @@ async fn run_session(
         }
     };
 
-    // Cleanup
+    // Cleanup：MOUSE_OFF 之后拉全量基线（kitty/括号粘贴/备用屏等），
+    // 否则远端程序残留的终端状态会把本地 shell 一并假死
     let _ = write_mouse(MOUSE_OFF);
+    write_terminal_baseline_reset();
     disable_raw_mode()?;
     pty_reader.abort();
+    stdout_writer.abort();
     if matches!(outcome, SessionOutcome::Exit) {
         write_detach(&mut *ctrl_send.lock().await).await.ok();
     }
     Ok(outcome)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn reassemble(data: &[u8]) -> Vec<u8> {
+        let mut out = Vec::new();
+        for r in stdout_split_ranges(data.len()) {
+            out.extend_from_slice(&data[r]);
+        }
+        out
+    }
+
+    #[test]
+    fn split_preserves_byte_stream() {
+        for len in [
+            0usize,
+            1,
+            4096,
+            STDOUT_SPLIT_THRESHOLD - 1,
+            STDOUT_SPLIT_THRESHOLD,
+            STDOUT_SPLIT_THRESHOLD + 1,
+            STDOUT_SPLIT_THRESHOLD * 3 + 7,
+            300 * 1024,
+        ] {
+            let data: Vec<u8> = (0..len).map(|i| (i % 251) as u8).collect();
+            assert_eq!(reassemble(&data), data, "len={len}");
+        }
+    }
+
+    #[test]
+    fn normal_output_is_written_in_one_piece() {
+        assert!(stdout_split_ranges(0).is_empty());
+        let one = stdout_split_ranges(1);
+        assert_eq!(one.len(), 1);
+        assert_eq!(one[0], 0..1);
+        let full = stdout_split_ranges(STDOUT_SPLIT_THRESHOLD);
+        assert_eq!(full.len(), 1);
+        assert_eq!(full[0], 0..STDOUT_SPLIT_THRESHOLD);
+    }
+
+    #[test]
+    fn oversized_block_is_split_and_bounded() {
+        let ranges = stdout_split_ranges(200 * 1024);
+        assert!(ranges.len() > 1);
+        assert!(ranges.iter().all(|r| r.len() <= STDOUT_SPLIT_CHUNK));
+        assert_eq!(ranges.last().unwrap().end, 200 * 1024);
+    }
 }

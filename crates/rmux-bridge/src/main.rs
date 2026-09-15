@@ -170,8 +170,10 @@ async fn main() -> anyhow::Result<()> {
                                 let rec_fsync = fsync_interval_secs;
                                 let stream_audit_db = conn_audit_db.clone();
                                 let rec_pubkey = conn_recording_pubkey.clone();
+                                let conn_for_stream = conn.clone();
                                 tokio::spawn(async move {
                                     if let Err(e) = files::handle_quic_stream(
+                                        conn_for_stream,
                                         send,
                                         recv,
                                         proxy,

@@ -85,6 +85,46 @@ impl ProtocolProxy {
         }
     }
 
+    /// 解析 pane 所在窗口的索引。attach 时解析一次并缓存：SDK 不公开 pane→window
+    /// 的映射，只能用 `display-message` 取（会 spawn 一次 rmux 进程）。
+    pub async fn window_index_of_pane(&self, pane_id: &str) -> Option<u32> {
+        let args = vec![
+            "display-message".to_string(),
+            "-p".to_string(),
+            "-t".to_string(),
+            pane_id.to_string(),
+            "#{window_index}".to_string(),
+        ];
+        match self.rmux.cmd(args).await {
+            Ok(run) if run.exit.unwrap_or(0) == 0 => {
+                String::from_utf8_lossy(&run.stdout).trim().parse().ok()
+            }
+            _ => None,
+        }
+    }
+
+    /// 把窗口尺寸显式设为 (cols, rows)。
+    ///
+    /// 必须走 resize-window 而不是 resize-pane：会话开启 `status` 时窗口高度上限
+    /// 被压到「客户端行数 − 1」，只 resize-pane 会被钳在窗口内，pane 比本地终端
+    /// 少一行，光标停在倒数第二行（raw 直通没有 rmux 客户端，状态栏本不渲染，
+    /// 却仍限制窗口高度）。
+    pub async fn resize_window_sized(
+        &self,
+        session_name: &str,
+        window_index: u32,
+        cols: u16,
+        rows: u16,
+    ) -> Result<(), String> {
+        let sn = SessionName::new(session_name).map_err(|e| e.to_string())?;
+        let session = self.rmux.session(sn).await.map_err(|e| e.to_string())?;
+        session
+            .window(window_index)
+            .resize(Some(cols), Some(rows))
+            .await
+            .map_err(|e| e.to_string())
+    }
+
     pub async fn handle_select_window(
         &self,
         session_name: &str,

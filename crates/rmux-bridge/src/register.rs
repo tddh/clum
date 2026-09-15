@@ -301,8 +301,10 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
                         let audit_db = config.audit_db.clone();
                         let idle_timeout = config.idle_timeout_secs;
                         let rec_pubkey = config.recording_pubkey.clone();
+                        let conn_for_stream = conn.clone();
                         tokio::spawn(async move {
                             if let Err(e) = crate::files::handle_quic_stream(
+                                conn_for_stream,
                                 stream_send,
                                 stream_recv,
                                 proxy,

@@ -77,6 +77,7 @@ enum Commands {
     ///   clum-cli term prod-web-01 --session debug
     ///   clum-cli term prod-web-01 --pane %1
     ///   clum-cli term prod-web-01 --watch
+    ///   clum-cli term prod-web-01 --mux
     Term {
         host: String,
 
@@ -89,6 +90,11 @@ enum Commands {
         /// Observe only — keyboard input is not forwarded to the remote host.
         #[arg(long)]
         watch: bool,
+
+        /// Attach through a full `rmux attach-session` UI (status bar, Ctrl+B
+        /// prefix) instead of the default transparent raw pane stream.
+        #[arg(long)]
+        mux: bool,
 
         #[arg(long, default_value = ".")]
         opencode_dir: String,
@@ -233,6 +239,7 @@ async fn main() -> anyhow::Result<()> {
             session,
             pane,
             watch,
+            mux,
             opencode_dir,
         } => {
             if let Some(server_addr) = &cli.server_addr {
@@ -268,6 +275,7 @@ async fn main() -> anyhow::Result<()> {
                     &session,
                     &pane,
                     watch,
+                    mux,
                     &opencode_dir,
                     Some((server_addr.clone(), host.clone())),
                     cli.api_key.as_deref(),
@@ -291,6 +299,7 @@ async fn main() -> anyhow::Result<()> {
                     &session,
                     &pane,
                     watch,
+                    mux,
                     &opencode_dir,
                     None,
                     None,

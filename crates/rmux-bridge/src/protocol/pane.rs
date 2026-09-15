@@ -879,4 +879,13 @@ impl ProtocolProxy {
             .await
             .map_err(|e| anyhow::anyhow!("{}", e))
     }
+
+    /// raw pane 直通模式（term 透明字节流）要求的 daemon 能力
+    /// （P0 实测 2026-09-14：现网 daemon 全支持；缺capability时 interactive 层拒绝并引导 `--mux`）
+    pub async fn supports_raw_recovery(&self) -> bool {
+        self.rmux
+            .has_capability("sdk.pane.raw_recovery")
+            .await
+            .unwrap_or(false)
+    }
 }
