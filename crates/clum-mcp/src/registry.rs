@@ -4,14 +4,20 @@ use std::time::Instant;
 
 use tokio::sync::RwLock;
 
-#[allow(dead_code)]
 pub struct BridgeConn {
     pub conn: quinn::Connection,
     pub hostname: String,
     pub tags: Vec<String>,
     pub labels: HashMap<String, String>,
+    /// Reported by the bridge at registration. Not consumed from this
+    /// in-memory copy: the `host_capabilities` tool queries the bridge live,
+    /// and the same value is persisted in the `bridges` SQLite table.
+    #[allow(dead_code)]
     pub capabilities: Vec<String>,
     pub version: String,
+    /// Reported by the bridge at registration; also persisted in the
+    /// `bridges` SQLite table. Not read from the in-memory copy yet.
+    #[allow(dead_code)]
     pub machine_id: String,
     pub os_info: String,
     pub registered_at: Instant,
@@ -20,7 +26,6 @@ pub struct BridgeConn {
 }
 
 impl BridgeConn {
-    #[allow(dead_code)]
     pub async fn send_control_frame(&self, msg: &serde_json::Value) -> anyhow::Result<()> {
         let mut send = self.control_send.lock().await;
         let data = serde_json::to_vec(msg)?;
@@ -31,14 +36,18 @@ impl BridgeConn {
     }
 }
 
-#[allow(dead_code)]
 pub struct BridgeInfo {
     pub hostname: String,
     pub tags: Vec<String>,
     pub labels: HashMap<String, String>,
+    /// Registration-time metadata, retained for future surfacing in
+    /// `host_list`. No caller reads these yet.
+    #[allow(dead_code)]
     pub version: String,
+    #[allow(dead_code)]
     pub os_info: String,
     pub online: bool,
+    #[allow(dead_code)]
     pub registered_secs_ago: u64,
     pub remote_addr: Option<String>,
 }
@@ -75,7 +84,6 @@ impl BridgeRegistry {
         }
     }
 
-    #[allow(dead_code)]
     pub async fn get(&self, hostname: &str) -> Option<Arc<BridgeConn>> {
         self.connections.read().await.get(hostname).cloned()
     }
