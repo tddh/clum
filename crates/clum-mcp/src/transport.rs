@@ -119,8 +119,9 @@ async fn open_json_bi(
 
 pub enum BridgeStream {
     Quic {
-        /// Kept to hold the QUIC connection alive for the lifetime of the
-        /// streams: dropping the last `Connection` handle closes `send`/`recv`.
+        /// Extra keep-alive reference. In quinn 0.11 the stream handles already
+        /// hold their own connection references, so this field is technically
+        /// redundant — retained deliberately to make the coupling explicit.
         #[allow(dead_code)]
         conn: quinn::Connection,
         send: quinn::SendStream,
