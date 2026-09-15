@@ -101,7 +101,7 @@ graph LR
 | **输出等待**    | `wait_for_text` 等待终端出现指定文本，`wait_exit` 等待进程退出，`wait_stable` 等待输出稳定，`wait_for_bytes` 等待原始字节序列 |
 | **文件传输**    | QUIC 通道上传/下载（`clum-cli` 与 MCP 工具），目录递归传输 + 并发 + `--exclude` glob 过滤，分块流式 + SHA-256 校验 |
 | **端口转发**    | 通过 QUIC 隧道访问远程内网服务（数据库、API 等）                                              |
-| **多主机编排**   | 主机注册表 + 分组/标签/模式过滤，broadcast_keys 多窗格广播                                    |
+| **多主机编排**   | 主机注册表 + 分组/标签/labels 过滤，broadcast_keys 多窗格广播                                    |
 | **操作审计**    | SQLite 审计日志 + bridge 端 PTY 全量录制（asciinema v2 内容，X25519 + AES-256-GCM 静态加密）+ 事件日志 + 推送/定期同步 + `clum-cli replay` 回放 |
 | **终端状态感知**  | `capture_pane`、`exec`、`wait_for_text`、`wait_stable`、`pane_info` 返回 `terminal_state`（ready/running/editor/pager/password/confirm/repl/unknown）和光标位置，让 AI Agent 理解终端当前状态 |
 | **exec 安全检查** | `exec` 在终端非 `ready` 状态时拒绝执行（如在 vim、less、密码提示中），状态检测不可用（连接错误或旧版 bridge）时同样拒绝（fail-closed），返回 `refused: true` 并给出操作建议，防止命令注入到非 shell 上下文 |
@@ -234,7 +234,7 @@ clum-mcp bridge join <hostname>   # 生成新 join token（离线恢复用）
 
 | 模式 | 说明 |
 |------|------|
-| CA 验证 | Server→bridge 连接始终通过 CA 根证书（`--ca-cert`）校验 bridge 证书——完整证书链 + 主机名校验，无免校验模式。纯 enrolled 部署（bridge 主动连接）可省略 `--ca-cert`；直连模式必须提供，否则相关连接失败。 |
+| CA 验证 | Server→bridge 连接始终通过 CA 根证书（`--ca-cert`）校验 bridge 证书——完整证书链 + 主机名校验，无免校验模式。纯 enrolled 部署（bridge 主动连接）可省略 `--ca-cert`。直连模式若省略，会回退到系统 WebPKI 根证书——仅对公信 CA 签发的 bridge 证书有效；私有 CA 必须显式指定。 |
 
 **生产环境建议**：自建 CA，为每台 bridge 签发证书，MCP server 只持有 CA 根证书。
 
@@ -258,9 +258,13 @@ clum-mcp audit stats
 
 # 手动清理
 clum-mcp audit cleanup --older-than 30
+
+# 校验哈希链完整性（链头可复制到外部系统做离线比对，见 INVARIANTS.md §8）
+clum-mcp audit verify
+# Chain check: OK / Hashed events: 12345 / Chain head: <hex64>
 ```
 
-审计数据默认存储在 `~/.clum/audit.db`，保留 90 天，500MB 软上限（清理按最旧事件裁剪，文件大小可能瞬时超过上限）。
+审计数据默认存储在 `~/.clum/audit.db`，保留 90 天，500MB 软上限（清理按最旧事件裁剪，文件大小可能瞬时超过上限）。每条事件都被封入前向哈希链（`entry_hash = SHA256(prev_hash ‖ payload)`）；`audit verify` 重算全链，首次发现被篡改或缺失的记录即以非零退出码报错。
 
 ## 知识库沉淀（设计理念）
 
@@ -374,7 +378,7 @@ echo "$(cat)" >> knowledge.jsonl && git commit -am "新增排障经验条目"
 - **BBR 用于内网 / CUBIC 用于公网**：BBR 基于带宽和 RTT 模型调速，少量丢包不大幅降窗——用于内网目标；公网目标用 CUBIC 丢包退避。自 v0.15.0 起默认 `auto`（见下）
 - **丢包自适应拥塞控制**：`auto` 模式下内网目标用 BBR（最大吞吐），公网目标用 CUBIC（丢包时主动退避，行为接近 TCP，不再断连）。各组件可显式覆盖：`clum-cli --cc`（或 `CLUM_CC`）、server `CLUM_CC`、bridge `BRIDGE_CC`
 - **接收方算哈希**：发送方单遍流式传输，接收方边收边算 SHA256——发送侧磁盘 I/O 减半
-- **统一 1MB buffer**：MCP 端与 Bridge 端均使用 `COPY_BUF_SIZE = 1MB` 的 `tokio::io::copy_with_buf`，消除跨边界缓冲
+- **统一 1MB buffer**：MCP 端、Bridge 端与 CLI 端口转发路径共用 `COPY_BUF_SIZE = 1MB`，消除跨边界缓冲
 
 ## 开发
 

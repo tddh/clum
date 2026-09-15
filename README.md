@@ -234,7 +234,7 @@ clum-mcp bridge join <hostname>   # Generate a new join token (offline recovery)
 
 | Mode | Description |
 |------|-------------|
-| CA verified | All server→bridge connections verify the bridge certificate against the CA root (`--ca-cert`) — full chain + hostname check, no insecure mode. `--ca-cert` may be omitted in pure enrolled deployments (bridges initiate the connection); direct-mode connections require it and fail without it. |
+| CA verified | All server→bridge connections verify the bridge certificate against the CA root (`--ca-cert`) — full chain + hostname check, no insecure mode. `--ca-cert` may be omitted in pure enrolled deployments (bridges initiate the connection). In direct mode, omitting it falls back to the system WebPKI roots — which works only for publicly-signed bridge certificates; a private CA must be passed explicitly. |
 
 **Production**: Run your own CA, issue per-bridge certificates, MCP server holds only the CA root.
 
@@ -380,7 +380,7 @@ Key design choices:
 - **BBR for private, CUBIC for public**: BBR's model-based rate control tolerates packet loss without drastic window reduction (used on private-network targets); CUBIC backs off on loss for public targets. Since v0.15.0 the default is `auto` — see loss-adaptive below.
 - **Loss-adaptive congestion control**: `auto` mode picks BBR for private-network targets (max throughput) and CUBIC for public targets (backs off on loss like TCP — public links at full bandwidth no longer drop the connection). Override per component: `clum-cli --cc` (or `CLUM_CC` env), server `CLUM_CC`, bridge `BRIDGE_CC`.
 - **Receiver computes hash**: Sender streams data in one pass; receiver calculates SHA256 inline — halves disk I/O on the sending side
-- **Unified 1MB buffer**: Both MCP and Bridge use `COPY_BUF_SIZE = 1MB` for `tokio::io::copy_with_buf`, aligned to avoid cross-boundary buffering
+- **Unified 1MB buffer**: `COPY_BUF_SIZE = 1MB` is shared by MCP, Bridge, and the CLI port-forward path — aligned to avoid cross-boundary buffering
 
 ## Development
 

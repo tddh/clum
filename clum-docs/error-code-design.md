@@ -105,7 +105,7 @@ if has("pane id") && has("not found") || has("can't find pane") || has("pane not
 
 ### P2-8：deploy_bridge 双轨状态（`status` 与 `error_code` 并存）
 
-`deploy.rs` 返回 `{ok:false, status:"first_time_deploy"}` 等 8 种小写 status，同时 `enrich_error` 还会基于 error 消息补一个 error_code。TOOLS.md 的 deploy 章节有 status 表，但通用错误码表未说明二者关系——调用方需知道"deploy 场景看 status，其余看 error_code"。
+`deploy.rs` 返回 `{ok:false, status:"first_time_deploy"}` 等 9 种小写 status，同时 `enrich_error` 还会基于 error 消息补一个 error_code。TOOLS.md 的 deploy 章节有 status 表，但通用错误码表未说明二者关系——调用方需知道"deploy 场景看 status，其余看 error_code"。
 
 ### P2-9：bridge 帧层错误格式不一致（`{"error": ...}` 无 `ok:false`）
 

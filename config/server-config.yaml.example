@@ -1,7 +1,9 @@
 # clum MCP Server configuration
 # Usage: clum-mcp --mode http --config /etc/clum/server-config.yaml
 #
-# All values can be overridden by CLI args (e.g. --listen, --ca-cert).
+# Most values can be overridden by CLI args (e.g. --listen, --ca-cert).
+# Exceptions with no CLI override: server_addr, token_ttl_hours,
+# recording_keys_dir, and the whole file_transfer block.
 
 # ─── Network ───
 listen: "0.0.0.0:9788"

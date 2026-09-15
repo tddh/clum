@@ -7,7 +7,7 @@
 1. **默认会话**：所有 clum 操作必须使用 `session_name="clum"`，除非用户明确指定其他会话名
 2. **默认 Pane**：`pane_id` 可省略，server 自动选择 window 0 中编号最小的 pane。破坏性工具（`close_pane`、`paste_buffer`、`respawn_pane`）必须显式指定
 3. **禁止随意创建会话**：不要自作主张创建 `test-session`、`debug-session` 等新会话，除非用户明确要求
-4. **先 attach 后 create**：操作前先 `session_attach` 检查会话是否存在，不存在才 `session_create`
+4. **`session_create` 幂等，无需先探测**：会话已存在则复用并返回首个 pane（bridge 侧 `CreateOrReuse`）；`session_attach` 是**可选的只读存在性检查**，仅在需要 inspect 已有会话时调用
 5. **保留会话**：执行完命令后，不要主动清理 session（禁止调用 `kill_session`、`close_window`、`close_pane`），除非用户明确要求"清理"、"关闭"、"销毁"
 
 6. **以用户指令为主**：用户的明确指令优先于以上所有默认规则。如果用户指令信息不明确（如未指定主机、会话名、操作目标等），必须先向用户确认再执行，禁止猜测或自作主张

@@ -20,7 +20,7 @@
   "ok": false,
   "error": "pane id %99 was not found",
   "error_code": "PANE_NOT_FOUND",
-  "recovery_hint": "list_window_panes 确认当前 pane_id（pane 可能已关闭）",
+  "recovery_hint": "confirm the current pane_id with list_window_panes (the pane may have been closed)",
   "retryable": false
 }
 ```
