@@ -62,7 +62,7 @@ pub struct FileTransferConfig {
     /// Global download bandwidth in Mbps across all streams. 0 = unlimited.
     #[serde(default)]
     pub global_download_bandwidth_mbps: u64,
-    /// Max concurrent file uploads per host. 0 = unlimited.
+    /// Max concurrent file uploads per upload operation. 0 = unlimited.
     #[serde(default = "default_upload_concurrency")]
     pub max_upload_concurrency: usize,
 }
@@ -212,5 +212,46 @@ mod tests {
         assert_eq!(down.per_stream, 0, "default download should be unlimited");
         assert_eq!(up.global, 0);
         assert_eq!(down.global, 0);
+    }
+
+    #[test]
+    fn default_upload_concurrency_is_16() {
+        assert_eq!(default_upload_concurrency(), 16);
+        assert_eq!(FileTransferConfig::default().max_upload_concurrency, 16);
+    }
+
+    #[test]
+    fn absent_file_transfer_block_falls_back_to_defaults() {
+        let cfg: ServerConfig =
+            serde_norway::from_str("server_addr: \"1.2.3.4:9788\"").expect("minimal config parses");
+        assert_eq!(cfg.file_transfer.max_upload_concurrency, 16);
+    }
+
+    #[test]
+    fn legacy_config_keys_are_ignored_not_rejected() {
+        // Backward compatibility guard: configs written before the removal of
+        // `max_download_concurrency` and the inline-bridge `tags`/`labels`
+        // fields must keep parsing (serde silently ignores unknown keys).
+        let legacy = r#"server_addr: "1.2.3.4:9788"
+file_transfer:
+  max_upload_concurrency: 4
+  max_download_concurrency: 8
+bridges:
+  - hostname: legacy-host
+    token: tok
+    tags: [gpu]
+    labels:
+      dc: sh
+"#;
+        let cfg: ServerConfig = serde_norway::from_str(legacy).expect("legacy config still parses");
+        assert_eq!(cfg.file_transfer.max_upload_concurrency, 4);
+        assert_eq!(cfg.bridges.len(), 1);
+        assert_eq!(cfg.bridges[0].hostname, "legacy-host");
+        assert_eq!(
+            cfg.bridge_token_map()
+                .get("legacy-host")
+                .map(String::as_str),
+            Some("tok")
+        );
     }
 }
