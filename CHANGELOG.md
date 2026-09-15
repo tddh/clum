@@ -12,6 +12,7 @@
 - **mux 下光标落到视口外**：窗口比 client 可用区高 1 行，导致光标出现在倒数第二行；现按模式统一计算窗口与 pane 尺寸。
 - **stdout 停摆不再杀连接**：改为纯反压（通道满时阻塞 send，与 ssh 行为一致），不丢字节、不主动断连。
 - **输出写合并与分片**：已到达的块合并为一次 write（上限 64KiB，非阻塞 `try_recv`，不引入等待），超大块按 16KiB 分片并让出，避免高频小包饿死 renderer。
+- **终端应答里的 BEL 不再被误判成 Ctrl+G**（CLI 输入侧）：TUI 会查询终端能力（如 OSC 11 查背景色 `ESC ] 11 ; ? BEL`），Ghostty 的应答终结符**跟随查询**（上游 `osc.zig` 的 `Terminator.init`），应答写回 tty 输入队列后被当作键盘输入，其末尾的 `0x07` 命中逐字节匹配 → **凭空弹出 AI 面板**（表现为"一运行 TUI 就跳到 AI 面板，按 Ctrl+G 回来才看到程序"）。现输入字节先过一个小型转义序列扫描器（**状态跨 `read` 保持**，一个序列可能跨越两次读取）：CSI / OSC / DCS / SOS / PM / APC 序列内的字节直接透传，只有序列外的裸 `0x07` 才算 Ctrl+G；`0x1c`（detach）、`0x0c`（清 AI 历史）同样受保护。6 个单测覆盖（跨 read 终结、序列外照拦、ST 终结、CSI、OSC）。
 
 ### Removed
 - **为已证伪假设写的机制**：`freeze_watchdog`、XTVERSION 探针、osascript 注入 Ctrl+Shift+R、RIS、`0x04` repaint 通路、stdout 停摆取证 dump。根因已定位为滚动区域泄漏，该链条既无效又有害（清屏、抢焦点、制造 keyframe 洪流）。

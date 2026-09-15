@@ -108,6 +108,70 @@ async fn paced_stdout_write(data: &[u8]) -> std::io::Result<()> {
     Ok(())
 }
 
+/// 输入流的转义序列扫描器：序列内部的字节不做本地控制键拦截。
+///
+/// 必须存在：stdin 上混有终端对远端 TUI 查询的应答（如 OSC 11 查背景色
+/// `ESC ] 11 ; ? BEL`），而 Ghostty 的应答终结符**跟随查询**（上游 `osc.zig`
+/// 的 `Terminator.init`），于是应答末尾的 0x07 会被逐字节匹配误判成 Ctrl+G。
+/// 状态必须跨 `read` 保持：一个序列可能被拆到两次读取里。
+#[derive(Default)]
+struct EscScanner {
+    state: EscState,
+}
+
+#[derive(Default, Clone, Copy, PartialEq)]
+enum EscState {
+    #[default]
+    Ground,
+    /// ESC 后等下一个字节定序列类型。
+    Esc,
+    /// CSI：`ESC [` 起，0x40..=0x7E 终结。
+    Csi,
+    /// OSC/DCS/SOS/PM/APC：`ESC ]`/`P`/`X`/`^`/`_` 起，BEL 或 ST(`ESC \`) 终结。
+    Str,
+    /// `Str` 中收到 ESC，可能是 ST 的前半。
+    StrEsc,
+}
+
+impl EscScanner {
+    /// 返回 true 表示该字节属于转义序列内部（禁止本地拦截）。
+    fn feed(&mut self, b: u8) -> bool {
+        use EscState::*;
+        self.state = match self.state {
+            Ground => {
+                if b == 0x1b {
+                    Esc
+                } else {
+                    return false;
+                }
+            }
+            Esc => match b {
+                b'[' => Csi,
+                b']' | b'P' | b'X' | b'^' | b'_' => Str,
+                // ESC 序列的中间字节（0x20..=0x2F），如 `ESC ( B`
+                0x20..=0x2f => Esc,
+                _ => Ground,
+            },
+            Csi => match b {
+                0x40..=0x7e => Ground,
+                _ => Csi,
+            },
+            Str => match b {
+                0x07 => Ground,
+                0x1b => StrEsc,
+                _ => Str,
+            },
+            StrEsc => match b {
+                b'\\' => Ground,
+                0x07 => Ground,
+                0x1b => StrEsc,
+                _ => Str,
+            },
+        };
+        true
+    }
+}
+
 /// 启动时审计本地 tty 的 termios（模拟 iTerm2 的检测修复行为，比其更彻底：
 /// 不提示、直接修）——上次异常退出若把 raw termios 遗留在内核 tty 上，
 /// 本地 shell 会敲键无回显（假死的内核侧成因）。ECHO 被关是 raw 遗留的标志。
@@ -823,6 +887,7 @@ async fn run_session(
         tokio::signal::unix::signal(tokio::signal::unix::SignalKind::window_change())?;
     let mut stdin = tokio::io::stdin();
     let mut inbuf = [0u8; 1024];
+    let mut esc = EscScanner::default();
 
     enum Input {
         Bytes(usize),
@@ -925,6 +990,11 @@ async fn run_session(
                 let mut forward: Vec<u8> = Vec::with_capacity(n);
                 let mut detach = false;
                 for &b in &inbuf[..n] {
+                    // 序列内字节（如终端对 OSC 查询的应答）不是本地按键，整体透传。
+                    if esc.feed(b) {
+                        forward.push(b);
+                        continue;
+                    }
                     match b {
                         0x07 => {
                             // Ctrl+G → AI 模式
@@ -995,6 +1065,60 @@ mod tests {
             out.extend_from_slice(&data[r]);
         }
         out
+    }
+
+    #[test]
+    fn esc_scanner_ignores_ctrl_g_inside_osc_response() {
+        let mut s = EscScanner::default();
+        for &b in b"\x1b]11;rgb:1e1e/1e1e/1e1e\x07" {
+            assert!(s.feed(b), "OSC 应答内字节不得被拦截: {b:#04x}");
+        }
+    }
+
+    #[test]
+    fn esc_scanner_still_catches_bare_ctrl_g() {
+        let mut s = EscScanner::default();
+        assert!(!s.feed(0x07));
+    }
+
+    #[test]
+    fn esc_scanner_keeps_state_across_reads() {
+        let mut s = EscScanner::default();
+        for &b in b"\x1b]11;?" {
+            assert!(s.feed(b));
+        }
+        assert!(s.feed(0x07), "跨 read 的 OSC 终结 BEL 不得被拦截");
+        assert!(!s.feed(0x07), "序列结束后应回到 Ground");
+    }
+
+    #[test]
+    fn esc_scanner_skips_csi_sequence() {
+        let mut s = EscScanner::default();
+        for &b in b"\x1b[?997;1n" {
+            assert!(s.feed(b));
+        }
+        assert!(!s.feed(b'a'));
+    }
+
+    #[test]
+    fn esc_scanner_handles_st_terminated_string() {
+        let mut s = EscScanner::default();
+        for &b in b"\x1b]0;title\x1b\\" {
+            assert!(s.feed(b));
+        }
+        assert!(!s.feed(0x07));
+    }
+
+    #[test]
+    fn esc_scanner_only_blocks_ctrl_g_outside_sequences() {
+        let mut s = EscScanner::default();
+        let mut blocked = 0;
+        for &b in b"ls\x1b]10;rgb:ffff/ffff/ffff\x07\x07ls" {
+            if !s.feed(b) && b == 0x07 {
+                blocked += 1;
+            }
+        }
+        assert_eq!(blocked, 1, "只应拦截序列外的那个 0x07");
     }
 
     #[test]
