@@ -186,6 +186,17 @@ async fn upload_single(
     }
 }
 
+/// Map the configured `max_upload_concurrency` to a semaphore permit count.
+/// `0` means unlimited; oversized values are clamped because `Semaphore::new`
+/// panics above `Semaphore::MAX_PERMITS`.
+fn resolve_upload_permits(max_concurrency: usize) -> usize {
+    if max_concurrency == 0 {
+        Semaphore::MAX_PERMITS
+    } else {
+        max_concurrency.min(Semaphore::MAX_PERMITS)
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn upload_dir(
     host: &HostConfig,
@@ -208,12 +219,7 @@ async fn upload_dir(
 
     let conn = Arc::new(get_conn(host, registry, ca_cert_path).await?);
 
-    let permits = if max_concurrency == 0 {
-        Semaphore::MAX_PERMITS
-    } else {
-        max_concurrency
-    };
-    let semaphore = Arc::new(Semaphore::new(permits));
+    let semaphore = Arc::new(Semaphore::new(resolve_upload_permits(max_concurrency)));
     let mut handles = Vec::new();
 
     for (local, remote) in files {
@@ -655,5 +661,36 @@ mod tests {
         for p in good_paths {
             assert_eq!(sanitize_local_path(p).unwrap(), p);
         }
+    }
+
+    #[test]
+    fn test_resolve_upload_permits_zero_means_unlimited() {
+        assert_eq!(resolve_upload_permits(0), Semaphore::MAX_PERMITS);
+    }
+
+    #[test]
+    fn test_resolve_upload_permits_passes_through_normal_values() {
+        assert_eq!(resolve_upload_permits(1), 1);
+        assert_eq!(resolve_upload_permits(16), 16);
+        assert_eq!(resolve_upload_permits(256), 256);
+    }
+
+    #[test]
+    fn test_resolve_upload_permits_accepts_exact_max() {
+        assert_eq!(
+            resolve_upload_permits(Semaphore::MAX_PERMITS),
+            Semaphore::MAX_PERMITS
+        );
+    }
+
+    #[test]
+    fn test_resolve_upload_permits_clamps_oversized() {
+        // Semaphore::new panics above MAX_PERMITS, so oversized config values
+        // must be clamped rather than passed through.
+        assert_eq!(
+            resolve_upload_permits(Semaphore::MAX_PERMITS + 1),
+            Semaphore::MAX_PERMITS
+        );
+        assert_eq!(resolve_upload_permits(usize::MAX), Semaphore::MAX_PERMITS);
     }
 }
