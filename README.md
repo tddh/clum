@@ -95,7 +95,7 @@ graph LR
 
 | Feature | Description |
 |---------|-------------|
-| **Interactive terminal** | `clum-cli term` — PTY-passthrough to remote rmux sessions (auto-creates the session if it doesn't exist) + built-in AI chat panel (Ctrl+G) with real-time SSE streaming, supports vim/htop/TUI |
+| **Interactive terminal** | `clum-cli term` — **transparent raw pane passthrough by default** (no rmux UI layer, ssh-like); `--mux` opts into the full `rmux attach-session` UI (status bar + Ctrl+B prefix). Auto-creates the session if it doesn't exist. Built-in AI chat panel (Ctrl+G) with real-time SSE streaming; supports vim/htop/TUI |
 | **Session management** | Create/destroy/list sessions, multi-pane splits, window layouts |
 | **Command execution** | `exec` one-shot execution (sentinel detection + exit code, full scrollback capture for large outputs, auto-reconnect on connection drop), interactive programs via send_keys + capture_pane |
 | **Output waiting** | `wait_for_text` for terminal text, `wait_exit` for process exit, `wait_stable` for output quiescence, `wait_for_bytes` for raw byte sequences |

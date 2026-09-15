@@ -95,7 +95,7 @@ graph LR
 
 | 能力          | 说明                                                                         |
 | ----------- | -------------------------------------------------------------------------- |
-| **交互式终端直连** | `clum-cli term` CLI 命令，PTY 透传至远程 rmux 会话（会话不存在时自动创建）+ 内置 AI 对话面板（Ctrl+G），SSE 实时流式输出，支持 vim/htop 等 TUI 程序 |
+| **交互式终端直连** | `clum-cli term` 默认 **raw 透明直通**（无 rmux UI 层，交互行为对齐 ssh）；`--mux` 切换到完整 `rmux attach-session` UI（状态栏 + Ctrl+B 前缀）。会话不存在时自动创建。内置 AI 对话面板（Ctrl+G），SSE 实时流式输出，支持 vim/htop 等 TUI 程序 |
 | **交互式会话管理** | 创建/销毁/列举会话，多窗格分屏，窗口布局                                                      |
 | **命令执行**    | `exec` 一站式执行（sentinel 检测 + exit code 提取，scrollback 全量捕获大输出，断连自动重连恢复），支持交互式程序（send_keys + capture_pane） |
 | **输出等待**    | `wait_for_text` 等待终端出现指定文本，`wait_exit` 等待进程退出，`wait_stable` 等待输出稳定，`wait_for_bytes` 等待原始字节序列 |

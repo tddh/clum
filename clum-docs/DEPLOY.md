@@ -26,7 +26,7 @@
 ```
 
 - **clum-mcp (Central Server)**: 中央 MCP Server，双栈监听。AI 客户端通过 HTTP 连接，Bridge 通过 QUIC 反向注册。
-- **clum-cli**: 命令行工具，通过 QUIC 连接 Server 中继到 Bridge。支持 term/push/pull/forward/list/replay；push/pull 支持文件与目录（1MB 分块流式传输，目录上传支持 `--exclude` 过滤）。拥塞控制默认 `auto`（内网目标→BBR，公网目标→CUBIC 丢包退避），可用 `--cc bbr|cubic|auto` 显式覆盖（也支持 `CLUM_CC` 环境变量）。
+- **clum-cli**: 命令行工具，通过 QUIC 连接 Server 中继到 Bridge。支持 term/push/pull/forward/list/replay；`term` 默认 **raw 透明直通**（无 rmux UI 层，行为对齐 ssh），`--mux` 启用完整 `rmux attach-session` UI（状态栏 + Ctrl+B 前缀）；push/pull 支持文件与目录（1MB 分块流式传输，目录上传支持 `--exclude` 过滤）。拥塞控制默认 `auto`（内网目标→BBR，公网目标→CUBIC 丢包退避），可用 `--cc bbr|cubic|auto` 显式覆盖（也支持 `CLUM_CC` 环境变量）。
 - **rmux-bridge**: 部署在每台目标 Linux 主机，主动连接 Server 注册，处理工具执行、文件 I/O、PTY、录制推送。
 - **RMUX daemon**: 每个 Linux 主机上的终端多路复用器。
 
@@ -407,6 +407,7 @@ clum-mcp audit cleanup --older-than 30
 | 症状 | 检查 |
 |------|------|
 | CLI `term` 后按键无效、终端卡死 | rmux 0.9 将 `allow-passthrough` 默认改为 `off`。项目 `rmux-daemon.service` 通过 `--config-default` 自动启用 passthrough。若使用自定义 service，确认启动参数包含 `--config-default` 或手动 `rmux set -g allow-passthrough on`，然后 `systemctl restart rmux-daemon`。（注：仓库 `config/rmux.conf` 不会被任何部署脚本安装，仅作参考；passthrough 实际由 daemon 启动参数决定。） |
+| TUI（htop 等）退出后屏幕卡死、输出覆盖同一行（Ghostty） | Ghostty 的滚动区域（DECSTBM）是 **Terminal 级全局状态且切屏不恢复**；TUI 在备用屏设置滚动区域后退出不重置 → 区域泄漏到主屏 → 光标落在区域外的最后一行，后续换行不触发滚动、输出全部覆盖写在同一行。CLI 侧 `alt_guard` 已在离开备用屏（`1049l`/`47l`/`1047l`）后补发 `ESC[s ESC[r ESC[u`（仅 raw 模式，字节流无损）。升级 `clum-cli` 即可，无需改动远端。 |
 | MCP 工具返回 `connection refused` | `systemctl status rmux-bridge`，确认 bridge 在运行 |
 | `authentication failed` | 检查 `bridge.env` 中的 `BRIDGE_AUTH_TOKEN` 与 `hosts.yaml` 中 `bridge_token` 是否一致 |
 | TLS 握手失败 | `--ca-cert` 指向的证书是否与 bridge 端一致 |

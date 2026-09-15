@@ -1,5 +1,25 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **`term` 默认 raw 透明直通，`--mux` 保留完整 rmux UI**：`clum-cli term` 默认改为**透明 raw 直通**——本地终端直接消费 pane 字节流，无 rmux UI 层（无状态栏、无 Ctrl+B 前缀），交互行为对齐 ssh。新增 `--mux` 显式启用完整 `rmux attach-session` UI（状态栏 + Ctrl+B 前缀）。
+- **attach payload 的 mode 尾字节**：在原有 payload 后追加 1 字节（`0x00` mux / `0x01` raw）。旧 CLI 不带该字节时 bridge 回落 mux，**旧客户端零改动兼容**。bridge raw 桥订阅 pane 输出经 QUIC 转发；首帧 Rebase keyframe 负责屏幕重建，**不写入录制**（重连不膨胀 cast）。
+- **按模式决定的窗口尺寸策略**（bridge `window_rows_for`）：raw 无状态栏用满 `rows`，mux 用 `rows-1` 与 client 可用区一致（实测 rmux 窗口高 = client 行数 − 状态栏行数）；`pane.resize` 与窗口尺寸共用该函数，避免两者不一致导致的中间闪烁。
+
+### Fixed
+- **Ghostty 下 TUI 退出后"屏幕卡死"**（CLI 侧 `alt_guard`）：Ghostty 的 `scrolling_region` 是 **Terminal 级全局字段且切屏不恢复**，而 htop 等 TUI 在备用屏设置滚动区域后退出时不重置 → 区域泄漏到主屏 → 光标落在区域外的最后一行，后续换行不触发滚动、所有输出覆盖写在同一行（表现为屏幕冻住但输入仍通）。raw 模式下检测到离开备用屏（`1049l`/`47l`/`1047l`）后补发 `ESC[s ESC[r ESC[u`（存光标→重置区域→恢复光标）；区域本已全屏时空操作，**字节流无损**（录制回放验证：剥离注入后与原文逐字节相同）。
+- **mux 下光标落到视口外**：窗口比 client 可用区高 1 行，导致光标出现在倒数第二行；现按模式统一计算窗口与 pane 尺寸。
+- **stdout 停摆不再杀连接**：改为纯反压（通道满时阻塞 send，与 ssh 行为一致），不丢字节、不主动断连。
+- **输出写合并与分片**：已到达的块合并为一次 write（上限 64KiB，非阻塞 `try_recv`，不引入等待），超大块按 16KiB 分片并让出，避免高频小包饿死 renderer。
+
+### Removed
+- **为已证伪假设写的机制**：`freeze_watchdog`、XTVERSION 探针、osascript 注入 Ctrl+Shift+R、RIS、`0x04` repaint 通路、stdout 停摆取证 dump。根因已定位为滚动区域泄漏，该链条既无效又有害（清屏、抢焦点、制造 keyframe 洪流）。
+
+### Changed
+- kitty keyboard 过滤器保留为 **opt-in**（`CLUM_KITTY_FILTER=1`，默认关闭）。
+- 保留（有实证支撑，勿删）：bridge 对 daemon 订阅静默停推的自愈（`RAW_ECHO_TIMEOUT_MS` / `RAW_IDLE_RESUBSCRIBE_MS`）、bridge 的 send_text IPC 挂死看护（`SEND_TEXT_TIMEOUT` 强制重连，输入通路挂死后唯一恢复手段）。
+
 ## [0.18.0] — 2026-09-14
 
 ### Added
