@@ -14,8 +14,6 @@ use tokio::sync::Semaphore;
 
 use crate::registry::BridgeRegistry;
 
-const MAX_UPLOAD_CONCURRENCY: usize = 16;
-
 const STREAM_UPLOAD: u8 = 0x02;
 const STREAM_DOWNLOAD: u8 = 0x03;
 
@@ -86,6 +84,7 @@ pub async fn upload_file(
     progress: &mut crate::progress::ProgressReporter,
     registry: &Arc<BridgeRegistry>,
     limiter: Option<&BandwidthLimiter>,
+    max_concurrency: usize,
 ) -> Result<Vec<FileResult>> {
     let local_path = sanitize_local_path(local_path)?;
     let meta = tokio::fs::metadata(&local_path)
@@ -103,6 +102,7 @@ pub async fn upload_file(
             progress,
             registry,
             limiter,
+            max_concurrency,
         )
         .await
     } else {
@@ -197,6 +197,7 @@ async fn upload_dir(
     progress: &crate::progress::ProgressReporter,
     registry: &Arc<BridgeRegistry>,
     limiter: Option<&BandwidthLimiter>,
+    max_concurrency: usize,
 ) -> Result<Vec<FileResult>> {
     let base = Path::new(local_path).to_path_buf();
     let mut files = Vec::new();
@@ -207,7 +208,12 @@ async fn upload_dir(
 
     let conn = Arc::new(get_conn(host, registry, ca_cert_path).await?);
 
-    let semaphore = Arc::new(Semaphore::new(MAX_UPLOAD_CONCURRENCY));
+    let permits = if max_concurrency == 0 {
+        Semaphore::MAX_PERMITS
+    } else {
+        max_concurrency
+    };
+    let semaphore = Arc::new(Semaphore::new(permits));
     let mut handles = Vec::new();
 
     for (local, remote) in files {

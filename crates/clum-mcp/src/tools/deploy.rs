@@ -114,6 +114,7 @@ pub(crate) async fn deploy_bridge(
     let semaphore = make_semaphore(concurrency_limit);
     let ca_cert = ctx.ca_cert_path.clone();
     let registry = std::sync::Arc::clone(&ctx.bridge_registry);
+    let max_upload_concurrency = ctx.file_transfer.max_upload_concurrency;
     let start = std::time::Instant::now();
 
     let mut handles: Vec<tokio::task::JoinHandle<(String, Value)>> = Vec::new();
@@ -206,6 +207,7 @@ pub(crate) async fn deploy_bridge(
                 &mut task_progress,
                 &registry,
                 None,
+                max_upload_concurrency,
             ).await;
 
             match upload_result {

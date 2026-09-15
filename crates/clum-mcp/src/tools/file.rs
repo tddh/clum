@@ -53,6 +53,7 @@ pub(crate) async fn file_upload(
         progress,
         &ctx.bridge_registry,
         limiter.as_ref(),
+        ctx.file_transfer.max_upload_concurrency,
     )
     .await;
     super::audit(
