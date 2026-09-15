@@ -46,7 +46,7 @@ token_ttl_hours: 24
 #   download_bandwidth_mbps: 0            # per-stream download Mbps (0=unlimited)
 #   global_upload_bandwidth_mbps: 0       # total upload across all streams (0=unlimited)
 #   global_download_bandwidth_mbps: 0     # total download across all streams (0=unlimited)
-#   max_upload_concurrency: 16            # concurrent uploads per host
+#   max_upload_concurrency: 16            # concurrent uploads per operation (0=unlimited)
 
 # ─── Inline bridge enrollment (optional) ───
 # Bridges can also be enrolled dynamically via the bridge_store SQLite DB.
