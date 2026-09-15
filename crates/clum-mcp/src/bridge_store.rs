@@ -4,11 +4,12 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use sha2::{Digest, Sha256};
 
-#[allow(dead_code)]
 pub struct BridgeEntry {
     pub hostname: String,
     pub token_prefix: String,
     pub tags: Vec<String>,
+    /// Recorded at enrollment; not surfaced by `bridge list` yet.
+    #[allow(dead_code)]
     pub created_at: String,
     pub revoked: bool,
 }
