@@ -9,19 +9,22 @@ use tokio::sync::RwLock;
 
 const CACHE_TTL: Duration = Duration::from_secs(600);
 
-#[allow(dead_code)]
 pub struct AgentIdentity {
     pub name: String,
+    /// Kept for audit/traceability; current callers resolve identity by
+    /// `name` + `group` only.
+    #[allow(dead_code)]
     pub key_prefix: String,
     pub group: Option<String>,
 }
 
-#[allow(dead_code)]
 pub struct ApiKeyInfo {
     pub name: String,
     pub key_prefix: String,
     pub created_at: String,
     pub last_used_at: Option<String>,
+    /// Recorded for key expiry; `agent list` does not display it yet.
+    #[allow(dead_code)]
     pub expires_at: Option<String>,
     pub revoked: bool,
     pub group: Option<String>,
