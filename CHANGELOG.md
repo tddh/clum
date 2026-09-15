@@ -15,6 +15,7 @@
 - **终端应答里的 BEL 不再被误判成 Ctrl+G**（CLI 输入侧）：TUI 会查询终端能力（如 OSC 11 查背景色 `ESC ] 11 ; ? BEL`），Ghostty 的应答终结符**跟随查询**（上游 `osc.zig` 的 `Terminator.init`），应答写回 tty 输入队列后被当作键盘输入，其末尾的 `0x07` 命中逐字节匹配 → **凭空弹出 AI 面板**（表现为"一运行 TUI 就跳到 AI 面板，按 Ctrl+G 回来才看到程序"）。现输入字节先过一个小型转义序列扫描器（**状态跨 `read` 保持**，一个序列可能跨越两次读取）：CSI / OSC / DCS / SOS / PM / APC 序列内的字节直接透传，只有序列外的裸 `0x07` 才算 Ctrl+G；`0x1c`（detach）、`0x0c`（清 AI 历史）同样受保护。6 个单测覆盖（跨 read 终结、序列外照拦、ST 终结、CSI、OSC）。
 
 - **`file_transfer.max_upload_concurrency` 此前静默失效**：`files.rs` 硬编码 16，配置项被解析但从不读取。现真正作用于目录上传的并发闸门；`0` = unlimited，超界值钳制到 `Semaphore::MAX_PERMITS` 以免 `Semaphore::new` panic。
+- **CLI 端口转发 buffer 8KB → 1MB**：`clum-cli/src/forward.rs` 的 `relay_one` 双向搬运此前用 8KB 缓冲，是全项目唯一残留的 8KB 路径——hub 模式下 server relay 与 bridge 两侧都已是 1MB，CLI 的 8KB 反而成为 forward 吞吐的前端供给瓶颈。现统一为 `COPY_BUF_SIZE`（1MB），与 MCP/Bridge 对齐。
 
 ### Removed
 - **两个从未生效的配置面**：`file_transfer.max_download_concurrency`（下载为单流串行，不存在"并发下载"概念）与 inline `bridges:` 的 `tags`/`labels`（标签归属 `hosts.yaml` / `host_set_meta`，此处从未被读取）。删除后旧配置仍可正常解析（serde 忽略未知键，已有回归测试锁定）。

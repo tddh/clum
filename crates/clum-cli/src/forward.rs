@@ -3,6 +3,7 @@ use std::time::Duration;
 use anyhow::{bail, Context, Result};
 use clum_core::backoff::FullJitterBackoff;
 use clum_core::quic::CcKind;
+use clum_core::COPY_BUF_SIZE;
 
 /// 解析 "30s" / "10m" / "2h" / 纯秒数 "7200"；"0" 表示永不（Duration::ZERO）。
 pub fn parse_duration(s: &str) -> Result<Duration> {
@@ -162,7 +163,7 @@ async fn relay_one(
     let (mut tcp_read, mut tcp_write) = tcp_stream.split();
     let t2q = async {
         use tokio::io::AsyncReadExt;
-        let mut buf = [0u8; 8192];
+        let mut buf = vec![0u8; COPY_BUF_SIZE];
         loop {
             match tcp_read.read(&mut buf).await {
                 Ok(0) => break,
@@ -178,7 +179,7 @@ async fn relay_one(
     };
     let q2t = async {
         use tokio::io::AsyncWriteExt;
-        let mut buf = [0u8; 8192];
+        let mut buf = vec![0u8; COPY_BUF_SIZE];
         while let Ok(Some(n)) = recv.read(&mut buf).await {
             if tcp_write.write_all(&buf[..n]).await.is_err() {
                 break;
