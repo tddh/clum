@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Default)]
-#[allow(dead_code)]
 pub struct ServerConfig {
     #[serde(default = "default_listen")]
     pub listen: String,
@@ -50,7 +49,6 @@ pub struct ServerConfig {
 }
 
 #[derive(Debug, Deserialize, Clone)]
-#[allow(dead_code)]
 pub struct FileTransferConfig {
     /// Upload bandwidth per stream in Mbps. 0 = unlimited.
     #[serde(default = "default_upload_bw")]
@@ -65,10 +63,15 @@ pub struct FileTransferConfig {
     #[serde(default)]
     pub global_download_bandwidth_mbps: u64,
     /// Max concurrent file uploads per host. 0 = unlimited.
+    /// Parsed but not applied: the upload path uses the hardcoded
+    /// `MAX_UPLOAD_CONCURRENCY` constant (16) in `files.rs`.
     #[serde(default = "default_upload_concurrency")]
+    #[allow(dead_code)]
     pub max_upload_concurrency: usize,
     /// Max concurrent file downloads per host. 0 = unlimited.
+    /// Parsed but not applied: no semaphore currently consumes this value.
     #[serde(default)]
+    #[allow(dead_code)]
     pub max_download_concurrency: usize,
 }
 
@@ -97,7 +100,6 @@ fn default_download_bw() -> u64 {
     0
 }
 
-#[allow(dead_code)]
 impl FileTransferConfig {
     pub fn upload_config(&self) -> clum_core::rate_limiter::BandwidthConfig {
         clum_core::rate_limiter::BandwidthConfig {
@@ -114,13 +116,16 @@ impl FileTransferConfig {
 }
 
 #[derive(Debug, Deserialize, Clone)]
-#[allow(dead_code)]
 pub struct BridgeEntry {
     pub hostname: String,
     pub token: String,
+    /// Parsed but not applied: `bridge_token_map()` consumes only `hostname`
+    /// and `token`.
     #[serde(default)]
+    #[allow(dead_code)]
     pub tags: Vec<String>,
     #[serde(default)]
+    #[allow(dead_code)]
     pub labels: HashMap<String, String>,
 }
 
