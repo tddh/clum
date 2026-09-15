@@ -14,7 +14,10 @@
 - **输出写合并与分片**：已到达的块合并为一次 write（上限 64KiB，非阻塞 `try_recv`，不引入等待），超大块按 16KiB 分片并让出，避免高频小包饿死 renderer。
 - **终端应答里的 BEL 不再被误判成 Ctrl+G**（CLI 输入侧）：TUI 会查询终端能力（如 OSC 11 查背景色 `ESC ] 11 ; ? BEL`），Ghostty 的应答终结符**跟随查询**（上游 `osc.zig` 的 `Terminator.init`），应答写回 tty 输入队列后被当作键盘输入，其末尾的 `0x07` 命中逐字节匹配 → **凭空弹出 AI 面板**（表现为"一运行 TUI 就跳到 AI 面板，按 Ctrl+G 回来才看到程序"）。现输入字节先过一个小型转义序列扫描器（**状态跨 `read` 保持**，一个序列可能跨越两次读取）：CSI / OSC / DCS / SOS / PM / APC 序列内的字节直接透传，只有序列外的裸 `0x07` 才算 Ctrl+G；`0x1c`（detach）、`0x0c`（清 AI 历史）同样受保护。6 个单测覆盖（跨 read 终结、序列外照拦、ST 终结、CSI、OSC）。
 
+- **`file_transfer.max_upload_concurrency` 此前静默失效**：`files.rs` 硬编码 16，配置项被解析但从不读取。现真正作用于目录上传的并发闸门；`0` = unlimited，超界值钳制到 `Semaphore::MAX_PERMITS` 以免 `Semaphore::new` panic。
+
 ### Removed
+- **两个从未生效的配置面**：`file_transfer.max_download_concurrency`（下载为单流串行，不存在"并发下载"概念）与 inline `bridges:` 的 `tags`/`labels`（标签归属 `hosts.yaml` / `host_set_meta`，此处从未被读取）。删除后旧配置仍可正常解析（serde 忽略未知键，已有回归测试锁定）。
 - **为已证伪假设写的机制**：`freeze_watchdog`、XTVERSION 探针、osascript 注入 Ctrl+Shift+R、RIS、`0x04` repaint 通路、stdout 停摆取证 dump。根因已定位为滚动区域泄漏，该链条既无效又有害（清屏、抢焦点、制造 keyframe 洪流）。
 
 ### Changed
@@ -370,7 +373,7 @@
 - **Token 自动轮换**：24h TTL，Server 通过 QUIC 控制流推送新 token，Bridge 持久化到 `/etc/yunying/token`。
 
 ### Changed
-- **MCP 协议升级**：rmcp v3.0.0（协商至 2025-11-25；2026-07-28 的无状态核心未启用），Streamable HTTP 传输。
+- **MCP 协议升级**：rmcp v3.0.0（协议版本回显客户端请求，合法范围 2024-11-05 至 2026-07-28；仅当请求未知版本时回落至 2025-11-25），Streamable HTTP 传输。
 - **架构文档更新**：SKILL.md、MCP instructions 同步 Hub 架构 + CLI 命令。
 
 ## [0.8.0] — 2026-07-29
