@@ -119,6 +119,8 @@ async fn open_json_bi(
 
 pub enum BridgeStream {
     Quic {
+        /// Kept to hold the QUIC connection alive for the lifetime of the
+        /// streams: dropping the last `Connection` handle closes `send`/`recv`.
         #[allow(dead_code)]
         conn: quinn::Connection,
         send: quinn::SendStream,
