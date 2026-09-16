@@ -4,7 +4,10 @@
 
 use anyhow::{Context, Result};
 use quinn::{RecvStream, SendStream};
-use rmux_sdk::{events::recovery::PaneRecoveryEvent, TerminalSizeSpec};
+use rmux_sdk::{
+    events::recovery::{PaneRecoveryEvent, PaneRecoveryRebaseReason},
+    TerminalSizeSpec,
+};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -14,7 +17,7 @@ use tokio::io::unix::AsyncFd;
 use tokio::sync::{Mutex, Notify};
 
 use crate::bridge_audit::{self, BridgeAuditDb};
-use crate::cast_recorder::{finalize_cast, CastRecorder};
+use crate::cast_recorder::{finalize_cast, CastEvent, CastRecorder};
 use crate::protocol::ProtocolProxy;
 
 /// attach payload 尾字节 mode：legacy mux 模式（spawn `rmux attach-session`）。
@@ -70,6 +73,38 @@ fn echo_deadline_exceeded(
         && now_ms.saturating_sub(last_input_ms) >= echo_timeout_ms
 }
 
+/// 把客户端 resize 写入 cast（asciinema `"r"` 事件）。
+///
+/// 必须写「客户端尺寸」而非 `window_rows_for(mode, rows)`：cast 头部用的是客户端
+/// cols/rows，`"r"` 事件必须同一坐标系，否则播放器按 `rows-1` 换行、此后每行都错位。
+/// `window_rows_for` 只服务于 pane/window 的真实几何，是另一回事。
+///
+/// 通道满或 writer 已退出时仅告警不 panic。丢一个 resize 比丢一段字节更糟——
+/// 后续所有输出都会按错误宽度换行。
+fn record_client_resize(tx: Option<&tokio::sync::mpsc::Sender<CastEvent>>, cols: u16, rows: u16) {
+    let Some(tx) = tx else { return };
+    if let Err(e) = tx.try_send(CastEvent::Resize { cols, rows }) {
+        tracing::warn!(
+            cols,
+            rows,
+            error = %e,
+            "cast resize event dropped — subsequent output wraps at the wrong width"
+        );
+    }
+}
+
+/// 该 Rebase 是否应写入 cast。
+///
+/// 仅录制「每个 recorder 生命周期内的第一个 `Initial` keyframe」（= 屏幕基线）：
+/// 首个 keyframe 是 attach 时刻的权威屏幕内容，是 cast 的正确基线。后续 heal
+/// 续订（echo-stale / idle-fallback）产生的 keyframe 不写，否则长挂机 watch 会
+/// 以每小时数百 KB 的速率重复整屏重绘，还会污染 search_recordings。
+/// 代价是中途 heal 后 cast 与真实屏幕永久分叉——这是刻意的取舍。
+/// 不能用 `epoch` 过滤：SDK 明确 epoch 是「stream-local」，跨流比较无意义。
+fn should_record_rebase(reason: PaneRecoveryRebaseReason, baseline_written: bool) -> bool {
+    !baseline_written && reason == PaneRecoveryRebaseReason::Initial
+}
+
 /// Interactive session state shared between control (0x06) and data (0x07) streams.
 pub struct InteractiveSession {
     pub session_name: String,
@@ -85,6 +120,11 @@ pub struct InteractiveSession {
     pub child_pid: Option<u32>,
     pub exit_code: Option<i32>,
     pub exit_notify: Arc<Notify>,
+    /// 录制事件的发送端克隆。recorder 本体由 data task（0x07）独占持有并最终被
+    /// `finish(mut self)` 消费，无法共享；resize（0x02）却发生在 control task（0x06），
+    /// 因此 control 侧只拿这个 clone 往同一个 FIFO 通道里写 `"r"` 事件。
+    /// 录制关闭时为 `None`。
+    pub recorder_tx: Option<tokio::sync::mpsc::Sender<CastEvent>>,
 }
 
 /// 会话状态 + 连接计数的组合。main（直连）与 register（注册）两处各自创建，
@@ -269,6 +309,8 @@ pub async fn handle_interactive_control(
                 child_pid: None,
                 exit_code: None,
                 exit_notify: exit_notify.clone(),
+                // data task（0x07）创建 recorder 后回填。
+                recorder_tx: None,
             },
         );
     }
@@ -346,6 +388,16 @@ pub async fn handle_interactive_control(
                 }
                 let new_cols = u16::from_le_bytes([payload[0], payload[1]]);
                 let new_rows = u16::from_le_bytes([payload[2], payload[3]]);
+
+                // 必须先于任何真实几何变更（TIOCSWINSZ / resize_window_sized /
+                // pane.resize）入队：try_send 完成后才触发 SIGWINCH 重绘，mpsc FIFO
+                // 保证重绘字节排在 "r" 之后；放在 pane.resize 之后则会与重绘竞态。
+                let recorder_tx = session_state
+                    .lock()
+                    .await
+                    .get(&client_id)
+                    .and_then(|s| s.recorder_tx.clone());
+                record_client_resize(recorder_tx.as_ref(), new_cols, new_rows);
 
                 let (mode_opt, window_index) = {
                     let state = session_state.lock().await;
@@ -629,6 +681,14 @@ pub async fn handle_interactive_data(
         &recording_pubkey,
     )
     .await;
+
+    // control task（0x02 resize）不在本 task 内，只能靠 sender clone 写 "r" 事件。
+    if let Some(ref rec) = recorder {
+        let mut state = session_state.lock().await;
+        if let Some(s) = state.get_mut(&client_id) {
+            s.recorder_tx = Some(rec.sender());
+        }
+    }
 
     let quic_to_pty = async {
         let mut buf = [0u8; 4096];
@@ -1112,6 +1172,14 @@ async fn run_raw_pane_bridge(
     )
     .await;
 
+    // control task（0x02 resize）不在本 task 内，只能靠 sender clone 写 "r" 事件。
+    if let Some(ref rec) = recorder {
+        let mut state = session_state.lock().await;
+        if let Some(s) = state.get_mut(&client_id) {
+            s.recorder_tx = Some(rec.sender());
+        }
+    }
+
     // attach 审计由 control (0x06) handler 统一记录，此处不重复；
     // attach_time 仅用于 exit 事件的 duration_secs。
     let attach_time = std::time::Instant::now();
@@ -1179,8 +1247,9 @@ async fn run_raw_pane_bridge(
     // 且死亡是静默的（无错误/结束事件）。对策（两档检测）：
     //  * R-A-W 档：敲键悬而未答超过 RAW_ECHO_TIMEOUT → 判死续订（交互中）；
     //  * 挂机兜底档：无任何事件超过 RAW_IDLE_RESUBSCRIBE_MS 才续订（watch 场景）。
-    //  * Rebase 一律不写 cast（恢复机制而非 pane 真实字节）——续订无论多少
-    //    次录制零膨胀；续订节流防风暴。
+    //  * Rebase keyframe 无条件转发给客户端（权威重刷屏幕），但只把首个
+    //    `Initial` 基线写入 cast（见 should_record_rebase）——续订无论多少次
+    //    录制零膨胀；续订节流防风暴。
     // 续订 = drop 旧流（SDK 自动 unsubscribe）→ 重新 recover_output，新流首个
     // keyframe 权威重刷屏幕；输入通路不动，无键丢失。
     let output_pane = pane.clone();
@@ -1195,6 +1264,9 @@ async fn run_raw_pane_bridge(
         };
         let mut last_output_ms = unix_ms_now();
         let mut last_resub_ms = 0u64;
+        // 首个 `Initial` 基线是否已入 cast。**必须声明在循环外**：pump 内 heal
+        // 续订走 `continue` 不离开循环，声明在循环内会让每次 heal 都重写一遍基线。
+        let mut baseline_written = false;
         loop {
             let now = unix_ms_now();
             let li = last_input_ms.load(Ordering::Relaxed);
@@ -1234,13 +1306,22 @@ async fn run_raw_pane_bridge(
                 r = tokio::time::timeout(wait, stream.next()) => match r {
                     Err(_elapsed) => {} // 超时返回循环头：判死/节流/续订逻辑统一在头部
                     Ok(Ok(Some(PaneRecoveryEvent::Rebase(r)))) => {
+                        let recorded = should_record_rebase(r.reason, baseline_written);
                         tracing::debug!(
                             reason = ?r.reason,
                             epoch = r.epoch,
                             kf_len = r.keyframe.len(),
-                            "raw mode: rebase forwarded (not recorded: recovery, not pane bytes)"
+                            recorded,
+                            "raw mode: rebase forwarded (recorded only as the initial baseline)"
                         );
-                        // 屏幕重建转发给客户端，但不写入 cast（见块首注释）
+                        // 屏幕重建无条件转发给客户端；cast 只写首个 Initial 基线
+                        // （见 should_record_rebase 与块首注释）。
+                        if recorded {
+                            if let Some(ref rec) = recorder {
+                                rec.record_output(&r.keyframe);
+                            }
+                            baseline_written = true;
+                        }
                         if send.write_all(&r.keyframe).await.is_err() {
                             wire_err = true;
                             break;
@@ -1521,5 +1602,59 @@ mod tests {
     fn echo_deadline_zero_timestamps_not_dead() {
         // 输出时间戳为 0（attach 起始边界）且从未敲键：不判死
         assert!(!echo_deadline_exceeded(0, 0, 100_000, RAW_ECHO_TIMEOUT_MS));
+    }
+
+    #[test]
+    fn resize_recorded_with_client_size_not_window_rows() {
+        // mux 模式下窗口高度是 rows-1，但 cast 头部用的是客户端 rows；
+        // "r" 事件必须与之同坐标系，否则播放器按错误宽度换行。
+        let (tx, mut rx) = tokio::sync::mpsc::channel(8);
+        let client_rows = 33u16;
+
+        record_client_resize(Some(&tx), 108, client_rows);
+
+        match rx.try_recv() {
+            Ok(CastEvent::Resize { cols, rows }) => {
+                assert_eq!((cols, rows), (108, client_rows));
+                assert_ne!(rows, window_rows_for(ATTACH_MODE_MUX, client_rows));
+            }
+            Ok(_) => panic!("expected a Resize event"),
+            Err(e) => panic!("resize must be enqueued: {e}"),
+        }
+    }
+
+    #[test]
+    fn resize_without_recorder_is_silent_noop() {
+        record_client_resize(None, 108, 31);
+    }
+
+    #[test]
+    fn resize_when_channel_full_does_not_panic() {
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        record_client_resize(Some(&tx), 80, 24);
+        // 通道已满：第二次 try_send 必然失败，只告警不 panic。
+        record_client_resize(Some(&tx), 108, 31);
+    }
+
+    #[test]
+    fn rebase_baseline_recorded_only_for_first_initial() {
+        use PaneRecoveryRebaseReason as R;
+        assert!(should_record_rebase(R::Initial, false));
+        assert!(!should_record_rebase(R::Initial, true));
+        for reason in [
+            R::Resize,
+            R::ClearHistory,
+            R::ParserStateExpired,
+            R::TerminalReset,
+            R::TranscriptMutation,
+            R::Lag,
+            R::GenerationChanged,
+        ] {
+            assert!(
+                !should_record_rebase(reason, false),
+                "{reason:?} must not be recorded"
+            );
+            assert!(!should_record_rebase(reason, true), "{reason:?}");
+        }
     }
 }

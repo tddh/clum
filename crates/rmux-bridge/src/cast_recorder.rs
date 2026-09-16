@@ -7,6 +7,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use base64::{engine::general_purpose, Engine as _};
 use clum_core::crypto::RecordingEncryptor;
 use sha2::{Digest, Sha256};
 use tokio::fs::File;
@@ -19,10 +20,28 @@ const CHANNEL_CAPACITY: usize = 4096;
 /// fsync threshold: bytes written since last sync.
 const FSYNC_BYTE_THRESHOLD: u64 = 64 * 1024; // 64 KB
 
+/// Asciinema v2 event code for PTY output text.
+const EVENT_OUTPUT: &str = "o";
+/// Asciinema v2 event code for PTY input text.
+const EVENT_INPUT: &str = "i";
+/// Resize events carry the standard asciinema string payload `"COLSxROWS"`.
+const EVENT_RESIZE: &str = "r";
+/// Event code for a run of bytes that is confirmed NOT valid UTF-8.
+///
+/// Deliberately a new event *code*, not a fourth array element: the asciinema
+/// v2 spec mandates exactly three elements per event line, and 4-element arrays
+/// are rejected by agg / asciinema 3.x (`asc`) / `asciinema cat` / `play`.
+/// Unknown event codes, however, are explicitly allowed to be ignored by
+/// players, so `"ob"` stays compatible while preserving the exact bytes (base64).
+const EVENT_INVALID_BYTES: &str = "ob";
+/// Marker written into the output stream where the recorder had to drop events.
+const GAP_MARKER: &[u8] = b"[gap]\r\n";
+
 /// Events that can be recorded into a cast file.
 pub enum CastEvent {
     Output(Vec<u8>),
     Input(Vec<u8>),
+    Resize { cols: u16, rows: u16 },
     Exit(i32),
 }
 
@@ -87,17 +106,46 @@ impl CastRecorder {
     /// Record PTY output data. Non-blocking; drops event if channel is full.
     pub fn record_output(&self, data: &[u8]) {
         use std::sync::atomic::Ordering;
+        // Emit any deferred `[gap]` marker BEFORE the resuming data so the
+        // marker annotates the gap in stream order instead of trailing it.
+        self.emit_gap_marker_if_pending();
         if self.tx.try_send(CastEvent::Output(data.to_vec())).is_err() {
             self.gap_pending.store(true, Ordering::Relaxed);
-        } else if self.gap_pending.swap(false, Ordering::Relaxed) {
-            let _ = self.tx.try_send(CastEvent::Output(b"[gap]\r\n".to_vec()));
         }
     }
 
     /// Record PTY input data. Non-blocking; drops event if channel is full.
     pub fn record_input(&self, data: &[u8]) {
         use std::sync::atomic::Ordering;
+        self.emit_gap_marker_if_pending();
         if self.tx.try_send(CastEvent::Input(data.to_vec())).is_err() {
+            self.gap_pending.store(true, Ordering::Relaxed);
+        }
+    }
+
+    /// Emit a deferred `[gap]` marker (as an output event) once a prior event
+    /// in either direction had to be dropped.
+    ///
+    /// `gap_pending` is a single flag shared by the output, input and resize
+    /// paths — a known conflation: it records "some event was dropped", not
+    /// which direction dropped it. The marker is therefore a global annotation
+    /// of stream discontinuity and may surface on a different direction than
+    /// the one that actually lost the event. Emitting it on every path is what
+    /// guarantees it is flushed by whichever direction resumes first.
+    ///
+    /// The flag is cleared only when the marker is actually enqueued; on failure
+    /// it is restored, so a marker that cannot be sent is retried on the next
+    /// call rather than being silently lost.
+    fn emit_gap_marker_if_pending(&self) {
+        use std::sync::atomic::Ordering;
+        if !self.gap_pending.swap(false, Ordering::Relaxed) {
+            return;
+        }
+        if self
+            .tx
+            .try_send(CastEvent::Output(GAP_MARKER.to_vec()))
+            .is_err()
+        {
             self.gap_pending.store(true, Ordering::Relaxed);
         }
     }
@@ -118,6 +166,14 @@ impl CastRecorder {
     /// The file path of this cast recording.
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Clone the event sender so a task that does not own the recorder (e.g.
+    /// the interactive *control* task handling client resizes) can enqueue
+    /// events. Ordering is preserved because every clone feeds the same
+    /// FIFO channel consumed by the single writer task.
+    pub fn sender(&self) -> mpsc::Sender<CastEvent> {
+        self.tx.clone()
     }
 }
 
@@ -174,6 +230,13 @@ async fn writer_task(
     }
 
     // Event loop: process events until Exit or channel close.
+    //
+    // UTF-8 reassembly state lives here, on the consumer side, so that
+    // `record_output` / `record_input` can stay stateless `&self` methods.
+    // Output and input are independent byte streams and keep independent
+    // pending buffers — they are never concatenated.
+    let mut pending_output: Vec<u8> = Vec::new();
+    let mut pending_input: Vec<u8> = Vec::new();
     let mut exit_seen = false;
     loop {
         // Check time-based fsync.
@@ -188,14 +251,14 @@ async fn writer_task(
         match rx.recv().await {
             Some(CastEvent::Output(data)) => {
                 let elapsed = start.elapsed().as_secs_f64();
-                let line = format_event_line(elapsed, "o", &data);
-                let bytes = encode_chunk(&mut encryptor, line.as_bytes());
-                if write_and_track(
+                let lines = reassemble_events(&mut pending_output, &data, EVENT_OUTPUT, elapsed);
+                if write_event_lines(
                     &mut file,
                     &mut hasher,
                     &mut total_bytes,
                     &mut bytes_since_sync,
-                    &bytes,
+                    &mut encryptor,
+                    &lines,
                 )
                 .await
                 .is_err()
@@ -205,7 +268,27 @@ async fn writer_task(
             }
             Some(CastEvent::Input(data)) => {
                 let elapsed = start.elapsed().as_secs_f64();
-                let line = format_event_line(elapsed, "i", &data);
+                let lines = reassemble_events(&mut pending_input, &data, EVENT_INPUT, elapsed);
+                if write_event_lines(
+                    &mut file,
+                    &mut hasher,
+                    &mut total_bytes,
+                    &mut bytes_since_sync,
+                    &mut encryptor,
+                    &lines,
+                )
+                .await
+                .is_err()
+                {
+                    break;
+                }
+            }
+            Some(CastEvent::Resize { cols, rows }) => {
+                let elapsed = start.elapsed().as_secs_f64();
+                let line = format!(
+                    "[{}, \"{}\", \"{}x{}\"]\n",
+                    elapsed, EVENT_RESIZE, cols, rows
+                );
                 let bytes = encode_chunk(&mut encryptor, line.as_bytes());
                 if write_and_track(
                     &mut file,
@@ -222,14 +305,18 @@ async fn writer_task(
             }
             Some(CastEvent::Exit(code)) => {
                 let elapsed = start.elapsed().as_secs_f64();
-                let line = format!("[{}, \"exit\", {}]\n", elapsed, code);
-                let bytes = encode_chunk(&mut encryptor, line.as_bytes());
-                if write_and_track(
+                // An incomplete UTF-8 tail can never be completed now: flush it
+                // as an `"ob"` event BEFORE the exit line so no byte is lost.
+                let mut lines = flush_pending_bytes(&mut pending_output, elapsed);
+                lines.extend(flush_pending_bytes(&mut pending_input, elapsed));
+                lines.push(format!("[{}, \"exit\", {}]\n", elapsed, code));
+                if write_event_lines(
                     &mut file,
                     &mut hasher,
                     &mut total_bytes,
                     &mut bytes_since_sync,
-                    &bytes,
+                    &mut encryptor,
+                    &lines,
                 )
                 .await
                 .is_err()
@@ -240,7 +327,20 @@ async fn writer_task(
                 break;
             }
             None => {
-                // Channel closed without explicit Exit.
+                // Channel closed without an explicit Exit: flush residual tails
+                // so they are not silently dropped.
+                let elapsed = start.elapsed().as_secs_f64();
+                let mut lines = flush_pending_bytes(&mut pending_output, elapsed);
+                lines.extend(flush_pending_bytes(&mut pending_input, elapsed));
+                let _ = write_event_lines(
+                    &mut file,
+                    &mut hasher,
+                    &mut total_bytes,
+                    &mut bytes_since_sync,
+                    &mut encryptor,
+                    &lines,
+                )
+                .await;
                 break;
             }
         }
@@ -316,12 +416,99 @@ async fn write_and_track(
     Ok(())
 }
 
-/// Format an asciinema v2 event line: `[elapsed, "o"|"i", "data"]\n`
-fn format_event_line(elapsed: f64, kind: &str, data: &[u8]) -> String {
+/// Format an asciinema v2 text event line: `[elapsed, "o"|"i", "data"]\n`.
+///
+/// `text` is valid UTF-8 by construction (the caller reassembles chunks first),
+/// so no lossy conversion is performed.
+fn format_event_line(elapsed: f64, kind: &str, text: &str) -> String {
     // Use serde_json to properly escape the data string.
-    let data_str = String::from_utf8_lossy(data);
-    let escaped = serde_json::to_string(&data_str).unwrap_or_else(|_| "\"\"".to_string());
+    let escaped = serde_json::to_string(text).unwrap_or_else(|_| "\"\"".to_string());
     format!("[{}, \"{}\", {}]\n", elapsed, kind, escaped)
+}
+
+/// Format an asciinema v2 invalid-bytes event line:
+/// `[elapsed, "ob", "<base64>"]\n`. Still exactly three elements, as v2 requires.
+fn format_bytes_event_line(elapsed: f64, bytes: &[u8]) -> String {
+    let encoded = general_purpose::STANDARD.encode(bytes);
+    format!(
+        "[{}, \"{}\", \"{}\"]\n",
+        elapsed, EVENT_INVALID_BYTES, encoded
+    )
+}
+
+/// Reassemble one chunk of a byte stream into lossless asciinema event lines.
+///
+/// `pending` carries the truncated UTF-8 tail of the previous chunk and is
+/// mutated in place. Valid text becomes a `[t, kind, "text"]` line; a
+/// confirmed-invalid byte run becomes `[t, "ob", base64]` so the exact bytes
+/// survive. Empty events are suppressed. All lines produced here share the same
+/// `elapsed`; asciinema v2 permits equal (non-decreasing) timestamps.
+fn reassemble_events(pending: &mut Vec<u8>, chunk: &[u8], kind: &str, elapsed: f64) -> Vec<String> {
+    let mut lines = Vec::new();
+    if chunk.is_empty() && pending.is_empty() {
+        return lines;
+    }
+    pending.extend_from_slice(chunk);
+    loop {
+        match std::str::from_utf8(pending.as_slice()) {
+            Ok(text) => {
+                if !text.is_empty() {
+                    lines.push(format_event_line(elapsed, kind, text));
+                }
+                pending.clear();
+                break;
+            }
+            Err(e) => {
+                let valid_up_to = e.valid_up_to();
+                if valid_up_to > 0 {
+                    // SAFETY: bytes before `valid_up_to` are valid UTF-8.
+                    let text = std::str::from_utf8(&pending[..valid_up_to]).unwrap_or_default();
+                    lines.push(format_event_line(elapsed, kind, text));
+                }
+                match e.error_len() {
+                    Some(bad) => {
+                        let end = valid_up_to + bad;
+                        lines.push(format_bytes_event_line(elapsed, &pending[valid_up_to..end]));
+                        pending.drain(..end);
+                    }
+                    None => {
+                        // Truncated multi-byte sequence at the tail: hold it for
+                        // the next chunk, where it may be completed.
+                        pending.drain(..valid_up_to);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    lines
+}
+
+/// Flush a pending tail that can never be completed as an `"ob"` event.
+/// Returns an empty vec when there is nothing pending.
+fn flush_pending_bytes(pending: &mut Vec<u8>, elapsed: f64) -> Vec<String> {
+    if pending.is_empty() {
+        return Vec::new();
+    }
+    let line = format_bytes_event_line(elapsed, pending);
+    pending.clear();
+    vec![line]
+}
+
+/// Write all formatted lines of one event, updating the hasher and counters.
+async fn write_event_lines(
+    file: &mut File,
+    hasher: &mut Sha256,
+    total_bytes: &mut u64,
+    bytes_since_sync: &mut u64,
+    encryptor: &mut Option<RecordingEncryptor>,
+    lines: &[String],
+) -> std::io::Result<()> {
+    for line in lines {
+        let bytes = encode_chunk(encryptor, line.as_bytes());
+        write_and_track(file, hasher, total_bytes, bytes_since_sync, &bytes).await?;
+    }
+    Ok(())
 }
 
 /// Write a `.meta` sidecar JSON file next to the cast file and (on Linux)
@@ -876,5 +1063,240 @@ mod tests {
 
         let unsynced_after = list_unsynced(&rec_dir).await.unwrap();
         assert_eq!(unsynced_after.len(), 0);
+    }
+
+    fn read_events(path: &Path) -> Vec<(String, serde_json::Value)> {
+        let content = std::fs::read_to_string(path).unwrap();
+        content
+            .lines()
+            .skip(1)
+            .map(|line| {
+                let val: serde_json::Value = serde_json::from_str(line).unwrap();
+                let arr = val.as_array().unwrap();
+                (arr[1].as_str().unwrap().to_string(), arr[2].clone())
+            })
+            .collect()
+    }
+
+    fn payload_text(events: &[(String, serde_json::Value)], kind: &str) -> String {
+        events
+            .iter()
+            .filter(|(k, _)| k == kind)
+            .filter_map(|(_, v)| v.as_str())
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn test_split_multibyte_char_reassembles_losslessly() {
+        let dir = tempfile::tempdir().unwrap();
+        let cast_path = dir.path().join("utf8.cast");
+        let recorder = CastRecorder::start(cast_path.clone(), 80, 24, 5, None)
+            .await
+            .unwrap();
+
+        // "├─┤" = E2 94 9C E2 94 80 E2 94 A4, split mid-character across calls.
+        let full = "├─┤".as_bytes();
+        recorder.record_output(&full[..2]);
+        recorder.record_output(&full[2..5]);
+        recorder.record_output(&full[5..]);
+        recorder.finish(0).await.unwrap();
+
+        let raw = tokio::fs::read(&cast_path).await.unwrap();
+        let text = String::from_utf8(raw).unwrap();
+        assert!(
+            !text.contains('\u{FFFD}'),
+            "lossless recording must not contain U+FFFD: {text:?}"
+        );
+
+        let events = read_events(&cast_path);
+        assert_eq!(payload_text(&events, EVENT_OUTPUT), "├─┤");
+        assert!(!events.iter().any(|(k, _)| k == EVENT_INVALID_BYTES));
+    }
+
+    #[tokio::test]
+    async fn test_truncated_tail_defers_until_completed() {
+        let dir = tempfile::tempdir().unwrap();
+        let cast_path = dir.path().join("tail.cast");
+        let recorder = CastRecorder::start(cast_path.clone(), 80, 24, 5, None)
+            .await
+            .unwrap();
+
+        recorder.record_output(&[0xE2]); // truncated tail -> no event yet
+        recorder.record_output(&[0x94, 0x9C]); // completes '├'
+        recorder.finish(0).await.unwrap();
+
+        let events = read_events(&cast_path);
+        let outputs: Vec<String> = events
+            .iter()
+            .filter(|(k, _)| k == EVENT_OUTPUT)
+            .filter_map(|(_, v)| v.as_str())
+            .map(str::to_string)
+            .collect();
+        assert_eq!(outputs, ["├"], "only the completed character is emitted");
+        assert!(!events.iter().any(|(k, _)| k == EVENT_INVALID_BYTES));
+    }
+
+    #[tokio::test]
+    async fn test_invalid_bytes_emit_ob_line_with_exact_base64() {
+        let dir = tempfile::tempdir().unwrap();
+        let cast_path = dir.path().join("invalid.cast");
+        let recorder = CastRecorder::start(cast_path.clone(), 80, 24, 5, None)
+            .await
+            .unwrap();
+
+        let invalid = [0xFF_u8, 0xFE];
+        recorder.record_output(b"ok");
+        recorder.record_output(&invalid);
+        recorder.finish(0).await.unwrap();
+
+        let events = read_events(&cast_path);
+        assert_eq!(payload_text(&events, EVENT_OUTPUT), "ok");
+
+        let mut recovered = Vec::new();
+        for (kind, value) in &events {
+            if kind == EVENT_INVALID_BYTES {
+                let decoded = general_purpose::STANDARD
+                    .decode(value.as_str().unwrap())
+                    .unwrap();
+                recovered.extend_from_slice(&decoded);
+            }
+        }
+        assert_eq!(
+            recovered, invalid,
+            "ob base64 must decode to the exact original bytes"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_gap_marker_precedes_post_gap_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let cast_path = dir.path().join("gap_order.cast");
+        let recorder = CastRecorder::start(cast_path.clone(), 80, 24, 5, None)
+            .await
+            .unwrap();
+
+        // Current-thread runtime: the writer task cannot be polled while we spin
+        // without awaiting, so the channel fills deterministically and the last
+        // sends are dropped.
+        let payload = vec![b'x'; 256];
+        for _ in 0..(CHANNEL_CAPACITY * 2) {
+            recorder.record_output(&payload);
+        }
+
+        for _ in 0..200 {
+            if recorder.tx.capacity() > 64 {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+
+        recorder.record_output(b"AFTER-GAP");
+        recorder.finish(0).await.unwrap();
+
+        let raw = tokio::fs::read_to_string(&cast_path).await.unwrap();
+        let gap_idx = raw.find("[gap]").expect("gap marker must be recorded");
+        let after_idx = raw
+            .find("AFTER-GAP")
+            .expect("post-gap data must be recorded");
+        assert!(
+            gap_idx < after_idx,
+            "gap marker must precede the post-gap data"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_gap_marker_not_lost_when_channel_full() {
+        let dir = tempfile::tempdir().unwrap();
+        let cast_path = dir.path().join("gap_full.cast");
+        let recorder = CastRecorder::start(cast_path.clone(), 80, 24, 5, None)
+            .await
+            .unwrap();
+
+        let payload = vec![b'x'; 256];
+        for _ in 0..(CHANNEL_CAPACITY + 1) {
+            recorder.record_output(&payload);
+        }
+
+        // The channel is full, so the marker could not be enqueued. The flag
+        // must stay set — a marker that cannot be sent is never silently lost.
+        assert!(recorder
+            .gap_pending
+            .load(std::sync::atomic::Ordering::Relaxed));
+
+        let _ = recorder.finish(0).await;
+    }
+
+    #[tokio::test]
+    async fn test_resize_event_via_sender_writes_string_form() {
+        let dir = tempfile::tempdir().unwrap();
+        let cast_path = dir.path().join("resize.cast");
+        let recorder = CastRecorder::start(cast_path.clone(), 80, 24, 5, None)
+            .await
+            .unwrap();
+
+        // 生产路径的 resize 发生在 control task，它不持有 recorder（`finish(mut self)`
+        // 会取走所有权），只能通过 `sender()` 克隆入队。这里就走这条真实路径，
+        // 让 `"r"` 行的格式得到端到端覆盖。
+        recorder
+            .sender()
+            .try_send(CastEvent::Resize {
+                cols: 108,
+                rows: 31,
+            })
+            .unwrap();
+        recorder.finish(0).await.unwrap();
+
+        let events = read_events(&cast_path);
+        let resizes: Vec<String> = events
+            .iter()
+            .filter(|(k, _)| k == EVENT_RESIZE)
+            .filter_map(|(_, v)| v.as_str())
+            .map(str::to_string)
+            .collect();
+        assert_eq!(resizes, ["108x31"]);
+    }
+
+    #[tokio::test]
+    async fn test_residual_pending_flushed_as_ob_before_exit() {
+        let dir = tempfile::tempdir().unwrap();
+        let cast_path = dir.path().join("residual.cast");
+        let recorder = CastRecorder::start(cast_path.clone(), 80, 24, 5, None)
+            .await
+            .unwrap();
+
+        recorder.record_output(&[0xE2, 0x94]); // incomplete '├'
+        recorder.finish(0).await.unwrap();
+
+        let events = read_events(&cast_path);
+        let kinds: Vec<&str> = events.iter().map(|(k, _)| k.as_str()).collect();
+        let n = kinds.len();
+        assert_eq!(kinds[n - 1], "exit");
+        assert_eq!(kinds[n - 2], EVENT_INVALID_BYTES);
+        let decoded = general_purpose::STANDARD
+            .decode(events[n - 2].1.as_str().unwrap())
+            .unwrap();
+        assert_eq!(decoded, vec![0xE2, 0x94]);
+    }
+
+    #[tokio::test]
+    async fn test_input_and_output_pendings_are_independent() {
+        let dir = tempfile::tempdir().unwrap();
+        let cast_path = dir.path().join("indep.cast");
+        let recorder = CastRecorder::start(cast_path.clone(), 80, 24, 5, None)
+            .await
+            .unwrap();
+
+        // '├' = E2 94 9C on the output stream, '┼' = E2 94 BC on the input
+        // stream; both are split mid-character and interleaved.
+        recorder.record_output(&[0xE2]);
+        recorder.record_input(&[0xE2]);
+        recorder.record_output(&[0x94, 0x9C]);
+        recorder.record_input(&[0x94, 0xBC]);
+        recorder.finish(0).await.unwrap();
+
+        let events = read_events(&cast_path);
+        assert_eq!(payload_text(&events, EVENT_OUTPUT), "├");
+        assert_eq!(payload_text(&events, EVENT_INPUT), "┼");
+        assert!(!events.iter().any(|(k, _)| k == EVENT_INVALID_BYTES));
     }
 }
