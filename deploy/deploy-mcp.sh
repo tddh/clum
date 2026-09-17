@@ -14,6 +14,10 @@ BINARY="${1:?Usage: $0 <binary> <user@host>}"
 REMOTE="${2:?Usage: $0 <binary> <user@host>}"
 CERTS_DIR="${CERTS_DIR:-certs}"
 
+# Server IP, used to populate the required `server_addr` field of the generated
+# server-config.yaml (ServerConfig rejects a config without it).
+SERVER_IP=$(echo "$REMOTE" | sed 's/.*@//' | cut -d: -f1)
+
 echo "=== Deploying clum-mcp to $REMOTE ==="
 
 # 0. Migrate legacy yunying layout (idempotent, backup first).
@@ -61,8 +65,11 @@ ssh "$REMOTE" "test -f /etc/clum/hosts.yaml || (echo 'hosts: []' | sudo tee /etc
 # 5. Write server-config.yaml if not present
 ssh "$REMOTE" "test -f /etc/clum/server-config.yaml" 2>/dev/null || {
     echo "Writing default server-config.yaml..."
-    ssh "$REMOTE" "sudo tee /etc/clum/server-config.yaml" <<'CONFIG_EOF'
+    ssh "$REMOTE" "sudo tee /etc/clum/server-config.yaml" <<CONFIG_EOF
 listen: "0.0.0.0:9788"
+# Required by ServerConfig — clients and bridges use it to reach this server.
+# Override if the server is reached through a different hostname or VIP.
+server_addr: "${SERVER_IP}:9788"
 server_cert: "/etc/clum/server.crt"
 server_key: "/etc/clum/server.key"
 ca_cert: "/etc/clum/ca.crt"
@@ -80,6 +87,10 @@ recordings_retention_days: 90
 recordings_max_size_mb: 5000
 CONFIG_EOF
 }
+
+# Existing configs predating this fix may lack the required server_addr field,
+# which makes clum-mcp refuse to start.
+ssh "$REMOTE" "grep -q '^server_addr:' /etc/clum/server-config.yaml || echo 'WARNING: /etc/clum/server-config.yaml lacks the required server_addr field — clum-mcp will fail to start. Add: server_addr: \"<server-ip>:9788\"'" 2>/dev/null || true
 
 # 6. Write systemd unit (tmp + atomic mv, then reload)
 ssh "$REMOTE" "sudo tee /tmp/clum-mcp.service" <<'UNIT_EOF'
