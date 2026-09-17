@@ -3,12 +3,12 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize)]
 pub struct ServerConfig {
     #[serde(default = "default_listen")]
     pub listen: String,
 
-    /// External address for clients/bridges to connect (e.g. "10.220.71.1:9788"). Required.
+    /// External address for clients/bridges to connect (e.g. "clum.example.com:9788"). Required.
     pub server_addr: String,
 
     pub server_cert: Option<String>,
@@ -142,6 +142,34 @@ fn default_recordings_retention_days() -> u32 {
 
 fn default_recordings_max_size_mb() -> u64 {
     5000
+}
+
+// Manual impl (not derived): a derived Default yields empty strings and zero
+// durations, and a zero period panics in `tokio::time::interval`.
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            listen: default_listen(),
+            server_addr: String::new(),
+            server_cert: None,
+            server_key: None,
+            ca_cert: None,
+            hosts_file: None,
+            audit_db: None,
+            static_dir: None,
+            recordings_dir: None,
+            recording_keys_dir: None,
+            bridges: Vec::new(),
+            token_ttl_hours: default_token_ttl_hours(),
+            audit_retention_days: default_audit_retention_days(),
+            audit_max_size_mb: default_audit_max_size_mb(),
+            audit_cleanup_interval_secs: default_audit_cleanup_interval_secs(),
+            audit_sync_interval_secs: default_audit_sync_interval_secs(),
+            recordings_retention_days: default_recordings_retention_days(),
+            recordings_max_size_mb: default_recordings_max_size_mb(),
+            file_transfer: FileTransferConfig::default(),
+        }
+    }
 }
 
 impl ServerConfig {

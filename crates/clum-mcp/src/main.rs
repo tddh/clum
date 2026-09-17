@@ -123,16 +123,11 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let file_config = match &cli.config {
-        Some(path) => match server_config::ServerConfig::load(path) {
-            Ok(c) => {
-                tracing::info!("loaded server config from {}", path.display());
-                c
-            }
-            Err(e) => {
-                tracing::error!("failed to load config: {e:#}");
-                server_config::ServerConfig::default()
-            }
-        },
+        Some(path) => {
+            let config = server_config::ServerConfig::load(path)?;
+            tracing::info!("loaded server config from {}", path.display());
+            config
+        }
         None => server_config::ServerConfig::default(),
     };
 
@@ -157,9 +152,11 @@ async fn main() -> anyhow::Result<()> {
     let audit_max_size_mb = cli
         .audit_max_size_mb
         .unwrap_or(file_config.audit_max_size_mb);
+    // Guard against a zero period: `tokio::time::interval` panics on it.
     let cleanup_interval = cli
         .audit_cleanup_interval_secs
-        .unwrap_or(file_config.audit_cleanup_interval_secs);
+        .unwrap_or(file_config.audit_cleanup_interval_secs)
+        .max(1);
     let sync_interval = cli
         .audit_sync_interval_secs
         .unwrap_or(file_config.audit_sync_interval_secs);
