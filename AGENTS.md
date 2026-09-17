@@ -36,9 +36,10 @@ clum/
 ├── clum-docs/           # 文档
 ├── deploy/              # 部署脚本（install.sh, deploy-bridge.sh, deploy-mcp.sh）
 ├── scripts/             # 迁移与测试脚本（migrate-to-clum.sh, migrate-bridge-to-clum.sh, mcp_smoke.py, mcp_remote_test.py）
-├── .opencode/skills/    # AI 开发辅助 Skills (OpenCode)
-└── .qoder/skills/       # AI 开发辅助 Skills (Qoder)
+└── SKILL.md             # clum-mcp 使用指南（skill 源文件，随代码维护）
 ```
+
+> **Skill 安装位置**：clum-mcp skill 源自本仓库根目录的 `SKILL.md`，**安装到全局**（`~/.config/opencode/skills/clum-mcp/`）。项目内不再保留 `.opencode/skills/`、`.qoder/skills/` 副本；修改 skill 请直接改根 `SKILL.md`，再同步到全局安装目录。
 
 ## 常用命令
 

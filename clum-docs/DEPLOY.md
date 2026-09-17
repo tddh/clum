@@ -128,9 +128,9 @@ curl -fsSLk -H "Authorization: Bearer <download_token>" \
   https://SERVER:9788/releases/install.sh | \
   BRIDGE_TOKEN=<token> SERVER_ADDR=SERVER:9788 sh
 
-# 方式 2：手动部署（先 just release-linux 交叉编译；BRIDGE_TOKEN 必填）
-BRIDGE_TOKEN=<token> just deploy-bridge host=root@<your-bridge-ip>
-# 等价直接调用：BRIDGE_TOKEN=<token> bash deploy/deploy-bridge.sh ./target/x86_64-unknown-linux-musl/release/rmux-bridge root@<your-bridge-ip> hub
+# 方式 2：手动部署（先 just release-linux 交叉编译；BRIDGE_TOKEN 与 CLUM_SERVER_ADDR 必填）
+BRIDGE_TOKEN=<token> CLUM_SERVER_ADDR=SERVER:9788 just deploy-bridge host=root@<your-bridge-ip>
+# 等价直接调用：BRIDGE_TOKEN=<token> CLUM_SERVER_ADDR=SERVER:9788 bash deploy/deploy-bridge.sh ./target/x86_64-unknown-linux-musl/release/rmux-bridge root@<your-bridge-ip> hub
 ```
 
 部署脚本自动完成：
@@ -210,18 +210,12 @@ ssh root@<your-bridge-ip> "systemctl status rmux-bridge --no-pager"
 | `--listen` | 无 | HTTP/QUIC 监听地址（http 模式，如 `0.0.0.0:9788`） |
 | `--server-cert` | 无 | TLS 服务器证书路径（http 模式必填） |
 | `--server-key` | 无 | TLS 服务器私钥路径（http 模式必填） |
-
-> **HTTP 模式强制 TLS（fail-closed）**：`--server-cert`/`--server-key` 任一缺失时启动直接失败并退出，**不会**降级为明文 HTTP。QUIC 与 HTTP 共用同一对证书。
 | `--api-keys` | 无 | API Key 列表（逗号分隔，http 模式认证） |
 | `--bridge` | 无 | Bridge token（`HOSTNAME=TOKEN` 格式，可多次指定） |
 | `--static-dir` | 无 | 静态文件服务目录（install.sh、ca.crt、releases 等） |
 | `--hosts-file` | `config/hosts.yaml` | 主机注册表路径（直连回退用） |
 | `--ca-cert` | 无 | CA 证书路径（direct 模式必填，缺失则拒绝连接；纯 enrolled 部署可省略） |
 | `--log-level` | `info` | 日志级别：trace/debug/info/warn/error（`RUST_LOG` 环境变量优先） |
-
-> **审计与日志关联（operation_id）**：每次 MCP 工具调用会生成一个 `operation_id`（UUID），同时写入审计事件（`audit_events.operation_id`）与日志行（`op=... tool=... result=... duration_ms=...`）。排查时用同一 ID 即可在 `audit_query` 与 `journalctl` 之间定位同一次操作的全链路记录。
-
-> **拥塞控制（Server）**：环境变量 `CLUM_CC=auto|bbr|cubic`（默认 `auto`）控制 server→bridge 中继发送段。`auto` 下监听端按对端地址自动判定（内网→BBR，公网→CUBIC）。公网部署建议显式 `CLUM_CC=cubic` 以在丢包时主动退避，避免带宽打满断连。
 | `--audit-db` | `~/.clum/audit.db` | 审计数据库路径 |
 | `--audit-retention-days` | `90` | 审计数据保留天数 |
 | `--audit-max-size-mb` | `500` | 审计数据库大小上限 (MB) |
@@ -230,6 +224,12 @@ ssh root@<your-bridge-ip> "systemctl status rmux-bridge --no-pager"
 | `--recordings-dir` | `~/.clum/recordings` | 本地录制存储目录 |
 | `--recordings-retention-days` | `90` | 本地录制保留天数 |
 | `--recordings-max-size-mb` | `5000` | 本地录制容量上限 (MB) |
+
+> **HTTP 模式强制 TLS（fail-closed）**：`--server-cert`/`--server-key` 任一缺失时启动直接失败并退出，**不会**降级为明文 HTTP。QUIC 与 HTTP 共用同一对证书。
+
+> **审计与日志关联（operation_id）**：每次 MCP 工具调用会生成一个 `operation_id`（UUID），同时写入审计事件（`audit_events.operation_id`）与日志行（`op=... tool=... result=... duration_ms=...`）。排查时用同一 ID 即可在 `audit_query` 与 `journalctl` 之间定位同一次操作的全链路记录。
+
+> **拥塞控制（Server）**：环境变量 `CLUM_CC=auto|bbr|cubic`（默认 `auto`）控制 server→bridge 中继发送段。`auto` 下监听端按对端地址自动判定（内网→BBR，公网→CUBIC）。公网部署建议显式 `CLUM_CC=cubic` 以在丢包时主动退避，避免带宽打满断连。
 
 ### 6. 认证模式
 
@@ -406,7 +406,7 @@ clum-mcp audit cleanup --older-than 30
 
 | 症状 | 检查 |
 |------|------|
-| CLI `term` 后按键无效、终端卡死 | rmux 0.9 将 `allow-passthrough` 默认改为 `off`。项目 `rmux-daemon.service` 通过 `--config-default` 自动启用 passthrough。若使用自定义 service，确认启动参数包含 `--config-default` 或手动 `rmux set -g allow-passthrough on`，然后 `systemctl restart rmux-daemon`。（注：仓库 `config/rmux.conf` 不会被任何部署脚本安装，仅作参考；passthrough 实际由 daemon 启动参数决定。） |
+| CLI `term` 后按键无效、终端卡死 | rmux 0.9 起将 `allow-passthrough` 默认改为 `off`（0.10 延续）。项目 `rmux-daemon.service` 通过 `--config-default` 自动启用 passthrough。若使用自定义 service，确认启动参数包含 `--config-default` 或手动 `rmux set -g allow-passthrough on`，然后 `systemctl restart rmux-daemon`。（passthrough 由 daemon 启动参数决定，项目内无独立的 rmux 配置文件。） |
 | TUI（htop 等）退出后屏幕卡死、输出覆盖同一行（Ghostty） | Ghostty 的滚动区域（DECSTBM）是 **Terminal 级全局状态且切屏不恢复**；TUI 在备用屏设置滚动区域后退出不重置 → 区域泄漏到主屏 → 光标落在区域外的最后一行，后续换行不触发滚动、输出全部覆盖写在同一行。CLI 侧 `alt_guard` 已在离开备用屏（`1049l`/`47l`/`1047l`）后补发 `ESC[s ESC[r ESC[u`（仅 raw 模式，字节流无损）。升级 `clum-cli` 即可，无需改动远端。 |
 | MCP 工具返回 `connection refused` | `systemctl status rmux-bridge`，确认 bridge 在运行 |
 | `authentication failed` | 检查 `bridge.env` 中的 `BRIDGE_AUTH_TOKEN` 与 `hosts.yaml` 中 `bridge_token` 是否一致 |

@@ -8,6 +8,8 @@
 - **按模式决定的窗口尺寸策略**（bridge `window_rows_for`）：raw 无状态栏用满 `rows`，mux 用 `rows-1` 与 client 可用区一致（实测 rmux 窗口高 = client 行数 − 状态栏行数）；`pane.resize` 与窗口尺寸共用该函数，避免两者不一致导致的中间闪烁。
 
 ### Fixed
+- **`ServerConfig` 缺字段静默降级 + 双 `interval(0)` panic（实机复现）**：`clum-mcp --mode http` 加载缺少必填 `server_addr` 的配置时只记一条 error 日志并回退 `ServerConfig::default()`；而 `#[derive(Default)]` 产出 `listen=""` 与 `audit_cleanup_interval_secs=0` / `audit_sync_interval_secs=0`，导致 `tokio::time::interval(0)` 在两处后台任务 panic（`main.rs` 审计清理、`recording_sync.rs` 录制同步）——因在 `tokio::spawn` 内，服务表面仍会打印启动日志，panic 极易被忽略；随后 http 模式又因 `server_cert` 回退为空而以 `http mode requires TLS` 退出。修复三处：① `ServerConfig` 改为手动 `impl Default`（沿用各 `default_*` 值，`listen` 恢复 `0.0.0.0:9788`、两个 interval 恢复 600/300）；② 配置文件解析失败改为 fail-closed（`?` 直接返回错误，不再静默降级）；③ 两处 interval 增加 `max(1)`，防御显式配置 0。
+- **`deploy/deploy-mcp.sh` 生成的 server-config.yaml 缺必填 `server_addr`**：首次部署写入的配置遗漏该字段（`ServerConfig` 中无 serde default，属必填），叠加上述降级路径会使 Server 无法启动。现从 SSH 目标地址推导 IP 并写入 `server_addr: "<ip>:9788"`；同时对已存在的旧配置增加缺失检测警告。
 - **Ghostty 下 TUI 退出后"屏幕卡死"**（CLI 侧 `alt_guard`）：Ghostty 的 `scrolling_region` 是 **Terminal 级全局字段且切屏不恢复**，而 htop 等 TUI 在备用屏设置滚动区域后退出时不重置 → 区域泄漏到主屏 → 光标落在区域外的最后一行，后续换行不触发滚动、所有输出覆盖写在同一行（表现为屏幕冻住但输入仍通）。raw 模式下检测到离开备用屏（`1049l`/`47l`/`1047l`）后补发 `ESC[s ESC[r ESC[u`（存光标→重置区域→恢复光标）；区域本已全屏时空操作，**字节流无损**（录制回放验证：剥离注入后与原文逐字节相同）。
 - **mux 下光标落到视口外**：窗口比 client 可用区高 1 行，导致光标出现在倒数第二行；现按模式统一计算窗口与 pane 尺寸。
 - **stdout 停摆不再杀连接**：改为纯反压（通道满时阻塞 send，与 ssh 行为一致），不丢字节、不主动断连。
@@ -22,8 +24,14 @@
 - **为已证伪假设写的机制**：`freeze_watchdog`、XTVERSION 探针、osascript 注入 Ctrl+Shift+R、RIS、`0x04` repaint 通路、stdout 停摆取证 dump。根因已定位为滚动区域泄漏，该链条既无效又有害（清屏、抢焦点、制造 keyframe 洪流）。
 
 ### Changed
+- **MCP 工具 schema 补齐机器可读元数据**：68 个工具的 87 个参数补上 `"default"` 键，取值一律以各 handler 的 `unwrap_or(...)` 实际回退值为准（如 `session_name="clum"`（40 处）、`exec.timeout_ms=600000`、`stream_pane.timeout_ms=10000`、`batch_exec.concurrency=5`、`deploy_bridge.concurrency=3`、`split_pane_with.shell=true`、`respawn_pane.kill=false`、`collect_until_exit.starting_at="now"`、`search_recordings.offset=0` 等）；并为原本**完全缺失** `"required"` 键的 3 个全可选工具（`host_filter` / `audit_query` / `list_recordings`）补 `"required": []`。`default` 为纯客户端注解，运行时行为不变——此前默认值仅存在于 description 散文，无法被机器校验，`audit_query.limit` 因"省略即返回全部"的语义而刻意不加默认值。
+- **`deploy/deploy-bridge.sh` 的 `CLUM_SERVER_ADDR` 不再有隐式默认值（breaking）**：此前 hub 模式在未设置该变量时会静默回退到硬编码的内网地址，现改为必填——未设置立即报错并给出用法提示。连带清理仓库内其余内网地址残留：`config/bridge.env.example`、`server_config.rs` 的字段文档示例、`deploy/generate-certs.sh` 的 usage 示例均改为通用占位符。`just deploy-bridge` 的 hub 模式现在需要 `CLUM_SERVER_ADDR=<server>:9788`（direct 模式不需要）。
 - kitty keyboard 过滤器保留为 **opt-in**（`CLUM_KITTY_FILTER=1`，默认关闭）。
 - 保留（有实证支撑，勿删）：bridge 对 daemon 订阅静默停推的自愈（`RAW_ECHO_TIMEOUT_MS` / `RAW_IDLE_RESUBSCRIBE_MS`）、bridge 的 send_text IPC 挂死看护（`SEND_TEXT_TIMEOUT` 强制重连，输入通路挂死后唯一恢复手段）。
+
+### Docs
+- **`AGENTS.md` 项目结构**：移除指向项目内 `.opencode/skills/`、`.qoder/skills/` 的行（前者为空目录、后者被 `.gitignore` 忽略，均非仓库内容），改为指向根 `SKILL.md`，并注明 clum-mcp skill 安装到全局 `~/.config/opencode/skills/clum-mcp/`。
+- **`clum-docs/DEPLOY.md`**：修复 §5「MCP Server CLI 参数参考」表格排版——3 个引用块原先插在表格中间，使 13 项参数失去表头而无法渲染，现移至表格之后；删除故障排查表中指向已删除文件 `config/rmux.conf` 的括注（该文件已随 `aa11571` 移除），passthrough 说明改为「由 daemon 启动参数决定，项目内无独立 rmux 配置文件」。
 
 ## [0.18.0] — 2026-09-14
 
