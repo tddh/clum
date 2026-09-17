@@ -166,18 +166,35 @@ WantedBy=multi-user.target
 
 ### 3. 更新 bridge（已有安装）
 
+**方式 1（推荐）：`deploy_bridge` MCP 工具** —— 只替换二进制并重启，保留各机现有 `/etc/clum/bridge.env` 与 systemd unit：
+
 ```bash
-# 交叉编译
+# 1) 交叉编译
 just release-linux
-
-# 替换二进制 + 重启
-ssh root@<your-bridge-ip> "systemctl stop rmux-bridge"
-scp target/x86_64-unknown-linux-musl/release/rmux-bridge root@<your-bridge-ip>:/usr/local/bin/rmux-bridge
-ssh root@<your-bridge-ip> "systemctl start rmux-bridge"
-
-# 验证
-ssh root@<your-bridge-ip> "systemctl status rmux-bridge --no-pager"
+# 2) 把产物放到 Server —— deploy_bridge 的 binary_path 是 SERVER 侧路径，不是客户端本地
+clum-cli push <server-host> target/x86_64-unknown-linux-musl/release/rmux-bridge /tmp/rmux-bridge.new
+# 3) 分发到目标机（自动 chmod +x + fire-and-forget restart，多机并发）
+#    deploy_bridge(hosts=["host-a","host-b"], binary_path="/tmp/rmux-bridge.new", concurrency=3)
+# 4) 验证：host_list 确认 online 恢复；exec 比对 sha256 与本地产物一致
 ```
+
+> ️ 该工具**不做备份**、直接覆盖：需要回滚能力时先保存旧版 `clum-cli pull <host> /usr/local/bin/rmux-bridge <local-path>`。
+> ⚠️ 传给 `binary_path` 的必须是 **Server 文件系统**路径，传客户端路径会报 `binary not found`。
+
+**方式 2：SSH 手动替换**（无 Central Server 时）
+
+```bash
+just release-linux
+# 备份 + 上传到临时路径
+ssh root@<your-bridge-ip> "cp -a /usr/local/bin/rmux-bridge /usr/local/bin/rmux-bridge.bak-$(date +%F)"
+scp target/x86_64-unknown-linux-musl/release/rmux-bridge root@<your-bridge-ip>:/tmp/rmux-bridge.new
+# 替换（必须 chmod 755）+ 重启
+ssh root@<your-bridge-ip> "mv /tmp/rmux-bridge.new /usr/local/bin/rmux-bridge && chmod 755 /usr/local/bin/rmux-bridge && systemctl restart rmux-bridge"
+# 验证：服务状态 + 哈希比对
+ssh root@<your-bridge-ip> "systemctl is-active rmux-bridge && sha256sum /usr/local/bin/rmux-bridge"
+```
+
+> ⚠️ **必须 `chmod 755`**：上传/`scp` 的文件默认没有可执行位，systemd 会以 `Permission denied` **静默失败**——服务看似重启，实则端口无监听且没有明显报错。
 
 ### 4. Bridge CLI 参数参考
 

@@ -1239,10 +1239,14 @@ forward_create host="tf01" local_port=8080 remote_host="api.internal" remote_por
 
 内部流程：查询 systemd ExecStart → 校验路径 → 上传二进制 → 设权限 → 替换 → `systemctl restart` 重启服务（fire-and-forget，不等待重连验证）。
 
+> ⚠️ **Central Server 模式（推荐部署方式）**：`binary_path` 指的是 **SERVER 文件系统**上的路径，不是客户端/AI 本地机器。客户端本地编译的产物请先用 `clum-cli push <server-host> <local-bin> <server-path>` 传到 Server，再把那个 Server 路径作为 `binary_path`（直接传客户端路径会报 `binary not found`）。
+
+> ⚠️ **本工具不做备份**：它直接覆盖目标机 `ExecStart` 指向的二进制，不保留旧版本、也没有回滚动作。需要回滚能力时请先自行保存旧版，例如 `clum-cli pull <host> /usr/local/bin/rmux-bridge <local-path>`。
+
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
 | `hosts` | string[] | ✅ | 目标主机名 |
-| `binary_path` | string | ✅ | 本地编译好的 bridge 二进制路径 |
+| `binary_path` | string | ✅ | **Server 文件系统**上的二进制路径（⚠️ 非客户端本地） |
 | `remote_path` | string | | 远程目标路径（不传则从 systemd 自动获取） |
 | `concurrency` | integer | | 最大并发数，默认 3 |
 
