@@ -152,7 +152,7 @@ bash deploy/install-daemon.sh root@<your-bridge-ip>
 
 # 步骤 2：编译并部署 bridge（一键）
 just release-linux
-BRIDGE_TOKEN="<your-token>" just deploy-bridge host=root@<your-bridge-ip>
+BRIDGE_TOKEN="<your-token>" CLUM_SERVER_ADDR=SERVER:9788 just deploy-bridge host=root@<your-bridge-ip>
 ```
 
 ### 配置主机注册表

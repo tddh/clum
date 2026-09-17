@@ -64,6 +64,7 @@ certs-host host:
 # ─── 部署 ────────────────────────────
 
 # 部署 bridge（首次或重新配置）mode=hub|direct
+# hub 模式需设置 CLUM_SERVER_ADDR=<server>:9788（direct 模式不需要）
 deploy-bridge host mode='hub':
     BRIDGE_TOKEN="${BRIDGE_TOKEN:?set BRIDGE_TOKEN env var}" bash deploy/deploy-bridge.sh ./target/x86_64-unknown-linux-musl/release/rmux-bridge {{host}} {{mode}}
 

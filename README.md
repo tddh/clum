@@ -152,7 +152,7 @@ bash deploy/install-daemon.sh root@<your-bridge-ip>
 
 # Step 2: Compile & deploy bridge (one-shot)
 just release-linux
-BRIDGE_TOKEN="<your-token>" just deploy-bridge host=root@<your-bridge-ip>
+BRIDGE_TOKEN="<your-token>" CLUM_SERVER_ADDR=SERVER:9788 just deploy-bridge host=root@<your-bridge-ip>
 ```
 
 ### Host Registry
