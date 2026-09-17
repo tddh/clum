@@ -34,7 +34,7 @@ Security assumptions:
 - Bridge authentication uses static tokens: direct-mode connections compare tokens in constant time; enrolled bridges authenticate at registration via a SHA-256 token-hash lookup against the server's token map (revocation evicts the map entry)
 - QUIC transport (Server↔Bridge, Server↔CLI) is TLS 1.3 encrypted (mandatory in the QUIC protocol)
 - The MCP HTTPS endpoint uses rustls (TLS 1.2+, negotiates 1.3 by default); HTTP mode is TLS-only (fail-closed) — startup fails if `--server-cert`/`--server-key` are missing, never falls back to plain HTTP
-- CA verification is enforced on all connections: server→bridge direct-mode connections require `--ca-cert` and fail closed without it; in pure enrolled deployments (bridges initiate the connection) the server's `--ca-cert` can be omitted. The former `--insecure` flag has been removed; skipping TLS verification is not supported
+- CA verification is enforced on all connections: direct-mode connections (the server connecting out to a bridge) verify the bridge certificate against the CA root, which must be passed explicitly via `--ca-cert`. **If `--ca-cert` is omitted, the root store silently falls back to the system WebPKI roots** (`build_root_store(None)`), which only works for publicly-signed bridge certificates — a private CA must always be passed explicitly. In pure enrolled deployments (bridges initiate the connection) the server's `--ca-cert` can be omitted. The former `--insecure` flag has been removed; skipping TLS verification is not supported
 
 For production deployments:
 - Use a self-managed CA to sign bridge certificates

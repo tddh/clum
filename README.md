@@ -85,9 +85,11 @@ graph LR
 | AI clients | Any machine | Central Server (HTTP, MCP protocol) |
 | `clum-cli` | Operator machine | Central Server (QUIC, `--server-addr`) |
 
-> 💡 New bridges deploy with one command: `curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/releases/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=SERVER:9788 sh`
+> 💡 New bridges deploy with one command (after the server's `releases/` assets are staged — see below): `curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/releases/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=SERVER:9788 sh`
 >
 > `<download_token>` and `BRIDGE_TOKEN=xxx` are the **same** bridge token (from `clum-mcp bridge add`) — the install script uses it both for the download header and for registration.
+>
+> ⚠️ `/releases/*` is served from `<static_dir>/releases/`, and no deployment script stages those files. Put `deploy/install.sh`, `certs/ca.crt` and the bridge binary (named `rmux-bridge-linux-<arch>`) under `<static_dir>/releases/` first — otherwise the URL returns nothing.
 
 > 💡 During deployment, the bridge auto-detects the RMUX socket path — no manual configuration needed.
 

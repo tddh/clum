@@ -85,9 +85,11 @@ graph LR
 | AI 客户端 | 任意机器 | Central Server（HTTP，MCP 协议） |
 | `clum-cli` | 运维人员机器 | Central Server（QUIC，`--server-addr`） |
 
-> 💡 新 Bridge 一键部署：`curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/releases/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=SERVER:9788 sh`
+> 💡 新 Bridge 一键部署（需先铺好 server 端 `releases/` 产物，见下）：`curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/releases/install.sh | BRIDGE_TOKEN=xxx SERVER_ADDR=SERVER:9788 sh`
 >
 > `<download_token>` 与 `BRIDGE_TOKEN=xxx` 是**同一个** bridge token（由 `clum-mcp bridge add` 生成）——安装脚本用同一 token 既做下载鉴权、也做注册认证。
+>
+> ⚠️ `/releases/*` 由 `<static_dir>/releases/` 提供，且**没有任何部署脚本会铺设这些文件**。需先把 `deploy/install.sh`、`certs/ca.crt` 与 bridge 二进制（命名为 `rmux-bridge-linux-<arch>`）放入 `<static_dir>/releases/`，否则该 URL 取不到内容。
 
 > 💡 部署时 bridge 会自动检测 RMUX socket 路径，无需手动配置。
 

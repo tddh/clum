@@ -34,6 +34,18 @@
 
 ### 1. 部署 Server
 
+**部署前**：备好 `certs/` 下三个文件。脚本只上传**已存在**的文件（缺失静默跳过），而 http 模式 TLS 是 fail-closed —— 缺 `server.crt`/`server.key` 会导致服务启动失败：
+
+- `certs/ca.crt` —— CA 根证书
+- `certs/server.crt` / `certs/server.key` —— **Server 自身主机**的证书（CN/SAN 指向 server 的 IP 或域名）
+
+```bash
+just certs                      # 生成 certs/ca.crt（仅一次）
+just certs-host host=<server-ip>   # 生成 certs/<server-ip>.crt / .key
+cp certs/<server-ip>.crt certs/server.crt
+cp certs/<server-ip>.key certs/server.key
+```
+
 ```bash
 bash deploy/deploy-mcp.sh ./target/x86_64-unknown-linux-musl/release/clum-mcp root@<server-ip>
 ```
@@ -44,6 +56,7 @@ bash deploy/deploy-mcp.sh ./target/x86_64-unknown-linux-musl/release/clum-mcp ro
 - 在 `/etc/clum/` 创建默认 `hosts.yaml`（仅首次；已有文件不覆盖——脚本不接收本机 hosts.yaml）
 - 首次部署时生成默认 `server-config.yaml`
 - 创建 `clum-mcp.service` systemd 服务并启动
+- **不铺设 `/releases/` 静态产物**（见 §2）
 
 ### 2. 添加 Bridge
 
@@ -56,6 +69,16 @@ clum-mcp bridge add my-host --tags gpu,web
 curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/releases/install.sh | \
   BRIDGE_TOKEN=<token> SERVER_ADDR=SERVER:9788 sh
 ```
+
+> **前置**：该 URL 由 `<static_dir>/releases/` 提供（默认 `static_dir: /root/.clum`，即 `/root/.clum/releases/`），且**没有任何部署脚本会铺设它**。需先放入三个文件，否则 URL 返回空、一键安装无法执行：
+> `install.sh`、`ca.crt`、`rmux-bridge-linux-<arch>`（`x86_64` 或 `aarch64`）——注意 bridge 二进制要**按此名重命名**：
+>
+> ```bash
+> ssh root@SERVER 'mkdir -p /root/.clum/releases'
+> scp deploy/install.sh certs/ca.crt root@SERVER:/root/.clum/releases/
+> scp target/x86_64-unknown-linux-musl/release/rmux-bridge \
+>     root@SERVER:/root/.clum/releases/rmux-bridge-linux-x86_64
+> ```
 
 ### 3. 配置 AI 客户端
 
@@ -77,7 +100,7 @@ curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/rele
 |------|------|
 | 目标主机 | Linux x86_64，systemd，有 SSH 访问 |
 | RMUX | `rmux` 0.10.0 daemon 已安装并运行（`curl -fsSL https://rmux.io/install.sh \| sh`，版本由部署脚本固定） |
-| 构建机 | Rust 1.85+，`x86_64-linux-musl-gcc`（交叉编译用 `brew install FiloSottile/musl-cross/musl-cross`） |
+| 构建机 | Rust 1.88+（由依赖 `rmcp 3.0.0` 的 `rust-version = "1.88"` 决定），`x86_64-linux-musl-gcc`（交叉编译用 `brew install FiloSottile/musl-cross/musl-cross`） |
 | 端口 | Server 监听 9788（TCP HTTP + UDP QUIC）；Bridge 为出站连接，无需开放入站端口 |
 | 证书 | 自签名 TLS 证书（`openssl` 即可） |
 
@@ -223,7 +246,7 @@ ssh root@<your-bridge-ip> "systemctl is-active rmux-bridge && sha256sum /usr/loc
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `--mode` | `stdio` | 运行模式：`stdio`（本地）或 `http`（Central Server） |
-| `--config` | 无 | server-config.yaml 路径（http 模式推荐，YAML 配置覆盖 CLI 参数） |
+| `--config` | 无 | server-config.yaml 路径（http 模式推荐；合并优先级 **CLI 参数 > YAML 配置 > 默认值**） |
 | `--listen` | 无 | HTTP/QUIC 监听地址（http 模式，如 `0.0.0.0:9788`） |
 | `--server-cert` | 无 | TLS 服务器证书路径（http 模式必填） |
 | `--server-key` | 无 | TLS 服务器私钥路径（http 模式必填） |
@@ -231,7 +254,7 @@ ssh root@<your-bridge-ip> "systemctl is-active rmux-bridge && sha256sum /usr/loc
 | `--bridge` | 无 | Bridge token（`HOSTNAME=TOKEN` 格式，可多次指定） |
 | `--static-dir` | 无 | 静态文件服务目录（install.sh、ca.crt、releases 等） |
 | `--hosts-file` | `config/hosts.yaml` | 主机注册表路径（直连回退用） |
-| `--ca-cert` | 无 | CA 证书路径（direct 模式必填，缺失则拒绝连接；纯 enrolled 部署可省略） |
+| `--ca-cert` | 无 | CA 证书路径（direct 模式必须显式传入；**缺失时回退系统 WebPKI roots**，仅适用于公网签名证书，私有 CA 场景会连接失败；纯 enrolled 部署可省略） |
 | `--log-level` | `info` | 日志级别：trace/debug/info/warn/error（`RUST_LOG` 环境变量优先） |
 | `--audit-db` | `~/.clum/audit.db` | 审计数据库路径 |
 | `--audit-retention-days` | `90` | 审计数据保留天数 |
@@ -473,4 +496,6 @@ openssl x509 -req -in bridge.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
 # MCP server 启动时指定 CA
 clum-mcp --ca-cert ca.crt ...
 ```
+
+> **Server 自身也需要证书**：http 模式下 `clum-mcp` 要求 `--server-cert` / `--server-key`（缺失即 fail-closed 退出），其 CN/SAN 须匹配 AI 客户端访问的地址（`SERVER:9788`）。用 `just certs-host host=<server-ip>` 生成后另存为 `certs/server.crt` / `certs/server.key`（完整部署流程见 §1）。
 
