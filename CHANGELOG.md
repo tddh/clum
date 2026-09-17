@@ -32,6 +32,8 @@
 ### Docs
 - **`AGENTS.md` 项目结构**：移除指向项目内 `.opencode/skills/`、`.qoder/skills/` 的行（前者为空目录、后者被 `.gitignore` 忽略，均非仓库内容），改为指向根 `SKILL.md`，并注明 clum-mcp skill 安装到全局 `~/.config/opencode/skills/clum-mcp/`。
 - **`clum-docs/DEPLOY.md`**：修复 §5「MCP Server CLI 参数参考」表格排版——3 个引用块原先插在表格中间，使 13 项参数失去表头而无法渲染，现移至表格之后；删除故障排查表中指向已删除文件 `config/rmux.conf` 的括注（该文件已随 `aa11571` 移除），passthrough 说明改为「由 daemon 启动参数决定，项目内无独立 rmux 配置文件」。
+- **bridge 升级路径的文档缺口**（本次实操暴露）：`TOOLS.md` 的 `deploy_bridge` 补两条警告——`binary_path` 是 **Server 文件系统**路径（传客户端路径实测报 `binary not found`），且该工具**不做备份、直接覆盖**；`DEPLOY.md` §3「更新 bridge」重写为两种方式（推荐 `deploy_bridge` MCP 工具 / 无 Central Server 时 SSH 手动），并修正原 SSH 示例**漏 `chmod 755`** 会让 systemd 以 `Permission denied` 静默失败的问题。
+- **`SKILL.md` 新增强制规则 9「MCP 工具调用必须串行」**：HTTP 传输下并发调用多个 clum MCP 工具会返回 `Unexpected message, expect initialize request`（实测 9 个并发 `session_create` 有 5 个失败）；批量操作应改用单个工具内置的批量能力（`batch_exec` / `batch_send_keys` / `batch_upload` / `batch_download` / `deploy_bridge`）。
 
 ## [0.18.0] — 2026-09-14
 
