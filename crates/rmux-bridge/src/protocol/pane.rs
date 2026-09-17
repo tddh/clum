@@ -724,13 +724,13 @@ impl ProtocolProxy {
             "-t".to_string(),
             target_pane_id.to_string(),
         ];
-        if let Some(d) = direction {
-            match d {
-                "horizontal" | "h" => args.push("-h".to_string()),
-                "vertical" | "v" => args.push("-v".to_string()),
-                invalid => {
-                    return json!({"ok": false, "error": format!("invalid direction: {}. Expected 'horizontal'/'h' or 'vertical'/'v'", invalid)})
-                }
+        // 故意与 rmux flag 反向：clum 词表 horizontal=上下、vertical=左右
+        // （见 split_pane / TOOLS.md），而 rmux 的 -v=上下、-h=左右。
+        match direction {
+            None | Some("vertical") | Some("v") => args.push("-h".to_string()),
+            Some("horizontal") | Some("h") => args.push("-v".to_string()),
+            Some(invalid) => {
+                return json!({"ok": false, "error": format!("invalid direction: {}. Expected 'horizontal'/'h' or 'vertical'/'v'", invalid)})
             }
         }
         if let Some(ref s) = size_str {

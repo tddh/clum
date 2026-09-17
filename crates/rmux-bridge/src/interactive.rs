@@ -882,7 +882,7 @@ fn parse_attach_payload(data: &[u8]) -> Result<(String, String, String, u16, u16
     let client_id = String::from_utf8(data[offset..offset + client_id_len].to_vec())?;
     offset += client_id_len;
 
-    if data.len() < 2 {
+    if data.len() < offset + 2 {
         anyhow::bail!("attach payload too short for session_name_len");
     }
     let session_name_len = u16::from_le_bytes([data[offset], data[offset + 1]]) as usize;
@@ -1513,6 +1513,17 @@ mod tests {
         let p = attach_payload("c1", "clum", "%0", 80, 24, Some(0x7f));
         let (_, _, _, _, _, _, mode) = parse_attach_payload(&p).expect("parse");
         assert_eq!(mode, ATTACH_MODE_MUX);
+    }
+
+    #[test]
+    fn parse_attach_payload_rejects_payload_ending_after_client_id() {
+        // client_id 必须合法 UTF-8 才能穿过更早的校验抵达越界点（故用 "ab" 而非任意字节）。
+        let p = [0x02u8, 0x00, b'a', b'b'];
+        let err = parse_attach_payload(&p).expect_err("must reject truncated payload");
+        assert!(
+            err.to_string().contains("too short for session_name_len"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
