@@ -100,7 +100,7 @@ BRIDGE_AUDIT_DB=/opt/clum/bridge_events.db
 "
 
 if [ "$MODE" = "hub" ]; then
-    SERVER_ADDR="${CLUM_SERVER_ADDR:-10.220.71.1:9788}"
+    SERVER_ADDR="${CLUM_SERVER_ADDR:?Set CLUM_SERVER_ADDR to the central server address (e.g. SERVER:9788)}"
     BRIDGE_ENV+="
 # Hub server connection
 CLUM_SERVER_ADDR=$SERVER_ADDR

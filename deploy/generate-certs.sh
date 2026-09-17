@@ -2,7 +2,7 @@
 # 证书管理：生成 CA 根证书 + 按主机签发独立证书
 # 用法:
 #   ./generate-certs.sh certs                    # 生成 CA 根证书
-#   ./generate-certs.sh certs 10.220.71.1        # 为主机签发证书
+#   ./generate-certs.sh certs <server-ip>        # 为主机签发证书
 #   ./generate-certs.sh certs tf01.example.com   # 支持域名
 set -euo pipefail
 
