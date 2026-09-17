@@ -93,7 +93,8 @@ pub fn tools_definition() -> Value {
                         "label_key": { "type": "string", "description": "Label key to filter by" },
                         "label_value": { "type": "string", "description": "Label value to match (used with label_key)" },
                         "pattern": { "type": "string", "description": "Hostname glob pattern, e.g. prod-web-*, supports * and ? wildcards" }
-                    }
+                    },
+                    "required": []
                 }
             },
             {
@@ -122,7 +123,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name (default: 'clum'). Must be unique per host." }
+                        "session_name": { "type": "string", "description": "Session name (default: 'clum'). Must be unique per host.", "default": "clum" }
                     },
                     "required": ["host"]
                 }
@@ -155,7 +156,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "keys": { "type": "string", "description": "Key sequence, e.g. \\n=Enter, \\x03=Ctrl-C. ⚠️ End with \\n to press Enter — a sequence without trailing \\n is typed but NOT executed." },
                         "sensitive": { "type": "boolean", "description": "Mark input as sensitive (password, token, 2FA code): audit detail is redacted to '[REDACTED:N bytes]'. Inputs sent while the pane is in 'password' terminal state are auto-redacted regardless of this flag. There is no way to opt out of redaction in password state." }
@@ -170,15 +171,15 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
-                        "max_lines": { "type": "integer", "description": "Default 200, 0=unlimited" },
-                        "ansi": { "type": "boolean", "description": "Preserve ANSI escape codes (default: false). When true, text is base64-encoded." },
+                        "max_lines": { "type": "integer", "description": "Default 200, 0=unlimited", "default": 200 },
+                        "ansi": { "type": "boolean", "description": "Preserve ANSI escape codes (default: false). When true, text is base64-encoded.", "default": false },
                         "start_line": { "type": "integer", "description": "Starting line (negative = from end). Overrides max_lines when set." },
                         "end_line": { "type": "integer", "description": "Ending line (negative = from end)" },
-                        "join_wrapped": { "type": "boolean", "description": "Join terminal-wrapped lines into single lines (default: false)" },
-                        "preserve_spaces": { "type": "boolean", "description": "Preserve trailing spaces (default: false)" },
-                        "alternate": { "type": "boolean", "description": "Capture alternate screen (e.g. vim/less). Default: false." },
+                        "join_wrapped": { "type": "boolean", "description": "Join terminal-wrapped lines into single lines (default: false)", "default": false },
+                        "preserve_spaces": { "type": "boolean", "description": "Preserve trailing spaces (default: false)", "default": false },
+                        "alternate": { "type": "boolean", "description": "Capture alternate screen (e.g. vim/less). Default: false.", "default": false },
                         "buffer_name": { "type": "string", "description": "Write capture to a named buffer instead of returning text directly. Other params (max_lines, start_line, etc.) still apply to limit the captured content." }
                     },
                     "required": ["host"]
@@ -191,10 +192,10 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "text": { "type": "string", "description": "Text pattern to wait for (exact match, not regex)" },
-                        "timeout_ms": { "type": "number", "description": "Maximum wait time in milliseconds (default: 30000)" }
+                        "timeout_ms": { "type": "number", "description": "Maximum wait time in milliseconds (default: 30000)", "default": 30000 }
                     },
                     "required": ["host", "text"]
                 }
@@ -206,7 +207,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "command": { "type": "string", "description": "Shell command to execute (e.g., 'ls -la | grep foo > /tmp/out')" }
                     },
@@ -220,15 +221,15 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
                         "command": { "type": "string", "description": "Replace default shell with this command (optional)" },
                         "args": { "type": "array", "items": { "type": "string" }, "description": "Command arguments (used when shell=false)" },
-                        "shell": { "type": "boolean", "description": "Run command via /bin/sh -c (default: false, spawn mode)" },
+                        "shell": { "type": "boolean", "description": "Run command via /bin/sh -c (default: false, spawn mode)", "default": false },
                         "cwd": { "type": "string", "description": "Working directory for the new process" },
                         "env": { "type": "object", "description": "Environment variables as KEY:VALUE pairs" },
-                        "kill": { "type": "boolean", "description": "Force kill running process before respawn (default: false)" },
-                        "keep_alive_on_exit": { "type": "boolean", "description": "Keep pane open after process exits (default: false)" }
+                        "kill": { "type": "boolean", "description": "Force kill running process before respawn (default: false)", "default": false },
+                        "keep_alive_on_exit": { "type": "boolean", "description": "Keep pane open after process exits (default: false)", "default": false }
                     },
                     "required": ["host", "pane_id"]
                 }
@@ -240,9 +241,9 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
-                        "timeout_ms": { "type": "number", "description": "Maximum wait time in milliseconds (default: 30000)" }
+                        "timeout_ms": { "type": "number", "description": "Maximum wait time in milliseconds (default: 30000)", "default": 30000 }
                     },
                     "required": ["host"]
                 }
@@ -254,7 +255,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "direction": { "type": "string", "description": "horizontal or vertical (currently ignored, reserved for future use)" }
                     },
                     "required": ["host"]
@@ -267,9 +268,9 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
-                        "timeout_ms": { "type": "number", "description": "Blocking timeout in ms (default: 10000)" }
+                        "timeout_ms": { "type": "number", "description": "Blocking timeout in ms (default: 10000)", "default": 10000 }
                     },
                     "required": ["host"]
                 }
@@ -283,9 +284,9 @@ pub fn tools_definition() -> Value {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "local_path": { "type": "string", "description": "Local file/directory path" },
                         "remote_path": { "type": "string", "description": "Remote destination path" },
-                        "overwrite": { "type": "string", "enum": ["overwrite", "skip", "rename", "error"], "description": "overwrite|skip|rename|error (default: overwrite)" },
+                        "overwrite": { "type": "string", "enum": ["overwrite", "skip", "rename", "error"], "description": "overwrite|skip|rename|error (default: overwrite)", "default": "overwrite" },
                         "exclude": { "type": "array", "items": { "type": "string" }, "description": "Glob patterns, e.g. [\"*.log\"]. Only if user specifies." },
-                        "bandwidth_limit_mbps": { "type": "integer", "description": "Bandwidth limit in Mbps (0=unlimited, default: 0)" }
+                        "bandwidth_limit_mbps": { "type": "integer", "description": "Bandwidth limit in Mbps (0=unlimited, default: 0)", "default": 0 }
                     },
                     "required": ["host", "local_path", "remote_path"]
                 }
@@ -299,7 +300,7 @@ pub fn tools_definition() -> Value {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "remote_path": { "type": "string", "description": "Remote file or directory path to download" },
                         "local_path": { "type": "string", "description": "Local destination path (for directories, this is the root directory)" },
-                        "bandwidth_limit_mbps": { "type": "integer", "description": "Bandwidth limit in Mbps (0=unlimited, default: 0)" }
+                        "bandwidth_limit_mbps": { "type": "integer", "description": "Bandwidth limit in Mbps (0=unlimited, default: 0)", "default": 0 }
                     },
                     "required": ["host", "remote_path", "local_path"]
                 }
@@ -311,11 +312,11 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "command": { "type": "string", "description": "Shell command, e.g. ls -la" },
-                        "timeout_ms": { "type": "number", "description": "Safety-net timeout in ms (default: 600000 = 10min). Normal commands don't need to set this — waiting for command completion is the default behavior." },
-                        "max_lines": { "type": "integer", "description": "Keep only the LAST N lines of output (default: 200, 0 = unlimited). Full output is always captured from scrollback regardless of this setting." },
+                        "timeout_ms": { "type": "number", "description": "Safety-net timeout in ms (default: 600000 = 10min). Normal commands don't need to set this — waiting for command completion is the default behavior.", "default": 600000 },
+                        "max_lines": { "type": "integer", "description": "Keep only the LAST N lines of output (default: 200, 0 = unlimited). Full output is always captured from scrollback regardless of this setting.", "default": 200 },
                         "clear_screen": { "type": "boolean", "description": "Clear pane before running" }
                     },
                     "required": ["host", "command"]
@@ -328,9 +329,9 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID to split, e.g. %0 (optional, auto-detects if omitted)" },
-                        "direction": { "type": "string", "description": "horizontal (top/bottom) or vertical (left/right). Default: horizontal" }
+                        "direction": { "type": "string", "description": "horizontal (top/bottom) or vertical (left/right). Default: horizontal", "default": "horizontal" }
                     },
                     "required": ["host"]
                 }
@@ -342,10 +343,10 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
-                        "cols": { "type": "integer", "description": "Width in columns (default: 80)" },
-                        "rows": { "type": "integer", "description": "Height in rows (default: 24)" }
+                        "cols": { "type": "integer", "description": "Width in columns (default: 80)", "default": 80 },
+                        "rows": { "type": "integer", "description": "Height in rows (default: 24)", "default": 24 }
                     },
                     "required": ["host"]
                 }
@@ -357,7 +358,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "text": { "type": "string", "description": "Plain text to send (no escape interpretation)" },
                         "sensitive": { "type": "boolean", "description": "Mark input as sensitive (password, token, 2FA code): audit detail is redacted to '[REDACTED:N bytes]'. Inputs sent while the pane is in 'password' terminal state are auto-redacted regardless of this flag. There is no way to opt out of redaction in password state." }
@@ -372,7 +373,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "title": { "type": "string", "description": "Title to set (e.g., 'web-server', 'db-monitor')" }
                     },
@@ -386,7 +387,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "pattern": { "type": "string", "description": "Text pattern to search for (exact match, not regex)" }
                     },
@@ -400,7 +401,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_ids": { "type": "array", "items": { "type": "string" }, "description": "Target pane IDs (e.g., ['%0', '%1']). If omitted, broadcasts to all panes in the window." },
                         "keys": { "type": "string", "description": "Key sequence to send (supports \\n, \\t, \\x03, \\xNN, etc.)" },
                         "sensitive": { "type": "boolean", "description": "Mark input as sensitive (password, token, 2FA code): audit detail is redacted to '[REDACTED:N bytes]'. Inputs sent while the pane is in 'password' terminal state are auto-redacted regardless of this flag. There is no way to opt out of redaction in password state." }
@@ -427,7 +428,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID to close, e.g. %0" }
                     },
                     "required": ["host", "pane_id"]
@@ -440,7 +441,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "window_index": { "type": "integer", "description": "Window index (0-based). Use window_info or list_window_panes to find the index." },
                         "name": { "type": "string", "description": "New window name (e.g., 'web-server', 'database')" }
                     },
@@ -454,7 +455,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "window_index": { "type": "integer", "description": "Window index (0-based)" }
                     },
                     "required": ["host", "window_index"]
@@ -467,7 +468,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "window_index": { "type": "integer", "description": "Window index (0-based)" },
                         "width": { "type": "integer", "description": "Window width in columns (optional)" },
                         "height": { "type": "integer", "description": "Window height in rows (optional)" }
@@ -482,7 +483,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "window_index": { "type": "integer", "description": "Window index to activate (0-based)" }
                     },
                     "required": ["host", "window_index"]
@@ -495,7 +496,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "window_index": { "type": "integer", "description": "Window index (0-based)" },
                         "layout": { "type": "string", "enum": ["even-horizontal", "even-vertical", "main-horizontal", "main-vertical", "tiled"], "description": "Layout name: even-horizontal, even-vertical, main-horizontal, main-vertical, or tiled" }
                     },
@@ -509,7 +510,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "window_index": { "type": "integer", "description": "Window index to close (0-based). Use window_info or list_window_panes to find the index." }
                     },
                     "required": ["host", "window_index"]
@@ -522,7 +523,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name to destroy (e.g., 'clum')" }
+                        "session_name": { "type": "string", "description": "Session name to destroy (e.g., 'clum')", "default": "clum" }
                     },
                     "required": ["host"]
                 }
@@ -534,7 +535,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" }
                     },
                     "required": ["host"]
@@ -547,7 +548,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "window_index": { "type": "integer", "description": "Window index (0-based)" }
                     },
                     "required": ["host", "window_index"]
@@ -560,7 +561,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID to check, e.g. %0. If omitted, auto-detects the lowest-numbered pane in window 0 and checks that (useful for verifying a session has any usable pane)." }
                     },
                     "required": ["host"]
@@ -574,9 +575,9 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "hosts": { "type": "array", "items": { "type": "string" }, "description": "Hostname list, e.g. [\"tf01\", \"dns-backup\"]" },
                         "command": { "type": "string", "description": "Command to run on each host" },
-                        "timeout_ms": { "type": "number", "description": "Per-host timeout in ms (default: 600000 = 10min)" },
-                        "max_lines": { "type": "integer", "description": "Max output lines per host (default: 200, 0=unlimited)" },
-                        "concurrency": { "type": "integer", "description": "Max concurrent connections (default: 5, 0=unlimited)" }
+                        "timeout_ms": { "type": "number", "description": "Per-host timeout in ms (default: 600000 = 10min)", "default": 600000 },
+                        "max_lines": { "type": "integer", "description": "Max output lines per host (default: 200, 0=unlimited)", "default": 200 },
+                        "concurrency": { "type": "integer", "description": "Max concurrent connections (default: 5, 0=unlimited)", "default": 5 }
                     },
                     "required": ["hosts", "command"]
                 }
@@ -590,9 +591,9 @@ pub fn tools_definition() -> Value {
                         "hosts": { "type": "array", "items": { "type": "string" }, "description": "Hostname list" },
                         "local_path": { "type": "string", "description": "Local file or directory path" },
                         "remote_path": { "type": "string", "description": "Remote destination path" },
-                        "overwrite": { "type": "string", "description": "overwrite|skip|rename|error (default: overwrite)" },
+                        "overwrite": { "type": "string", "enum": ["overwrite", "skip", "rename", "error"], "description": "overwrite|skip|rename|error (default: overwrite)", "default": "overwrite" },
                         "exclude": { "type": "array", "items": { "type": "string" }, "description": "Glob patterns to exclude" },
-                        "concurrency": { "type": "integer", "description": "Max concurrent connections (default: 5, 0=unlimited)" }
+                        "concurrency": { "type": "integer", "description": "Max concurrent connections (default: 5, 0=unlimited)", "default": 5 }
                     },
                     "required": ["hosts", "local_path", "remote_path"]
                 }
@@ -606,7 +607,7 @@ pub fn tools_definition() -> Value {
                         "hosts": { "type": "array", "items": { "type": "string" }, "description": "Hostname list" },
                         "remote_path": { "type": "string", "description": "Remote file path to download" },
                         "local_dir": { "type": "string", "description": "Local directory (files saved as <local_dir>/<hostname>/<filename>)" },
-                        "concurrency": { "type": "integer", "description": "Max concurrent connections (default: 5, 0=unlimited)" }
+                        "concurrency": { "type": "integer", "description": "Max concurrent connections (default: 5, 0=unlimited)", "default": 5 }
                     },
                     "required": ["hosts", "remote_path", "local_dir"]
                 }
@@ -619,9 +620,9 @@ pub fn tools_definition() -> Value {
                     "properties": {
                         "hosts": { "type": "array", "items": { "type": "string" }, "description": "Hostname list, e.g. [\"tf01\", \"dns-backup\"]" },
                         "keys": { "type": "string", "description": "Key sequence to send (supports \\n, \\t, \\x03, \\xNN, etc.)" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
-                        "concurrency": { "type": "integer", "description": "Max concurrent connections (default: 5, 0=unlimited)" },
+                        "concurrency": { "type": "integer", "description": "Max concurrent connections (default: 5, 0=unlimited)", "default": 5 },
                         "sensitive": { "type": "boolean", "description": "Mark input as sensitive (password, token, 2FA code): audit detail is redacted to '[REDACTED:N bytes]'. Inputs sent while the pane is in 'password' terminal state are auto-redacted regardless of this flag. There is no way to opt out of redaction in password state." }
                     },
                     "required": ["hosts", "keys"]
@@ -637,7 +638,7 @@ pub fn tools_definition() -> Value {
                         "local_port": { "type": "integer", "description": "Local port to listen on (e.g., 5432 for PostgreSQL)" },
                         "remote_host": { "type": "string", "description": "Remote target host (can be internal address like 127.0.0.1 or 10.x.x.x)" },
                         "remote_port": { "type": "integer", "description": "Remote target port (e.g., 5432 for PostgreSQL)" },
-                        "local_addr": { "type": "string", "description": "Local bind address (default: 127.0.0.1, use 0.0.0.0 to listen on all interfaces)" }
+                        "local_addr": { "type": "string", "description": "Local bind address (default: 127.0.0.1, use 0.0.0.0 to listen on all interfaces)", "default": "127.0.0.1" }
                     },
                     "required": ["host", "local_port", "remote_host", "remote_port"]
                 }
@@ -700,7 +701,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" }
                     },
                     "required": ["host"]
@@ -713,7 +714,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "pattern": { "type": "string", "description": "Text pattern to search for (exact match, not regex)" }
                     },
@@ -727,7 +728,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" }
                     },
                     "required": ["host"]
@@ -751,7 +752,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
                         "buffer_name": { "type": "string", "description": "Buffer name to paste (optional, pastes top buffer if omitted)" }
                     },
@@ -777,16 +778,16 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Source pane ID to split, e.g. %0 (optional, auto-detects if omitted)" },
                         "direction": { "type": "string", "description": "Split direction: horizontal (top/bottom) or vertical (left/right)" },
                         "command": { "type": "string", "description": "Command to run in the new pane (e.g., 'tail -f /var/log/syslog')" },
                         "args": { "type": "array", "items": { "type": "string" }, "description": "Command arguments (used when shell=false)" },
-                        "shell": { "type": "boolean", "description": "Run command via /bin/sh -c (default: true). Set false for direct exec without shell interpretation." },
+                        "shell": { "type": "boolean", "description": "Run command via /bin/sh -c (default: true). Set false for direct exec without shell interpretation.", "default": true },
                         "cwd": { "type": "string", "description": "Working directory for the new pane" },
                         "env": { "type": "object", "description": "Environment variables as KEY:VALUE pairs" },
                         "title": { "type": "string", "description": "Title for the new pane (useful for identification)" },
-                        "keep_alive_on_exit": { "type": "boolean", "description": "Keep pane open after process exits (default: false)" }
+                        "keep_alive_on_exit": { "type": "boolean", "description": "Keep pane open after process exits (default: false)", "default": false }
                     },
                     "required": ["host", "direction", "command"]
                 }
@@ -810,11 +811,11 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
-                        "max_bytes": { "type": "integer", "description": "Maximum bytes to collect (default: 1048576 = 1MB)" },
-                        "timeout_ms": { "type": "number", "description": "Timeout in milliseconds (default: 60000)" },
-                        "starting_at": { "type": "string", "enum": ["now", "oldest"], "description": "Where to start collecting: 'now' (default) or 'oldest' (includes scrollback)" }
+                        "max_bytes": { "type": "integer", "description": "Maximum bytes to collect (default: 1048576 = 1MB)", "default": 1048576 },
+                        "timeout_ms": { "type": "number", "description": "Timeout in milliseconds (default: 60000)", "default": 60000 },
+                        "starting_at": { "type": "string", "enum": ["now", "oldest"], "description": "Where to start collecting: 'now' (default) or 'oldest' (includes scrollback)", "default": "now" }
                     },
                     "required": ["host"]
                 }
@@ -826,10 +827,10 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID to break out (optional, breaks current pane if omitted)" },
                         "destination_window": { "type": "integer", "description": "Target window index (optional, creates new window if omitted)" },
-                        "detached": { "type": "boolean", "description": "Detach the pane (default: false)" }
+                        "detached": { "type": "boolean", "description": "Detach the pane (default: false)", "default": false }
                     },
                     "required": ["host"]
                 }
@@ -841,7 +842,7 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "source_pane_id": { "type": "string", "description": "Pane ID to move (e.g., %1)" },
                         "target_pane_id": { "type": "string", "description": "Pane ID to join with in the target window (e.g., %0)" },
                         "direction": { "type": "string", "description": "Split direction: horizontal or vertical (optional)" },
@@ -857,10 +858,10 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "source_pane_id": { "type": "string", "description": "First pane ID (e.g., %0)" },
                         "target_pane_id": { "type": "string", "description": "Second pane ID to swap with (e.g., %1)" },
-                        "detached": { "type": "boolean", "description": "Detach source pane after swap (default: false)" }
+                        "detached": { "type": "boolean", "description": "Detach source pane after swap (default: false)", "default": false }
                     },
                     "required": ["host", "source_pane_id", "target_pane_id"]
                 }
@@ -884,13 +885,13 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "row": { "type": "integer", "description": "Top row of region (0-based). Omit all coords for full pane capture." },
                         "col": { "type": "integer", "description": "Left column of region (0-based)" },
                         "rows": { "type": "integer", "description": "Height of region in rows" },
                         "cols": { "type": "integer", "description": "Width of region in columns" },
-                        "styled": { "type": "boolean", "description": "Preserve style/color markup (default: false, plain text only)" }
+                        "styled": { "type": "boolean", "description": "Preserve style/color markup (default: false, plain text only)", "default": false }
                     },
                     "required": ["host"]
                 }
@@ -902,11 +903,11 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
                         "bytes": { "type": "string", "description": "Raw bytes to wait for, encoded as base64" },
-                        "only_new": { "type": "boolean", "description": "Only match data appearing after this call (skip existing buffer, default: false)" },
-                        "timeout_ms": { "type": "number", "description": "Maximum total wait time in milliseconds (default: 600000)" }
+                        "only_new": { "type": "boolean", "description": "Only match data appearing after this call (skip existing buffer, default: false)", "default": false },
+                        "timeout_ms": { "type": "number", "description": "Maximum total wait time in milliseconds (default: 600000)", "default": 600000 }
                     },
                     "required": ["host", "bytes"]
                 }
@@ -918,10 +919,10 @@ pub fn tools_definition() -> Value {
                     "type": "object",
                     "properties": {
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
-                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)" },
+                        "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
-                        "stable_ms": { "type": "number", "description": "Duration of stability required in milliseconds (default: 500)" },
-                        "timeout_ms": { "type": "number", "description": "Maximum total wait time in milliseconds (default: 30000)" }
+                        "stable_ms": { "type": "number", "description": "Duration of stability required in milliseconds (default: 500)", "default": 500 },
+                        "timeout_ms": { "type": "number", "description": "Maximum total wait time in milliseconds (default: 30000)", "default": 30000 }
                     },
                     "required": ["host"]
                 }
@@ -935,7 +936,7 @@ pub fn tools_definition() -> Value {
                         "hosts": { "type": "array", "items": { "type": "string" }, "description": "Target hostnames (must already have rmux-bridge running)" },
                         "binary_path": { "type": "string", "description": "Local path to compiled rmux-bridge binary (e.g., './target/release/rmux-bridge')" },
                         "remote_path": { "type": "string", "description": "Remote binary path (auto-detected from systemd ExecStart if omitted)" },
-                        "concurrency": { "type": "integer", "description": "Max concurrent deployments (default: 3, 0=unlimited)" }
+                        "concurrency": { "type": "integer", "description": "Max concurrent deployments (default: 3, 0=unlimited)", "default": 3 }
                     },
                     "required": ["hosts", "binary_path"]
                 }
@@ -951,7 +952,7 @@ pub fn tools_definition() -> Value {
                         "session_name": { "type": "string", "description": "Filter by session name" },
                         "since": { "type": "string", "description": "Start time (RFC3339)" },
                         "until": { "type": "string", "description": "End time (RFC3339)" },
-                        "limit": { "type": "integer", "description": "Max number of events to return (default: 50)" }
+                        "limit": { "type": "integer", "description": "Max number of events to return (default: 50)", "default": 50 }
                     },
                     "required": ["host"]
                 }
@@ -969,7 +970,8 @@ pub fn tools_definition() -> Value {
                         "until": { "type": "string", "description": "End time (RFC3339)" },
                         "success": { "type": "boolean", "description": "Filter by success/failure" },
                         "limit": { "type": "integer", "description": "Max number of events to return. If omitted, returns all matching events." }
-                    }
+                    },
+                    "required": []
                 }
             },
             {
@@ -981,7 +983,8 @@ pub fn tools_definition() -> Value {
                         "host": { "type": "string", "description": "Filter by hostname" },
                         "date": { "type": "string", "description": "Filter by date (YYYY-MM-DD)" },
                         "session": { "type": "string", "description": "Filter by session name prefix" }
-                    }
+                    },
+                    "required": []
                 }
             },
             {
@@ -1006,12 +1009,12 @@ pub fn tools_definition() -> Value {
                         "date_to": { "type": "string", "description": "End date (YYYY-MM-DD, inclusive)" },
                         "session": { "type": "string", "description": "Filter by session name prefix" },
                         "query": { "type": "string", "description": "Search keyword or regex pattern" },
-                        "match_mode": { "type": "string", "description": "plain (substring, default) or regex" },
-                        "search_input": { "type": "boolean", "description": "Include input events in search (default: true)" },
-                        "search_output": { "type": "boolean", "description": "Include output events in search (default: true)" },
-                        "context_lines": { "type": "integer", "description": "Lines of context before/after each match (default: 2, max: 10)" },
-                        "limit": { "type": "integer", "description": "Max matches to return (default: 50, max: 200)" },
-                        "offset": { "type": "integer", "description": "Skip first N matches for pagination (default: 0)" }
+                        "match_mode": { "type": "string", "description": "plain (substring, default) or regex", "default": "plain" },
+                        "search_input": { "type": "boolean", "description": "Include input events in search (default: true)", "default": true },
+                        "search_output": { "type": "boolean", "description": "Include output events in search (default: true)", "default": true },
+                        "context_lines": { "type": "integer", "description": "Lines of context before/after each match (default: 2, max: 10)", "default": 2 },
+                        "limit": { "type": "integer", "description": "Max matches to return (default: 50, max: 200)", "default": 50 },
+                        "offset": { "type": "integer", "description": "Skip first N matches for pagination (default: 0)", "default": 0 }
                     },
                     "required": ["query"]
                 }
