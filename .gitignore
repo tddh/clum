@@ -47,6 +47,10 @@ clum-docs/project-evaluation-2026-08-03.md
 # AI 辅助开发计划
 .sisyphus/
 
+# AI 工具运行时状态与本地计划（机器生成，会随时间无限累积）
+# .omo/plans 下另含本地计划文档；如需将其中某份正式入库，请单独白名单该文件
+.omo/
+
 # Git worktrees
 .worktrees/
 
