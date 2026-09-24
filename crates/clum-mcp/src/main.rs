@@ -319,7 +319,13 @@ async fn main() -> anyhow::Result<()> {
             // File/CLI tokens only — preserved across DB refreshes.
             let static_hashes = hash_map.clone();
 
-            let db_hashes = bridge_store.token_map().await;
+            let db_hashes = match bridge_store.token_map().await {
+                Ok(m) => m,
+                Err(e) => {
+                    tracing::error!("failed to load bridge tokens from db at startup: {e}");
+                    std::collections::HashMap::new()
+                }
+            };
             hash_map.extend(db_hashes);
 
             tracing::info!("loaded {} bridge tokens", hash_map.len());

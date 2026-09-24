@@ -39,7 +39,7 @@
 | `SESSION_NOT_FOUND` / `SESSION_EXISTS` | 会话不存在 / 同名会话已存在（**注意：MCP 的 `session_create` 幂等复用，`SESSION_EXISTS` 对 MCP 路径不可达**，按"只增不改"契约保留） |
 | `PANE_NOT_FOUND` / `PANE_BUSY` | pane 无效/不存在（含 `invalid pane_id`）/ 非空闲 |
 | `WINDOW_NOT_FOUND` / `FORWARD_NOT_FOUND` | 窗口 / 隧道不存在 |
-| `PATH_TRAVERSAL` | 路径含 `..` / null 字节 / 目录过深被拒绝 |
+| `PATH_TRAVERSAL` | 路径含 `..` / null 字节 / 目录过深 / 越界 recordings 目录被拒绝 |
 | `FORWARD_DENIED` | 隧道目标不在 `allowed_forward_targets` 白名单 |
 | `AUTH_FAILED` | 直连（direct）模式 bridge token 认证失败；enrolled 模式 token 校验失败表现为连接建立失败（`BRIDGE_UNREACHABLE` / `CONNECT_TIMEOUT`） |
 | `FORBIDDEN` | API Key 分组隔离：主机不在该 key 可访问的分组内 |
@@ -1391,7 +1391,7 @@ forward_create host="tf01" local_port=8080 remote_host="api.internal" remote_por
 }
 ```
 
-**安全限制**：路径必须在 recordings 目录内，路径穿越会被拒绝。
+**安全限制**：路径必须在 recordings 目录内，路径穿越会被拒绝。返回的 `path` 为 canonicalize 后的绝对路径。
 
 **回放方式**：使用 CLI `clum-cli replay <file.cast> [--speed 2.0] [--idle 1.0]` 或第三方工具 `asciinema play`。
 

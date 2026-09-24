@@ -399,7 +399,7 @@ wait_stable(host, session_name, pane_id)
 | `CONNECTION_LOST` | `recv: connection lost` | bridge 重启或网络中断 | 等待后重试 |
 | `PANE_BUSY` | `pane still active` | shell_command **只接受 dead pane**——任何活进程（**idle 交互 shell 也算**）都被拒绝；respawn 无 `kill=true` 遇活进程同理 | 换用 dead pane（`keep_alive_on_exit` 保留的），或 `respawn_pane(kill=true)` 替换活进程（`close_pane` 需用户明确同意） |
 | `TIMEOUT`（执行类） | `timeout waiting for sentinel...` | 命令执行超时 | `output` 含已探测的可见文本（exec 超时**不含** `partial_output` / `terminal_state` / `cursor`；`wait_*` 与 `collect_until_exit` 超时才回填）。判断终端状态用 `capture_pane`。别重跑 — 用 `wait_exit` / `wait_for_text` 继续等。远端进程仍在运行。 |
-| `PATH_TRAVERSAL` | `path traversal rejected` | 路径包含 `..` | 使用不含 `..` 的绝对路径或相对路径 |
+| `PATH_TRAVERSAL` | `path traversal rejected` / `path outside recordings directory` | 路径包含 `..` 或越界 recordings 目录 | 使用不含 `..` 的绝对路径或相对路径 |
 | `FORWARD_DENIED` | `forward target not in allowed list` | 隧道目标不在白名单中 | 检查 `hosts.yaml` 中的 `allowed_forward_targets` 配置 |
 | `HOST_NOT_FOUND` | `host not found` | 主机名不在 registry 中 | `host_list` 检查可用主机 |
 | `REFUSED_STATE` | （exec 安全拒绝，附具体建议） | 终端非 ready 状态 | 按 `error` 中的建议恢复终端状态后重试 |

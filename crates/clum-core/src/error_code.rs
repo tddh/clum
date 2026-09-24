@@ -104,6 +104,7 @@ pub fn classify_error_message(msg: &str) -> &'static str {
         || has("unsafe relative path")
         || has("path contains null byte")
         || has("directory too deep")
+        || has("path outside recordings")
     {
         return CODE_PATH_TRAVERSAL;
     }
@@ -257,6 +258,10 @@ mod tests {
         );
         assert_eq!(
             classify_error_message("directory too deep (>64)"),
+            CODE_PATH_TRAVERSAL
+        );
+        assert_eq!(
+            classify_error_message("path outside recordings directory"),
             CODE_PATH_TRAVERSAL
         );
         assert_eq!(

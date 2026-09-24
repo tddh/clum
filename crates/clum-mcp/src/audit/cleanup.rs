@@ -108,7 +108,6 @@ impl AuditDb {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::audit::AuditDb;
     use chrono::{TimeZone, Utc};
     use clum_core::types::{AuditAction, AuditEvent};

@@ -89,7 +89,8 @@ impl BridgeStore {
 
         let db = self.db.lock().await;
         let updated = db.execute(
-            "UPDATE bridges SET token_hash = ?1, token_prefix = ?2, revoked_at = NULL WHERE hostname = ?3",
+            "UPDATE bridges SET token_hash = ?1, token_prefix = ?2, revoked_at = NULL,
+             previous_token_hash = NULL, rotated_at = NULL WHERE hostname = ?3",
             rusqlite::params![hash, prefix, hostname],
         )?;
         if updated == 0 {
@@ -129,55 +130,39 @@ impl BridgeStore {
         rows.filter_map(|r| r.ok()).collect()
     }
 
-    pub async fn token_map(&self) -> HashMap<String, String> {
+    /// Snapshot of SHA-256(token) → hostname for all non-revoked bridges,
+    /// plus any previous tokens still inside the 12h rotation grace period.
+    ///
+    /// Returns `Err` when the DB cannot be read, so callers can distinguish a
+    /// genuinely empty result from a failed read. The background refresh relies
+    /// on this: an empty `Ok` must overwrite the in-memory map (otherwise
+    /// revoking the last bridge would leave its token valid forever), while an
+    /// `Err` must preserve the previous in-memory map.
+    pub async fn token_map(&self) -> rusqlite::Result<HashMap<String, String>> {
         let db = self.db.lock().await;
         let mut map: HashMap<String, String> = HashMap::new();
 
         let mut stmt =
-            match db.prepare("SELECT token_hash, hostname FROM bridges WHERE revoked_at IS NULL") {
-                Ok(s) => s,
-                Err(e) => {
-                    tracing::error!("bridge_store token_map prepare failed: {e}");
-                    return map;
-                }
-            };
-        let rows = match stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?))) {
-            Ok(r) => r,
-            Err(e) => {
-                tracing::error!("bridge_store token_map query failed: {e}");
-                return map;
-            }
-        };
+            db.prepare("SELECT token_hash, hostname FROM bridges WHERE revoked_at IS NULL")?;
+        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
         for (hash, host) in rows.filter_map(|r| r.ok()) {
             map.insert(hash, host);
         }
 
         // Include previous tokens within 12h grace period
         let cutoff = (chrono::Utc::now() - chrono::Duration::hours(12)).to_rfc3339();
-        let mut prev_stmt = match db.prepare(
+        let mut prev_stmt = db.prepare(
             "SELECT previous_token_hash, hostname FROM bridges
              WHERE revoked_at IS NULL AND previous_token_hash IS NOT NULL AND rotated_at > ?1",
-        ) {
-            Ok(s) => s,
-            Err(e) => {
-                tracing::error!("bridge_store token_map (previous) prepare failed: {e}");
-                return map;
-            }
-        };
-        let prev_rows = match prev_stmt.query_map(rusqlite::params![cutoff], |row| {
+        )?;
+        let prev_rows = prev_stmt.query_map(rusqlite::params![cutoff], |row| {
             Ok((row.get(0)?, row.get(1)?))
-        }) {
-            Ok(r) => r,
-            Err(e) => {
-                tracing::error!("bridge_store token_map (previous) query failed: {e}");
-                return map;
-            }
-        };
+        })?;
         for (hash, host) in prev_rows.filter_map(|r| r.ok()) {
             map.entry(hash).or_insert(host);
         }
 
-        map
+        Ok(map)
     }
 
     pub async fn validate_token(&self, raw_token: &str) -> bool {
@@ -354,11 +339,23 @@ mod tests {
     #[test]
     fn token_map_empty_db_returns_empty_hashmap() {
         let conn = rusqlite::Connection::open_in_memory().unwrap();
+        create_test_schema(&conn);
+        let store = BridgeStore::from_conn(conn);
+        let map = block_on(store.token_map()).expect("empty schema db should read Ok(empty)");
+        assert!(
+            map.is_empty(),
+            "expected empty HashMap for schema'd db with no rows"
+        );
+    }
+
+    #[test]
+    fn token_map_missing_table_returns_err() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
         let store = BridgeStore::from_conn(conn);
         let result = block_on(store.token_map());
         assert!(
-            result.is_empty(),
-            "expected empty HashMap for fresh in-memory db"
+            result.is_err(),
+            "a db without the bridges table must return Err, not Ok(empty)"
         );
     }
 
@@ -494,6 +491,31 @@ mod tests {
         let new_valid = block_on(store.validate_token(&new_token));
         assert!(!old_valid, "old token should be invalid after join");
         assert!(new_valid, "new token should be valid");
+    }
+
+    #[test]
+    fn join_clears_previous_token_hash() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        create_test_schema(&conn);
+        let store = BridgeStore::from_conn(conn);
+
+        block_on(store.add("test-host", "origtoken1234567890abcdef", &[], None)).unwrap();
+        block_on(store.rotate_token("test-host", "rotatedtoken1234567890abc")).unwrap();
+        assert!(
+            block_on(store.validate_token("origtoken1234567890abcdef")),
+            "rotated-away token should be valid during the 12h grace period"
+        );
+
+        let joined = block_on(store.join("test-host")).unwrap();
+
+        assert!(
+            !block_on(store.validate_token("origtoken1234567890abcdef")),
+            "join must clear previous_token_hash so a revoked token cannot resurrect"
+        );
+        assert!(
+            block_on(store.validate_token(&joined)),
+            "the freshly joined token should be valid"
+        );
     }
 
     // ── join nonexistent host ────────────────────────────────────────

@@ -394,35 +394,19 @@ pub async fn execute_tool(
                         Some(&err_msg),
                     )
                     .await;
-                    Ok(json!({ "error": err_msg }))
+                    Ok(json!({ "ok": false, "error": err_msg }))
                 }
             }
         }
         "get_recording" => {
             let start = std::time::Instant::now();
             let path = args.get("path").and_then(|v| v.as_str()).unwrap_or("");
-
             let caller_group = ctx
                 .caller_group
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .clone();
-            if let Some(ref cg) = caller_group {
-                // Recording paths are absolute: <recordings_dir>/<host>/...
-                let host_from_path = std::path::Path::new(path)
-                    .strip_prefix(&ctx.recordings_dir)
-                    .ok()
-                    .and_then(|rel| rel.components().next())
-                    .map(|c| c.as_os_str().to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                let host_group = resolve_host_group(ctx, &host_from_path).await;
-                if host_group.as_deref() != Some(cg.as_str()) {
-                    anyhow::bail!("host '{host_from_path}' is not in your group '{cg}'");
-                }
-            }
-
-            let result =
-                read_recording_file(&ctx.recordings_dir, &ctx.recording_keyring, path).await;
+            let result = get_recording_checked(ctx, path, caller_group.as_deref()).await;
             let duration_ms = start.elapsed().as_millis() as u64;
             match result {
                 Ok(value) => {
@@ -456,7 +440,7 @@ pub async fn execute_tool(
                         Some(&err_msg),
                     )
                     .await;
-                    Ok(json!({ "error": err_msg }))
+                    Ok(json!({ "ok": false, "error": err_msg }))
                 }
             }
         }
@@ -508,32 +492,62 @@ pub async fn execute_tool(
     result
 }
 
-/// Read a recording file's content, ensuring the resolved path stays within
-/// `recordings_dir` (path-traversal protection).
-async fn read_recording_file(
-    recordings_dir: &std::path::Path,
-    keyring: &crate::recording_keyring::RecordingKeyring,
+/// Validate and read a recording file for `get_recording`. Every failure is
+/// returned as `Err` so the caller's single audit branch records it.
+async fn get_recording_checked(
+    ctx: &ToolContext,
     path: &str,
+    caller_group: Option<&str>,
 ) -> Result<Value> {
     if path.is_empty() {
         anyhow::bail!("missing 'path'");
     }
-    let requested = std::path::Path::new(path);
-    if !requested.is_absolute() {
+    if !std::path::Path::new(path).is_absolute() {
         anyhow::bail!("path must be absolute (use the path returned by list_recordings)");
     }
 
-    let canonical_root = recordings_dir
+    // Canonicalize FIRST, then run the group check against the same
+    // resolved path that will be read — otherwise a `..` segment can
+    // make the group check see host A while the read targets host B.
+    let canonical_root = ctx
+        .recordings_dir
         .canonicalize()
         .map_err(|_| anyhow::anyhow!("recordings directory not found"))?;
-    let canonical_path = requested
+    let canonical_path = std::path::Path::new(path)
         .canonicalize()
         .map_err(|e| anyhow::anyhow!("failed to resolve path: {e}"))?;
     if !canonical_path.starts_with(&canonical_root) {
         anyhow::bail!("path outside recordings directory");
     }
 
-    let raw = tokio::fs::read(&canonical_path)
+    if let Some(cg) = caller_group {
+        let host_from_path = canonical_path
+            .strip_prefix(&canonical_root)
+            .ok()
+            .and_then(|rel| rel.components().next())
+            .and_then(|c| match c {
+                std::path::Component::Normal(s) => Some(s.to_string_lossy().into_owned()),
+                _ => None,
+            })
+            .unwrap_or_default();
+        let host_group = resolve_host_group(ctx, &host_from_path).await;
+        if host_group.as_deref() != Some(cg) {
+            anyhow::bail!("host '{host_from_path}' is not in your group '{cg}'");
+        }
+    }
+
+    read_recording_file_at(&canonical_path, &ctx.recording_keyring).await
+}
+
+/// Read an already-canonicalized recording path and decrypt its content.
+/// The caller is responsible for canonicalizing and confining the path to
+/// `recordings_dir` (see `get_recording_checked`), so this helper does no
+/// path validation of its own.
+async fn read_recording_file_at(
+    canonical_path: &std::path::Path,
+    keyring: &crate::recording_keyring::RecordingKeyring,
+) -> Result<Value> {
+    let raw = tokio::fs::read(canonical_path)
         .await
         .map_err(|e| anyhow::anyhow!("failed to read recording: {e}"))?;
     let plain = keyring.decrypt_or_passthrough(&raw)?;
@@ -542,4 +556,138 @@ async fn read_recording_file(
         "path": canonical_path.to_string_lossy(),
         "content": content,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    const HOSTS_YAML: &str =
+        "hosts:\n  - name: devhost\n    group: dev\n  - name: prodhost\n    group: prod\n";
+
+    fn grouped_ctx(caller_group: &str) -> (ToolContext, tempfile::TempDir) {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let hosts_path = tmp.path().join("hosts.yaml");
+        std::fs::write(&hosts_path, HOSTS_YAML).expect("write hosts.yaml");
+        let router = crate::router::HostRouter::from_file(&hosts_path).expect("load router");
+        let audit_db =
+            crate::audit::AuditDb::open(&tmp.path().join("audit.db")).expect("open audit db");
+        let bridge_store = crate::bridge_store::BridgeStore::open(&tmp.path().join("bridge.db"))
+            .expect("open bridge store");
+        let ctx = ToolContext {
+            router: Arc::new(router),
+            ca_cert_path: None,
+            audit_db: Arc::new(audit_db),
+            agent_name: Arc::new(std::sync::Mutex::new("test".to_string())),
+            caller_group: Arc::new(std::sync::Mutex::new(Some(caller_group.to_string()))),
+            current_op: Arc::new(std::sync::Mutex::new(None)),
+            forward_manager: Arc::new(crate::forward::ForwardManager::new()),
+            stream_manager: Arc::new(crate::stream::StreamManager::new()),
+            recordings_dir: tmp.path().join("recordings"),
+            recording_keyring: Arc::new(
+                crate::recording_keyring::RecordingKeyring::load_or_create(
+                    &tmp.path().join("rec-keys"),
+                )
+                .unwrap(),
+            ),
+            bridge_registry: Arc::new(crate::registry::BridgeRegistry::new()),
+            bridge_store: Arc::new(bridge_store),
+            file_transfer: crate::server_config::FileTransferConfig::default(),
+        };
+        (ctx, tmp)
+    }
+
+    fn write_cast(recordings_dir: &std::path::Path, host: &str) -> std::path::PathBuf {
+        let dir = recordings_dir.join(host).join("2026-08-06");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("x.cast");
+        std::fs::write(&path, "{\"version\":2}\n[1.0, \"o\", \"hi\"]\n").unwrap();
+        path
+    }
+
+    fn progress() -> crate::progress::ProgressReporter {
+        crate::progress::ProgressReporter::new_stdout(
+            None,
+            Arc::new(tokio::sync::Mutex::new(tokio::io::stdout())),
+        )
+    }
+
+    #[tokio::test]
+    async fn get_recording_rejects_cross_group_dotdot_path() {
+        let (ctx, _tmp) = grouped_ctx("dev");
+        write_cast(&ctx.recordings_dir, "devhost");
+        write_cast(&ctx.recordings_dir, "prodhost");
+
+        let evil = ctx
+            .recordings_dir
+            .join("devhost")
+            .join("..")
+            .join("prodhost")
+            .join("2026-08-06")
+            .join("x.cast");
+
+        let mut progress = progress();
+        let value = execute_tool(
+            &ctx,
+            "get_recording",
+            json!({ "path": evil.to_string_lossy() }),
+            &mut progress,
+        )
+        .await
+        .expect("rejection must be a business error envelope, not a hard Err");
+        assert_eq!(value["ok"], json!(false));
+        let err = value["error"].as_str().expect("error message present");
+        assert!(
+            err.contains("not in your group"),
+            "cross-group traversal must be rejected, got: {err}"
+        );
+        assert!(
+            value.get("content").is_none(),
+            "rejected path must not leak content"
+        );
+    }
+
+    #[tokio::test]
+    async fn get_recording_rejects_out_of_dir_path_with_error_envelope() {
+        let (ctx, tmp) = grouped_ctx("dev");
+        std::fs::create_dir_all(&ctx.recordings_dir).unwrap();
+        let outside = tmp.path().join("outside.cast");
+        std::fs::write(&outside, "{}").unwrap();
+
+        let mut progress = progress();
+        let value = execute_tool(
+            &ctx,
+            "get_recording",
+            json!({ "path": outside.to_string_lossy() }),
+            &mut progress,
+        )
+        .await
+        .expect("rejection must be a business error envelope, not a hard Err");
+        assert_eq!(value["ok"], json!(false));
+        assert!(
+            value["error"]
+                .as_str()
+                .is_some_and(|e| e.contains("outside recordings directory")),
+            "out-of-dir path must be rejected, got: {}",
+            value["error"]
+        );
+    }
+
+    #[tokio::test]
+    async fn get_recording_allows_same_group_path() {
+        let (ctx, _tmp) = grouped_ctx("dev");
+        let path = write_cast(&ctx.recordings_dir, "devhost");
+
+        let mut progress = progress();
+        let value = execute_tool(
+            &ctx,
+            "get_recording",
+            json!({ "path": path.to_string_lossy() }),
+            &mut progress,
+        )
+        .await
+        .expect("same-group recording should succeed");
+        assert!(value.get("content").and_then(|v| v.as_str()).is_some());
+    }
 }

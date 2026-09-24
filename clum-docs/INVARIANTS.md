@@ -124,5 +124,6 @@
 ## 不再重复踩的坑（本清单的来历）
 
 - [2026-09-12] `search_recordings` 缺组隔离 → 跨组越权（组过滤必须覆盖可选 host 参数的缺省场景）→ 第 6 条。
+- [2026-09-24] `get_recording` 组校验基于**未规范化**路径首分量、读取基于 canonicalize 后路径 → 受限 key 用 `<rec>/<本组host>/../<他组host>/...` 跨组读录制（校验与读取必须用**同一**规范化路径；先 canonicalize 再鉴权）→ 第 6 条。
 - [2026-09-12] 把 schema 模糊文案（"depends on the rmux daemon"）当事实，误判 shell_command 会静默杀进程 → 未查 rmux-sdk 实现（`kill_existing=false`）→ 凡"声明 vs 行为"存疑，先读实现（第 3 条）。
 - [2026-08] `SESSION_EXISTS` 契约漂移：schema 说"已存在报错"，实现是 CreateOrReuse 幂等 → 第 4 条 + 文案修正。

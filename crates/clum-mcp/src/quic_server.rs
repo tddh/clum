@@ -34,7 +34,7 @@ pub struct QuicServerConfig {
     pub audit_db: Arc<crate::audit::AuditDb>,
 }
 
-async fn refresh_bridge_state(
+pub(crate) async fn refresh_bridge_state(
     token_map: &tokio::sync::RwLock<HashMap<String, String>>,
     host_groups: &tokio::sync::RwLock<HashMap<String, String>>,
     db_path: &std::path::Path,
@@ -43,13 +43,19 @@ async fn refresh_bridge_state(
     let Ok(store) = crate::bridge_store::BridgeStore::open(db_path) else {
         return;
     };
-    let mut db_hashes = store.token_map().await;
-    if !db_hashes.is_empty() || !static_tokens.is_empty() {
-        // DB is authoritative for DB-managed tokens; static file/CLI tokens
-        // are re-added so refresh never wipes them.
-        db_hashes.extend(static_tokens.iter().map(|(k, v)| (k.clone(), v.clone())));
-        let mut map = token_map.write().await;
-        *map = db_hashes;
+    match store.token_map().await {
+        Ok(mut db_hashes) => {
+            // DB is authoritative for DB-managed tokens; static file/CLI tokens
+            // are re-added so refresh never wipes them. An empty DB result is
+            // still written through, so revoking the last bridge actually
+            // evicts its in-memory token.
+            db_hashes.extend(static_tokens.iter().map(|(k, v)| (k.clone(), v.clone())));
+            *token_map.write().await = db_hashes;
+        }
+        Err(e) => {
+            tracing::error!("token_map refresh failed; keeping previous in-memory tokens: {e}");
+            // Keep the old map to avoid evicting all bridges on a transient DB error.
+        }
     }
     let meta = store.get_all_host_meta().await;
     let mut groups = host_groups.write().await;
@@ -678,4 +684,86 @@ fn load_server_tls(
 
     quinn::crypto::rustls::QuicServerConfig::try_from(Arc::new(rustls_config))
         .map_err(|e| anyhow::anyhow!("QUIC crypto config: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn refresh_empties_token_map_when_db_has_no_bridges() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db_path = tmp.path().join("bridge.db");
+        drop(crate::bridge_store::BridgeStore::open(&db_path).unwrap());
+
+        let token_map = tokio::sync::RwLock::new(HashMap::from([(
+            "stale-hash".to_string(),
+            "revoked-host".to_string(),
+        )]));
+        let host_groups = tokio::sync::RwLock::new(HashMap::new());
+        refresh_bridge_state(&token_map, &host_groups, &db_path, &HashMap::new()).await;
+
+        assert!(
+            token_map.read().await.is_empty(),
+            "empty DB must clear the in-memory token map so revocations take effect"
+        );
+    }
+
+    /// `BridgeStore::open` fails here, so `refresh_bridge_state` early-returns
+    /// at its `let Ok(store) = ... else { return }` guard and the map is kept.
+    /// The separate `token_map() -> Err` arm is covered by
+    /// `refresh_keeps_token_map_when_token_map_errors` below.
+    #[tokio::test]
+    async fn refresh_keeps_token_map_when_store_unopenable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db_path = tmp.path().join("no-such-dir").join("bridge.db");
+
+        let token_map = tokio::sync::RwLock::new(HashMap::from([(
+            "existing-hash".to_string(),
+            "host".to_string(),
+        )]));
+        let host_groups = tokio::sync::RwLock::new(HashMap::new());
+        refresh_bridge_state(&token_map, &host_groups, &db_path, &HashMap::new()).await;
+
+        assert_eq!(
+            token_map
+                .read()
+                .await
+                .get("existing-hash")
+                .map(String::as_str),
+            Some("host"),
+            "a DB read failure must keep the previous in-memory tokens"
+        );
+    }
+
+    /// A real SQLite file whose `bridges` table exists with an incompatible
+    /// schema: `BridgeStore::open` succeeds (its `CREATE TABLE IF NOT EXISTS`
+    /// is a no-op and its `ALTER TABLE`s are best-effort), but `token_map()`
+    /// fails on the absent columns. This exercises the `Err => keep old map`
+    /// arm, not the open-failure guard — asserted by the explicit open below.
+    #[tokio::test]
+    async fn refresh_keeps_token_map_when_token_map_errors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db_path = tmp.path().join("bridge.db");
+        {
+            let conn = rusqlite::Connection::open(&db_path).unwrap();
+            conn.execute_batch("CREATE TABLE bridges (id INTEGER);")
+                .unwrap();
+        }
+        crate::bridge_store::BridgeStore::open(&db_path)
+            .expect("open must succeed on an existing incompatible bridges table");
+
+        let token_map = tokio::sync::RwLock::new(HashMap::from([(
+            "kept-hash".to_string(),
+            "kept-host".to_string(),
+        )]));
+        let host_groups = tokio::sync::RwLock::new(HashMap::new());
+        refresh_bridge_state(&token_map, &host_groups, &db_path, &HashMap::new()).await;
+
+        assert_eq!(
+            token_map.read().await.get("kept-hash").map(String::as_str),
+            Some("kept-host"),
+            "a token_map() read error must keep the previous in-memory tokens"
+        );
+    }
 }

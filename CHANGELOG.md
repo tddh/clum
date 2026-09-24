@@ -19,6 +19,12 @@
 - **`file_transfer.max_upload_concurrency` 此前静默失效**：`files.rs` 硬编码 16，配置项被解析但从不读取。现真正作用于目录上传的并发闸门；`0` = unlimited，超界值钳制到 `Semaphore::MAX_PERMITS` 以免 `Semaphore::new` panic。
 - **CLI 端口转发 buffer 8KB → 1MB**：`clum-cli/src/forward.rs` 的 `relay_one` 双向搬运此前用 8KB 缓冲，是全项目唯一残留的 8KB 路径——hub 模式下 server relay 与 bridge 两侧都已是 1MB，CLI 的 8KB 反而成为 forward 吞吐的前端供给瓶颈。现统一为 `COPY_BUF_SIZE`（1MB），与 MCP/Bridge 对齐。
 
+### Security
+- **`get_recording` 组隔离绕过修复（越权）**：组校验此前基于**未规范化**路径的首分量（`strip_prefix` + `components().next()`），而实际读取基于 `canonicalize` 后的路径——受限 group 的 key 传 `<recordings>/<本组host>/../<他组host>/<date>/file.cast` 即可读取他组主机的录制（含明文密码）。现改为**先 canonicalize、再用同一规范化路径做组校验并读取**（host 分量仅接受 `Component::Normal`）；路径越界/校验失败也重新纳入审计（此前这类失败不落审计）。
+- **Bridge token 撤销失效修复**：`refresh_bridge_state` 此前在「DB 读出为空 且 无静态 token」时跳过内存 map 更新——撤销**最后一台** bridge 后其 token 长期留在内存（直到重启或新增 bridge），被撤销的 bridge 持旧 token 仍能重新注册。现区分「合法空集」（写穿，撤销立即生效）与「DB 读失败」（保留旧 map，避免误踢全体）；`token_map()` 返回 `Result` 以支持该区分（12h rotate 宽限期语义原样保留）。
+- **`bridge join` 复活旧 token 修复**：`join` 此前不清 `previous_token_hash`——先 `rotate` 再 `remove` 再 `join` 后，rotate 掉的旧 token 在 12h 宽限期内被「复活」。现 `join` 一并清空 `previous_token_hash` / `rotated_at`。
+- **错误信封与分类统一**：`get_recording` / `list_recordings` 的错误信封统一为 `{"ok": false, "error": ...}`（可被 `enrich_error` 补全 `error_code`/`recovery_hint`/`retryable`）；错误分类器 `PATH_TRAVERSAL` 分支新增匹配 `path outside recordings directory`。
+
 ### Removed
 - **两个从未生效的配置面**：`file_transfer.max_download_concurrency`（下载为单流串行，不存在"并发下载"概念）与 inline `bridges:` 的 `tags`/`labels`（标签归属 `hosts.yaml` / `host_set_meta`，此处从未被读取）。删除后旧配置仍可正常解析（serde 忽略未知键，已有回归测试锁定）。
 - **为已证伪假设写的机制**：`freeze_watchdog`、XTVERSION 探针、osascript 注入 Ctrl+Shift+R、RIS、`0x04` repaint 通路、stdout 停摆取证 dump。根因已定位为滚动区域泄漏，该链条既无效又有害（清屏、抢焦点、制造 keyframe 洪流）。

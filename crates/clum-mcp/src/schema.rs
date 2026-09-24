@@ -989,7 +989,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "get_recording",
-                "description": "Get the content of a recording file (asciinema v2 format). The path must be an absolute path returned by list_recordings — path traversal is rejected.\n\nUse this to read the full text content of a recorded session.",
+                "description": "Get the content of a recording file (asciinema v2 format). The path must be an absolute path returned by list_recordings — path traversal is rejected; the returned `path` is the canonicalized absolute path.\n\nUse this to read the full text content of a recorded session.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
