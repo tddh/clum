@@ -1,0 +1,38 @@
+# clum 命令规则（人工维护，支持 reload_config 热重载）
+#
+# 三态动作：deny（直接拦截）/ ask（挂起等人工批准）/ allow（放行）
+# 规则按 priority 升序评估，首个命中生效；未命中则查内置知识库，再未命中按 default_effect。
+# 权限层（authorize 的 group 隔离）先于本文件生效——本文件是权限之后的第二道闸。
+
+schema_version = 1
+
+# 未命中任何规则与知识库时的默认动作。切勿改为 allow。
+default_effect = "ask"
+
+# ───────── 示例：禁止一切删除类操作（按需启用）─────────
+# [[rule]]
+# id = "block-destructive"
+# priority = 10
+# tool = ["exec", "batch_exec", "shell_command"]
+# program = ["rm", "mkfs.ext4", "mkfs.xfs", "dd", "fdisk", "parted", "shred"]
+# action = "deny"
+# reason = "破坏性命令默认禁止"
+
+# ───────── 示例：生产环境变更需人工批准 ─────────
+# [[rule]]
+# id = "prod-write-approval"
+# priority = 50
+# host_group = ["prod"]
+# argv_regex = "^(systemctl (restart|stop|disable)|docker (rm|stop|kill)|kubectl (delete|drain))"
+# action = "ask"
+# reason = "生产环境变更需人工批准（clum-mcp approval approve <id>）"
+
+# ───────── 示例：堵住不可静态检查的旁路通道 ─────────
+# paste_buffer 的内容存在于远端缓冲区，无法静态检查。
+# 若你的威胁模型要求覆盖该通道，启用下面规则（会让 paste_buffer 每次都需批准）：
+# [[rule]]
+# id = "paste-buffer-approval"
+# priority = 20
+# tool = ["paste_buffer", "cmd_escape"]
+# action = "ask"
+# reason = "该通道内容无法静态检查，需人工确认"

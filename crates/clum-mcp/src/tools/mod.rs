@@ -20,12 +20,16 @@ mod file;
 mod forward;
 mod output;
 mod pane;
+mod rules;
 mod search;
 mod session;
 mod window;
 
 // Re-export audit for all sub-modules
 pub(crate) use deploy::{audit, audit_flagged};
+
+/// ask 命中后待批准项的存活时间（秒）。超时即不可批准（fail-closed）。
+const DEFAULT_APPROVAL_TTL_SECS: i64 = 900;
 
 pub struct ToolContext {
     pub router: Arc<HostRouter>,
@@ -41,6 +45,11 @@ pub struct ToolContext {
     pub bridge_registry: Arc<crate::registry::BridgeRegistry>,
     pub bridge_store: Arc<crate::bridge_store::BridgeStore>,
     pub file_transfer: crate::server_config::FileTransferConfig,
+    pub command_kb: Arc<clum_command_kb::KnowledgeBase>,
+    pub rules: Arc<std::sync::RwLock<clum_command_kb::RuleSet>>,
+    /// 规则文件路径（启动时解析；reload_config 时按此路径重载）
+    pub rules_path: PathBuf,
+    pub approvals: Arc<crate::approvals::ApprovalStore>,
 }
 
 impl Clone for ToolContext {
@@ -74,6 +83,10 @@ impl Clone for ToolContext {
             bridge_registry: Arc::clone(&self.bridge_registry),
             bridge_store: Arc::clone(&self.bridge_store),
             file_transfer: self.file_transfer.clone(),
+            command_kb: Arc::clone(&self.command_kb),
+            rules: Arc::clone(&self.rules),
+            rules_path: self.rules_path.clone(),
+            approvals: Arc::clone(&self.approvals),
         }
     }
 }
@@ -178,6 +191,94 @@ pub async fn execute_tool(
     progress: &mut crate::progress::ProgressReporter,
 ) -> Result<Value> {
     authorize(ctx, tool_name, &args).await?;
+
+    // ── 命令规则引擎：deny / ask / allow 三态裁决（权限层之后、执行层之前）──
+    let host_group = match args.get("host").and_then(|v| v.as_str()) {
+        Some(h) => resolve_host_group(ctx, h).await,
+        None => None,
+    };
+    if let Some((verdict, command, decision)) =
+        rules::evaluate_call(ctx, tool_name, &args, host_group)
+    {
+        let host = args.get("host").and_then(|v| v.as_str()).unwrap_or("");
+        match verdict {
+            rules::Verdict::Allow => {
+                // 放行不额外写审计：命令执行路径自身已写审计（如 exec → AuditAction::Exec），
+                // 此处再写会让每条命令产生双倍记录。裁决详情仅用于 deny/ask。
+            }
+            rules::Verdict::Deny { source, reason } => {
+                audit_flagged(
+                    ctx,
+                    clum_core::types::AuditAction::CommandDenied,
+                    host,
+                    "",
+                    None,
+                    &format!(
+                        "deny rule={source} cmd={command} why={reason} segments={:?} hazards={:?}",
+                        decision.commands, decision.hazards
+                    ),
+                    false,
+                    None,
+                    false,
+                    0,
+                    Some(&reason),
+                )
+                .await;
+                return Ok(rules::deny_payload(&source, &reason, &command));
+            }
+            rules::Verdict::Ask { source, reason } => {
+                let agent_name = ctx
+                    .agent_name
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
+                let caller_group = ctx
+                    .caller_group
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
+                let ttl = DEFAULT_APPROVAL_TTL_SECS;
+                let approval_id = ctx
+                    .approvals
+                    .create(crate::approvals::NewApproval {
+                        agent_name,
+                        caller_group,
+                        tool_name: tool_name.to_string(),
+                        host_name: host.to_string(),
+                        command: command.clone(),
+                        rule_id: source.clone(),
+                        reason: reason.clone(),
+                        ttl_secs: ttl,
+                    })
+                    .await?;
+                let expires_at = (chrono::Utc::now() + chrono::Duration::seconds(ttl)).to_rfc3339();
+                audit_flagged(
+                    ctx,
+                    clum_core::types::AuditAction::ApprovalRequested,
+                    host,
+                    "",
+                    None,
+                    &format!(
+                        "ask approval={approval_id} rule={source} cmd={command} segments={:?} hazards={:?}",
+                        decision.commands, decision.hazards
+                    ),
+                    false,
+                    None,
+                    true,
+                    0,
+                    None,
+                )
+                .await;
+                return Ok(rules::ask_payload(
+                    &approval_id,
+                    &source,
+                    &reason,
+                    &command,
+                    &expires_at,
+                ));
+            }
+        }
+    }
 
     debug_assert!(
         GROUP_SCOPED_TOOLS.iter().all(|t| matches!(
@@ -594,6 +695,15 @@ mod tests {
             bridge_registry: Arc::new(crate::registry::BridgeRegistry::new()),
             bridge_store: Arc::new(bridge_store),
             file_transfer: crate::server_config::FileTransferConfig::default(),
+            command_kb: Arc::new(
+                clum_command_kb::KnowledgeBase::builtin().expect("builtin command kb"),
+            ),
+            rules: Arc::new(std::sync::RwLock::new(clum_command_kb::RuleSet::default())),
+            rules_path: tmp.path().join("command-rules.toml"),
+            approvals: Arc::new(
+                crate::approvals::ApprovalStore::open(&tmp.path().join("approvals.db"))
+                    .expect("open approval store"),
+            ),
         };
         (ctx, tmp)
     }
@@ -689,5 +799,60 @@ mod tests {
         .await
         .expect("same-group recording should succeed");
         assert!(value.get("content").and_then(|v| v.as_str()).is_some());
+    }
+
+    #[test]
+    fn extracts_command_per_tool() {
+        assert_eq!(
+            rules::extract_command("exec", &json!({"command": "ls -la"})).as_deref(),
+            Some("ls -la")
+        );
+        assert_eq!(
+            rules::extract_command("batch_exec", &json!({"command": "df -h"})).as_deref(),
+            Some("df -h")
+        );
+        assert_eq!(
+            rules::extract_command("send_keys", &json!({"keys": "rm -rf /\n"})).as_deref(),
+            Some("rm -rf /\n")
+        );
+        assert_eq!(rules::extract_command("capture_pane", &json!({})), None);
+    }
+
+    #[tokio::test]
+    async fn denies_destructive_command_via_execute_tool() {
+        let (ctx, _tmp) = grouped_ctx("dev");
+        let mut progress = progress();
+        let value = execute_tool(
+            &ctx,
+            "exec",
+            json!({ "host": "devhost", "command": "rm -rf /" }),
+            &mut progress,
+        )
+        .await
+        .expect("deny must be a business error envelope, not a hard Err");
+        assert_eq!(value["ok"], json!(false));
+        assert_eq!(value["error_code"], json!("COMMAND_DENIED"));
+        assert_eq!(value["rule_id"], json!("kb:rm dangerous-flag(-rf)"));
+    }
+
+    #[tokio::test]
+    async fn asks_unknown_command_and_records_pending_approval() {
+        let (ctx, _tmp) = grouped_ctx("dev");
+        let mut progress = progress();
+        let value = execute_tool(
+            &ctx,
+            "exec",
+            json!({ "host": "devhost", "command": "systemctl restart nginx" }),
+            &mut progress,
+        )
+        .await
+        .expect("ask must be a business error envelope, not a hard Err");
+        assert_eq!(value["ok"], json!(false));
+        assert_eq!(value["error_code"], json!("APPROVAL_REQUIRED"));
+        assert!(
+            value["approval_id"].as_str().is_some(),
+            "ask payload must carry an approval_id"
+        );
+        assert_eq!(ctx.approvals.list_pending().await.unwrap().len(), 1);
     }
 }

@@ -1,5 +1,7 @@
 #![recursion_limit = "512"]
 mod api_keys;
+mod approval_cli;
+mod approvals;
 mod audit;
 mod audit_cli;
 mod bridge_store;
@@ -41,6 +43,10 @@ struct Cli {
 
     #[arg(long)]
     hosts_file: Option<PathBuf>,
+
+    /// 命令规则文件路径（默认 config/command-rules.toml）
+    #[arg(long)]
+    command_rules: Option<PathBuf>,
 
     #[arg(long, env = "CLUM_CA_CERT")]
     ca_cert: Option<String>,
@@ -89,6 +95,21 @@ struct Cli {
     log_level: String,
 }
 
+fn load_rules(path: &std::path::Path) -> anyhow::Result<clum_command_kb::RuleSet> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => clum_command_kb::RuleSet::from_toml_str(&text)
+            .map_err(|e| anyhow::anyhow!("parse {}: {e}", path.display())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            tracing::warn!(
+                "command rules file {} not found — using empty rule set",
+                path.display()
+            );
+            Ok(clum_command_kb::RuleSet::default())
+        }
+        Err(e) => Err(anyhow::anyhow!("read {}: {e}", path.display())),
+    }
+}
+
 pub(crate) fn resolve_audit_db_path(custom: Option<PathBuf>) -> PathBuf {
     custom.unwrap_or_else(|| {
         let dir = dirs::home_dir()
@@ -104,6 +125,9 @@ async fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 && args[1] == "audit" {
         return audit_cli::run_audit_command().await;
+    }
+    if args.len() > 1 && args[1] == "approval" {
+        return approval_cli::run_approval_command().await;
     }
     if args.len() > 1 && args[1] == "agent" {
         return run_agent_command(&args[2..]).await;
@@ -263,6 +287,17 @@ async fn main() -> anyhow::Result<()> {
     ));
     let bridge_store = Arc::new(bridge_store::BridgeStore::open(&db_path)?);
 
+    let command_kb = Arc::new(
+        clum_command_kb::KnowledgeBase::builtin().context("load builtin command knowledge base")?,
+    );
+    let rules_path = cli
+        .command_rules
+        .clone()
+        .or_else(|| file_config.command_rules_file.as_ref().map(PathBuf::from))
+        .unwrap_or_else(|| PathBuf::from("config/command-rules.toml"));
+    let rules = Arc::new(std::sync::RwLock::new(load_rules(&rules_path)?));
+    let approvals = Arc::new(approvals::ApprovalStore::open(&db_path)?);
+
     let ctx = Arc::new(tools::ToolContext {
         router,
         ca_cert_path: ca_cert.clone(),
@@ -277,6 +312,10 @@ async fn main() -> anyhow::Result<()> {
         bridge_registry: Arc::clone(&bridge_registry),
         bridge_store: Arc::clone(&bridge_store),
         file_transfer: file_config.file_transfer.clone(),
+        command_kb,
+        rules,
+        rules_path,
+        approvals,
     });
 
     match cli.mode.as_str() {

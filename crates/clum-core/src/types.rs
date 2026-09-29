@@ -154,6 +154,9 @@ pub enum AuditAction {
     BridgeAuditQuery,
     AgentRelay,
     SearchRecordings,
+    CommandDenied,
+    ApprovalRequested,
+    ApprovalDecided,
 }
 
 #[cfg(test)]
@@ -609,7 +612,7 @@ mod tests {
     /// （注：AuditAction 当前未实现 Display trait，通过 serde 验证变体名一致性）
     #[test]
     fn test_audit_action_display() {
-        // 覆盖所有变体（共 69 个）
+        // 覆盖所有变体（共 72 个）
         let all_actions: Vec<(&str, AuditAction)> = vec![
             ("SessionCreate", AuditAction::SessionCreate),
             ("SessionAttach", AuditAction::SessionAttach),
@@ -680,6 +683,9 @@ mod tests {
             ("BridgeAuditQuery", AuditAction::BridgeAuditQuery),
             ("AgentRelay", AuditAction::AgentRelay),
             ("SearchRecordings", AuditAction::SearchRecordings),
+            ("CommandDenied", AuditAction::CommandDenied),
+            ("ApprovalRequested", AuditAction::ApprovalRequested),
+            ("ApprovalDecided", AuditAction::ApprovalDecided),
         ];
 
         for (expected_name, action) in all_actions {

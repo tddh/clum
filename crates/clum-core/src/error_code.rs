@@ -42,6 +42,10 @@ pub const CODE_TIMEOUT: &str = "TIMEOUT";
 pub const CODE_CLI_FAILED: &str = "CLI_FAILED";
 /// 帧协议错误（不应发生）
 pub const CODE_PROTOCOL_ERROR: &str = "PROTOCOL_ERROR";
+/// 命令规则引擎拒绝执行（deny 三态命中）
+pub const CODE_COMMAND_DENIED: &str = "COMMAND_DENIED";
+/// 命令挂起等待人工批准（ask 三态命中）
+pub const CODE_APPROVAL_REQUIRED: &str = "APPROVAL_REQUIRED";
 
 /// 按错误消息分类为稳定 error_code。匹配顺序即优先级：更具体的模式在前。
 ///
@@ -50,6 +54,16 @@ pub const CODE_PROTOCOL_ERROR: &str = "PROTOCOL_ERROR";
 pub fn classify_error_message(msg: &str) -> &'static str {
     let m = msg.to_lowercase();
     let has = |p: &str| m.contains(p);
+
+    // ── 命令规则引擎 ──
+    // 必须在宽泛的 RBAC/权限模式之前：deny/ask 消息含 "rule" 与权限语义，
+    // 若排在 "not in your group" 之后会被抢走分类。
+    if has("requires approval") {
+        return CODE_APPROVAL_REQUIRED;
+    }
+    if has("denied by rule") || has("blocked by command rule") {
+        return CODE_COMMAND_DENIED;
+    }
 
     // ── RBAC / 分组隔离 ──
     // 只匹配真实消息格式（"host 'x' is not in your group" / "forbidden: 'x' requires superadmin"），
@@ -368,6 +382,18 @@ mod tests {
         assert_eq!(
             classify_error_message("pane must be closed before respawn"),
             CODE_UNKNOWN
+        );
+    }
+
+    #[test]
+    fn classifies_command_rule_verdicts() {
+        assert_eq!(
+            classify_error_message("command denied by rule 'block-destructive-rm'"),
+            CODE_COMMAND_DENIED
+        );
+        assert_eq!(
+            classify_error_message("command requires approval (rule 'prod-write-approval')"),
+            CODE_APPROVAL_REQUIRED
         );
     }
 

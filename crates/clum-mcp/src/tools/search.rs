@@ -625,6 +625,12 @@ mod tests {
             current_op: Arc::new(std::sync::Mutex::new(None)),
             forward_manager: Arc::new(crate::forward::ForwardManager::new()),
             stream_manager: Arc::new(crate::stream::StreamManager::new()),
+            command_kb: Arc::new(clum_command_kb::KnowledgeBase::builtin().unwrap()),
+            rules: Arc::new(std::sync::RwLock::new(clum_command_kb::RuleSet::default())),
+            rules_path: std::path::PathBuf::from("/dev/null"),
+            approvals: Arc::new(
+                crate::approvals::ApprovalStore::open_in_memory().expect("open approval store"),
+            ),
             recordings_dir: tmp.path().join("recordings"),
             recording_keyring: Arc::new(
                 crate::recording_keyring::RecordingKeyring::load_or_create(

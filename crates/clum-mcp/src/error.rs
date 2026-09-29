@@ -27,6 +27,16 @@ const fn c(code: &'static str, hint: &'static str, retryable: bool) -> Classifie
 /// 产生（与 bridge 侧注入一致），此处补充 UX 字段。
 fn lookup(code: &str) -> Classified {
     match code {
+        CODE_APPROVAL_REQUIRED => c(
+            "APPROVAL_REQUIRED",
+            "a human must approve — run 'clum-mcp approval approve <approval_id>' on the server host, or change the command to a read-only equivalent",
+            false,
+        ),
+        CODE_COMMAND_DENIED => c(
+            "COMMAND_DENIED",
+            "command blocked by policy — the rule id is in recovery_hint; use a safer equivalent or ask an admin to adjust command-rules.toml",
+            false,
+        ),
         CODE_FORBIDDEN => c(
             "FORBIDDEN",
             "host not in your group — ask an admin to check your group assignment",

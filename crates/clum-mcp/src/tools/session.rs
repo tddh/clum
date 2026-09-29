@@ -6,6 +6,8 @@ use crate::transport::{connect_to_host, recv_json_frame, send_json_frame};
 use clum_core::types::AuditAction;
 
 pub(crate) async fn reload_config(ctx: &ToolContext) -> Result<Value> {
+    let rules_status = reload_rules(ctx);
+
     match ctx.router.reload() {
         Ok(count) => {
             super::audit(
@@ -14,7 +16,7 @@ pub(crate) async fn reload_config(ctx: &ToolContext) -> Result<Value> {
                 "",
                 "",
                 None,
-                &format!("reloaded {} hosts", count),
+                &format!("reloaded {} hosts; command rules: {}", count, rules_status),
                 None,
                 true,
                 0,
@@ -24,6 +26,7 @@ pub(crate) async fn reload_config(ctx: &ToolContext) -> Result<Value> {
             Ok(json!({
                 "ok": true,
                 "hosts_count": count,
+                "command_rules": rules_status,
                 "message": format!("successfully reloaded {} hosts", count),
             }))
         }
@@ -45,7 +48,37 @@ pub(crate) async fn reload_config(ctx: &ToolContext) -> Result<Value> {
             Ok(json!({
                 "ok": false,
                 "error": err_msg,
+                "command_rules": rules_status,
             }))
+        }
+    }
+}
+
+/// 重载命令规则。解析失败时保留旧规则（绝不因配置错误退化为「无规则」），
+/// 并把结果作为字符串返回，让调用方知道规则是否真的生效。
+fn reload_rules(ctx: &ToolContext) -> String {
+    match std::fs::read_to_string(&ctx.rules_path)
+        .map_err(|e| e.to_string())
+        .and_then(|text| clum_command_kb::RuleSet::from_toml_str(&text).map_err(|e| e.to_string()))
+    {
+        Ok(new_rules) => {
+            let count = new_rules.rule.len();
+            *ctx.rules.write().unwrap_or_else(|e| e.into_inner()) = new_rules;
+            tracing::info!(
+                "reloaded {count} command rules from {}",
+                ctx.rules_path.display()
+            );
+            format!("reloaded {count}")
+        }
+        Err(e) => {
+            let kept = ctx
+                .rules
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .rule
+                .len();
+            tracing::error!("command rules reload failed ({e}) — keeping previous {kept} rules");
+            format!("unchanged ({kept} rules kept): {e}")
         }
     }
 }
