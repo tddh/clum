@@ -7,7 +7,8 @@ description = "Command normalization and risk classification knowledge base for 
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
-serde_norway.workspace = true
+# serde_norway 是 YAML 库（依赖 unsafe-libyaml-norway），解析 TOML 会失败——勿替换。
+toml = "1"
 regex.workspace = true
 anyhow.workspace = true
 shell-words = "1.1"

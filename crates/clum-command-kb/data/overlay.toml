@@ -1,0 +1,38 @@
+schema_version = 1
+
+[[command]]
+name = "systemctl"
+effect = "ask"
+arity = 2
+source = "manual(clum)"
+  [[command.subcommand]]
+  name = ["status", "is-active", "is-enabled", "list-units", "show", "cat"]
+  effect = "allow"
+  [[command.subcommand]]
+  name = ["restart", "reload", "start", "stop", "enable", "disable", "mask"]
+  effect = "ask"
+  [[command.subcommand]]
+  name = ["poweroff", "reboot", "halt", "daemon-reexec"]
+  effect = "deny"
+
+[[command]]
+name = "journalctl"
+effect = "allow"
+dangerous_flags = ["--vacuum-size", "--vacuum-time", "--rotate", "--flush"]
+escalate_to = "ask"
+source = "manual(clum)"
+
+[[command]]
+name = "docker"
+effect = "ask"
+arity = 2
+source = "manual(clum)"
+  [[command.subcommand]]
+  name = ["ps", "images", "logs", "inspect", "version", "info"]
+  effect = "allow"
+  [[command.subcommand]]
+  name = ["rm", "rmi", "stop", "kill", "restart", "run", "exec", "compose"]
+  effect = "ask"
+  [[command.subcommand]]
+  name = ["system"]
+  effect = "deny"

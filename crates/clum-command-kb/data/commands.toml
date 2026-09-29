@@ -1,0 +1,398 @@
+schema_version = 1
+default_effect = "ask"
+
+# ─────────── 只读白名单（Gemini CLI isKnownSafeCommand / prodagent read-only）───────────
+# source: gemini-cli(apache-2.0) / prodagent(apache-2.0 OR mit)
+
+[[command]]
+name = "cat"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+# 其余只读命令由生成脚本追加（见 Step 2b），避免手写约 40 个同构块。
+
+# ─────────── git 子命令粒度（prodagent read-only 标注）───────────
+
+[[command]]
+name = "git"
+effect = "ask"
+arity = 2
+source = "prodagent(apache-2.0)"
+  [[command.subcommand]]
+  name = ["status", "log", "diff", "show", "branch", "remote"]
+  effect = "allow"
+  [[command.subcommand]]
+  name = ["push", "reset", "clean", "rebase", "checkout"]
+  effect = "ask"
+  dangerous_flags = ["--force", "-f", "--hard"]
+
+# ─────────── 文件系统变更（prodagent mutating + Gemini isDangerousCommand）───────────
+
+[[command]]
+name = "rm"
+effect = "ask"
+dangerous_flags = ["-f", "--force", "-rf", "-fr", "-r"]
+escalate_to = "deny"
+source = "gemini-cli(apache-2.0)+prodagent(apache-2.0)"
+
+# 其余文件系统变更命令由生成脚本追加（见 Step 2b）。
+
+# ─────────── kubectl（prodagent effect 标注 + K8s verb 模型校准）───────────
+
+[[command]]
+name = "kubectl"
+effect = "ask"
+arity = 2
+source = "prodagent(apache-2.0)"
+  [[command.subcommand]]
+  name = ["get", "describe", "logs", "explain", "version", "api-resources", "config"]
+  effect = "allow"
+  [[command.subcommand]]
+  name = ["apply", "create", "edit", "patch", "scale", "rollout", "exec", "cp", "port-forward"]
+  effect = "ask"
+  [[command.subcommand]]
+  name = ["delete", "drain", "cordon", "taint", "replace"]
+  effect = "ask"
+  dangerous_flags = ["--all", "--force", "--grace-period=0", "--prune"]
+
+# ─────────── systemd / 日志（overlay 手工标注，见 overlay.toml）───────────
+
+# ─────── 只读白名单（脚本生成，源：gemini-cli apache-2.0）───────
+[[command]]
+name = "__read"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "ls"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "cd"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "cut"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "echo"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "expr"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "false"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "grep"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "head"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "id"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "nl"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "paste"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "pwd"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "rev"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "seq"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "stat"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "tail"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "tr"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "true"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "uname"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "uniq"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "wc"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "which"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "whoami"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "numfmt"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "tac"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "basename"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "dirname"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "realpath"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "comm"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "cmp"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "readlink"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "diff"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "sleep"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "type"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "test"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "getconf"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "tsort"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "pr"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "column"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "cal"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "uptime"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "free"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "df"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "du"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "locale"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "groups"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "nproc"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "strings"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "hexdump"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+[[command]]
+name = "od"
+effect = "allow"
+source = "gemini-cli(apache-2.0)"
+
+# ─────── 文件系统变更（脚本生成，源：prodagent apache-2.0 + gemini-cli apache-2.0）───────
+[[command]]
+name = "cp"
+effect = "ask"
+dangerous_flags = ["-r", "-R", "--recursive"]
+escalate_to = "deny"
+source = "gemini-cli(apache-2.0)+prodagent(apache-2.0)"
+
+[[command]]
+name = "mv"
+effect = "ask"
+source = "gemini-cli(apache-2.0)+prodagent(apache-2.0)"
+
+[[command]]
+name = "mkdir"
+effect = "ask"
+source = "gemini-cli(apache-2.0)+prodagent(apache-2.0)"
+
+[[command]]
+name = "rmdir"
+effect = "ask"
+source = "gemini-cli(apache-2.0)+prodagent(apache-2.0)"
+
+[[command]]
+name = "touch"
+effect = "ask"
+source = "gemini-cli(apache-2.0)+prodagent(apache-2.0)"
+
+[[command]]
+name = "chmod"
+effect = "ask"
+dangerous_flags = ["-R", "--recursive"]
+escalate_to = "deny"
+source = "gemini-cli(apache-2.0)+prodagent(apache-2.0)"
+
+[[command]]
+name = "chown"
+effect = "ask"
+dangerous_flags = ["-R", "--recursive"]
+escalate_to = "deny"
+source = "gemini-cli(apache-2.0)+prodagent(apache-2.0)"
+
+[[command]]
+name = "ln"
+effect = "ask"
+dangerous_flags = ["-s", "-sf"]
+escalate_to = "deny"
+source = "gemini-cli(apache-2.0)+prodagent(apache-2.0)"
+
+[[command]]
+name = "tee"
+effect = "ask"
+source = "gemini-cli(apache-2.0)+prodagent(apache-2.0)"
+
+[[command]]
+name = "dd"
+effect = "ask"
+source = "gemini-cli(apache-2.0)+prodagent(apache-2.0)"
+
+[[command]]
+name = "mkfs.ext4"
+effect = "ask"
+source = "gemini-cli(apache-2.0)+prodagent(apache-2.0)"
+
+[[command]]
+name = "mkfs.xfs"
+effect = "ask"
+source = "gemini-cli(apache-2.0)+prodagent(apache-2.0)"
+
+[[command]]
+name = "fdisk"
+effect = "ask"
+source = "gemini-cli(apache-2.0)+prodagent(apache-2.0)"
+
+[[command]]
+name = "parted"
+effect = "ask"
+source = "gemini-cli(apache-2.0)+prodagent(apache-2.0)"
+
+[[command]]
+name = "shred"
+effect = "ask"
+source = "gemini-cli(apache-2.0)+prodagent(apache-2.0)"

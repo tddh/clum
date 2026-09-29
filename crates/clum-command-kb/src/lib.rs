@@ -6,12 +6,12 @@
 pub mod effect;
 // 以下模块由后续 Task 逐个实现并放开（Task 1 仅建立 effect；Task 2 放开 normalize）：
 // pub mod evaluate;
-// pub mod kb;
+pub mod kb;
 pub mod normalize;
 // pub mod rules;
 
 pub use effect::Effect;
 // pub use evaluate::{evaluate, Decision, EvalContext, Verdict};
-// pub use kb::KnowledgeBase;
+pub use kb::KnowledgeBase;
 pub use normalize::{normalize, Hazard, NormalizeOutcome, SimpleCommand};
 // pub use rules::RuleSet;
