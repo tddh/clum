@@ -4,6 +4,7 @@ members = [
     "crates/clum-core",
     "crates/clum-mcp",
     "crates/clum-cli",
+    "crates/clum-command-kb",
 ]
 resolver = "2"
 
@@ -31,3 +32,4 @@ clap = "4"
 serde_norway = "0.9"
 rmcp = { version = "=3.0.0", features = ["server", "transport-streamable-http-server"] }
 axum = "0.8"
+shell-words = "1.1"
