@@ -4,14 +4,14 @@
 //! 调用方（clum-mcp）负责提供配置内容与上下文，并处理裁决结果的副作用（审批、审计）。
 
 pub mod effect;
-// 以下模块由后续 Task 逐个实现并放开（Task 1 仅建立 effect）：
+// 以下模块由后续 Task 逐个实现并放开（Task 1 仅建立 effect；Task 2 放开 normalize）：
 // pub mod evaluate;
 // pub mod kb;
-// pub mod normalize;
+pub mod normalize;
 // pub mod rules;
 
 pub use effect::Effect;
 // pub use evaluate::{evaluate, Decision, EvalContext, Verdict};
 // pub use kb::KnowledgeBase;
-// pub use normalize::{normalize, Hazard, NormalizeOutcome, SimpleCommand};
+pub use normalize::{normalize, Hazard, NormalizeOutcome, SimpleCommand};
 // pub use rules::RuleSet;
