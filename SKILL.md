@@ -593,6 +593,22 @@ clum-mcp audit verify [--db /root/.clum/audit.db]
 
 **备份/演练注意**：拷贝审计库做演练或分析时用 python3 `sqlite3` 的 `backup()` API（在线一致快照，自动合并 WAL）；**禁止在线 cp 三件套**（撕裂风险）；任何对审计库的直改演练先做快照副本，产物用毕清理；生产机不为此安装 sqlite3 CLI。
 
+## 命令规则裁决（deny / ask / allow）
+
+clum 在执行命令前会按规则裁决，可能返回两个新的 error_code：
+
+| error_code | 含义 | 你该怎么做 |
+|---|---|---|
+| `COMMAND_DENIED` | 命令被规则硬拒绝 | **不要重试**。看 `recovery_hint` 与 `rule_id`，改用只读等价命令，或请管理员调整规则文件 |
+| `APPROVAL_REQUIRED` | 命令挂起等**人类**批准 | **不要重试、不要试图批准**。把 `approval_id` 和 `command` 转告用户，等人类在服务端执行 `clum-mcp approval approve <approval_id>`，然后**重新执行原命令** |
+
+要点：
+
+- 批准权只属于能登录服务端主机的人类（`clum-mcp approval`），agent 没有任何批准通道——这是刻意的设计，不是缺陷。
+- 批准针对**某一条具体命令**一次性生效，默认 15 分钟后过期；过期后需重新发起。
+- 只读命令（`ls` / `cat` / `grep` / `kubectl get` / `systemctl status` 等）默认放行，不会打扰你。
+- 复合命令取最严：`ls && rm -rf /` 整体按 `rm` 处理；含 `$( )`、反引号、重定向的命令至少需要人工批准。
+
 ## 经验沉淀
 
 遇到以下情况时，在回复末尾主动建议沉淀：

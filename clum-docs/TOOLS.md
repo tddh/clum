@@ -949,6 +949,28 @@ clum-mcp audit cleanup [--db <path>] [--older-than <days>] [--max-size <mb>]
 
 ---
 
+## 命令规则引擎
+
+所有携带命令的工具在执行前会经过规则裁决：`exec`、`shell_command`、`batch_exec`（读 `command`）、`send_keys`、`batch_send_keys`（读 `keys`）、`send_text`（读 `text`）。
+
+| 裁决 | 返回 | AI 应如何反应 |
+|---|---|---|
+| allow | 正常执行（无额外字段） | — |
+| deny | `{"ok":false,"error_code":"COMMAND_DENIED","rule_id":"...","recovery_hint":"..."}` | **不要重试**；看 `rule_id`，改用只读等价命令，或请管理员调整 `config/command-rules.toml` |
+| ask | `{"ok":false,"error_code":"APPROVAL_REQUIRED","approval_id":"...","expires_at":"...","rule_id":"..."}` | **不要重试、不要试图批准**；把 `approval_id` 与 `command` 告知用户，等人类在服务端执行 `clum-mcp approval approve <approval_id>` 后**再重新执行原命令** |
+
+挂起项默认存活 15 分钟，超时后不可再批准。批准是**对某一条具体命令的一次性授权**，不是对规则的永久修改。裁决在权限层（`authorize` 的 caller-group 隔离）之后生效——规则不能授予权限层已拒绝的访问。
+
+### 不检查的通道（已知边界）
+
+| 不检查 | 原因 |
+|---|---|
+| `paste_buffer` | 内容在远端 paste buffer，服务端拿不到 |
+| `cmd_escape` | 参数是 rmux CLI 而非 shell 命令 |
+| `respawn_pane` | 重新执行 pane 的既有进程规格 |
+
+不检查 ≠ 放行：这些工具仍受权限层约束，且可用规则的 `tool` 过滤对其强制 `ask`（见 `config/command-rules.toml` 中的注释示例）。
+
 ## 快速参考
 
 | 场景 | 工具 |

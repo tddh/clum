@@ -121,6 +121,15 @@
 
 ---
 
+## 14. 命令规则引擎（deny / ask / allow）
+
+1. **fail-closed**：解析失败、未知命令、危险结构（重定向 / 命令替换 / 反引号 / heredoc / 包装器嵌套超深）一律**至少 `ask`**；`config/command-rules.toml` 的 `default_effect` 不得配置为 `allow`。
+2. **聚合取最严**：复合命令按 `Deny > Ask > Allow` 取最严，由 `clum-command-kb` 的 `Effect` 派生 `Ord` + `max()` 保证，不是调用方约定。
+3. **approval 不经 MCP**：审批通道只在服务端 CLI（`clum-mcp approval`），agent key 没有任何批准权限。工具面维持 68 个不变。
+4. **规则热重载失败保留旧规则**：绝不因配置解析错误退化为「无规则」。
+5. **权限优先**：`authorize`（caller-group 隔离）先于规则裁决执行；规则**不能**授予权限层已拒绝的访问。
+6. **覆盖边界是显式的**：`paste_buffer` / `cmd_escape` / `respawn_pane` 的载荷无法静态检查（不检查 ≠ 放行）——它们仍受权限层约束，可用 `tool` 过滤规则强制 `ask`。**新增携带命令的工具时必须同步 `clum-mcp/src/tools/rules.rs` 的 `extract_command`，否则会形成绕过通道**（JumpServer 的教训：真正被打穿的是过滤器覆盖不到的旁路）。
+
 ## 不再重复踩的坑（本清单的来历）
 
 - [2026-09-12] `search_recordings` 缺组隔离 → 跨组越权（组过滤必须覆盖可选 host 参数的缺省场景）→ 第 6 条。
