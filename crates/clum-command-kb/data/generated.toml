@@ -1,0 +1,7936 @@
+# 本文件由 scripts/kb-fuse-safe-chains.py 生成，请勿手工编辑。
+# 数据来源: safe-chains (MIT OR Apache-2.0)
+# 映射: Inert / SafeRead -> allow（只读）; SafeWrite -> ask（会写）; 其余 -> ask
+# 同命令多处标注时取最严。被 data/commands.toml 与 data/overlay.toml 的同名条目覆盖。
+
+schema_version = 1
+
+[[command]]
+name = "7z"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = ":"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "DeRez"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "GetFileInfo"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "M4"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "PlistBuddy"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "R"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ResMerger"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "Rez"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "Rscript"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "SetFile"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "SplitForks"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "a2p"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "aa"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "aapt2"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ab"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ack"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "aclocal"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "acorn"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "act"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "actool"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "aea"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "afconvert"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "afhash"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "afida"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "afinfo"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "afplay"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "afscexpand"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ag"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "agda"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "age"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "agvtool"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "agy"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "aider"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "alembic"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "alias"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "allume"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ameba"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "amplify"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "amtool"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "anchor"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "annotate"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "annotaterb"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ansible-config"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ansible-doc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ansible-galaxy"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ansible-inventory"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ansible-lint"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ansible-playbook"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ansible-vault"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "anvil"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "apkanalyzer"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "apksigner"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "app-sso"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "applesingle"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "apropos"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ar"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "arch"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "archiveutil"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "arduino-cli"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "argocd"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "aria2c"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "arp"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "arping"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "artillery"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "artisan"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "as"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "asciidoctor"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "asdf"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "asn1Coding"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "asn1Decoding"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "asn1Parser"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "aspell"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "assetutil"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "astro"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "at"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "atlas"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "atq"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "atrm"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "atuin"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "autoconf"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "autoflake"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "autoheader"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "autom4te"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "automake"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "automator"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "autopep8"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "autopoint"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "autoreconf"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "autoscan"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "autossh"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "autoupdate"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "auval"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ava"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "avbanalyse"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "avbcapture"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "avbdiagnose"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "avbutil"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "avconvert"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "avdmanager"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "avmediainfo"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "avrdude"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "aws"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "az"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "b2sum"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "b64decode"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "b64encode"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bacon"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bandit"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "base32"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "base64"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "basecamp"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "basename"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "basenc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bat"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "batch"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bazel"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "biber"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "binhex"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "binhex.pl"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bintrans"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "biome"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bison"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bitcode_strip"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bitcoin-cli"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "black"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bombardier"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "borg"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "brakeman"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "branchdiff"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "brew"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bridgetown"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "brotli"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bru"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bsqldb"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bsqlodbc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "btop"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "buck2"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "buf"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "buildah"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "buildctl"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bun"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bundle"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bundler-audit"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bundletool"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bw"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "byacc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "byebug"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bzcmp"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bzgrep"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bzip2"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "bzmore"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "c8"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "c89"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "c99"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cabal"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "caddy"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "caffeinate"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cake"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cal"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cancel"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cap"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cap_mkdb"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cargo"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "carton"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cast"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cat"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cc_fips_test"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cd"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cdk"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "certbot"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cf"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "chalice"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "checkLocalKDC"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "chef-client"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "chflags"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "chisel"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "chronic"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "circuschief"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cjpeg"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cjxl"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cksum"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "clang"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "clang-format"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "clang-tidy"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "claude"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "clever"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "clj"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cloc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cloudflared"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "clusterdb"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cmake"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cmake-format"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cmp"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cmpdylib"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cockroach"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "code"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "codesign"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "codesign_allocate"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "codex"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "col"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "colordiff"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "colrm"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "column"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "comm"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "command"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "composer"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "compress"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "compression_tool"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "conan"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "concurrently"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "conda"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "config_data"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "consul"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "convert"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cookiecutter"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "copa"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "copier"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "copilot"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "coqc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "coqtop"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "corelist"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cosign"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "coverage"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cp"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cpan"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cpanm"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cpio"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cppcheck"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cqlsh"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "craft"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "crane"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "create-next-app"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "create-react-app"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "create-vite"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "createdb"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "createuser"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "credo"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "crontab"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "crystal"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "csi"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "csplit"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "csreq"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "csrutil"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ctags"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ctf_insert"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ctr"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cucumber"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cucumber-js"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cupstestppd"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cut"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cwebp"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "cx"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "danetool"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "danger"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dapr"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dart"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dasel"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "date"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dawn"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dbmate"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dbt"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dcli"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dd"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ddev"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "debinhex.pl"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "debride"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "declare"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "defaults"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "defncopy"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "degit"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "delta"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "delv"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "demandoc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "deno"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "depcheck"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "depcruise"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "deptry"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "derq"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "desdp"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "detekt"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "devbox"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "devenv"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "devicectl"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "df"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dict"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "diesel"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "diff"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "diff3"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "diffstat"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "difft"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dig"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dircolors"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "direnv"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dirname"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "diskutil"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ditto"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dive"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "djpeg"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "djxl"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dltest"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dlv"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dns-sd"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "docfx"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "docker"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "docker-buildx"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "docker-compose"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "doctl"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "doggo"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dot"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dot_clean"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dotenv"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dotnet"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dotnet-counters"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dotnet-dump"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dotnet-ef"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dotnet-gcdump"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dotnet-script"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dotnet-sos"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dotnet-stack"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dotnet-symbol"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dotnet-trace"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "doxygen"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "drizzle-kit"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dropdb"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dropuser"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "drutil"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dscacheutil"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dsmemberutil"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dsymutil"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dtruss"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "du"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dub"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "duckdb"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "duf"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dune"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dust"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dvc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dvipdf"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dwarfdump"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dwebp"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dyld_info"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "dyld_usage"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "earthly"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "eb"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "echo"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ecpg"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "editorconfig-checker"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "elan"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "eleventy"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "elixir"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "emacs"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "emar"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "emcc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "emconfigure"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "emulator"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "enc2xs"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "encguess"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "encode_keychange"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "entr"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "envoy"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "envsubst"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "eps2eps"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "erb_lint"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "erd"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "erl"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "errcheck"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "errno"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "esbuild"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "eslint"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "eslogger"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "espeak-ng"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "esptool"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "exiftool"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "exit"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "exo"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "expand"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "expect"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "expo"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "export"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "expr"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "eyapp"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "eza"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "factor"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "false"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fantomas"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fasterer"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fastlane"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fax2ps"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fax2tiff"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fd"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ffmpeg"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ffprobe"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fido2-assert"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fido2-cred"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fido2-token"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "file"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fileproviderctl"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fileurltool"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "find"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "findmnt"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "findrule"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "firebase"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fix-qdf"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "flake8"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "flang"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "flay"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "flex"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "flog"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "flutter"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "flux"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "flyctl"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "flyway"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fm"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fmt"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fnm"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fold"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "footprint"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "foreman"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "forge"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fossil"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "foundryup"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fourmolu"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fping"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fpm"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "frames"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "free"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fs_usage"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fsi"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "funzip"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fuser"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fx"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fzf"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "fzy"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gatherheaderdoc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gatsby"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gcc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gci"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gcloud"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gcore"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gdbm_dump"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gdbm_load"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gdbmtool"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gem"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gen_bridge_metadata"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gencat"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "genstrings"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "getconf"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "geth"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gettext"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gettextize"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gfortran"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gh"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ghc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ghostty"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gif2webp"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gifsicle"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "git"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "git-cliff"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "git-lfs"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gitleaks"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gkill"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "glab"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "glances"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gleam"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "glow"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gmknod"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gnatmake"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gnutls-certtool"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "go"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "godot"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "goenv"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gofmt"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gofumpt"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "goimports"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gojq"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "golangci-lint"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gomodifytags"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "goose"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "goreleaser"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gosec"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gotestsum"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "govulncheck"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gperf"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gpg"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gpustat"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gradle"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "grafana-cli"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "grep"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gron"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "groovy"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "groups"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "grpcurl"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "grype"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gs"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gsnd"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gtruncate"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "guard"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gunlink"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "gzip"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "h2ph"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "h2xs"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hadolint"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "haml"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "haml-lint"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "haproxy"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hardhat"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hash"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hatch"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hcloud"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hdiutil"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "head"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "headerdoc2html"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "heap"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "heif-dec"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "heif-enc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "heif-info"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "heif-thumbnailer"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "helm"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "helmfile"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "herb"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "heroku"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hexdump"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hexo"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hey"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hf"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hg"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hiutil"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hlint"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "home-manager"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "host"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hostid"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hostinfo"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hostname"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hpmdiagnose"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "htmlq"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "htmltree"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "htop"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "http"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "http-server"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "httpyac"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "huggingface-cli"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hugo"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hunspell"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hurl"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "husky"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hx"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hygen"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "hyphen"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "i18n-tasks"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ibtool"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "iconutil"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "iconv"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "id"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "identify"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "idf.py"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "idn"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "idn2"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "idris2"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "iex"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ifconfig"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ifne"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ignite"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "img2webp"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "imgcmp"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "imginfo"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "importmap"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "imptrace"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "indent"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "influx"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "influxd"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "initdb"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "inso"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "install_name_tool"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "instmodsh"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ionic"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ioreg"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "iostat"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "iotop"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ip2cc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ipcalc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ipconfig"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ipcrm"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ipcs"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "iperf3"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ipfs"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ippfind"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ipptool"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ipython"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "iredis"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "isort"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ispell"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "istioctl"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "isutf8"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jai"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jaq"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jarsigner"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jasmine"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jasper"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "java"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "javap"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jbig2dec"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jcmd"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jdeps"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jekyll"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jenv"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jest"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jira"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jj"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jjpr"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jless"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "join"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jot"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "journalctl"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jpegoptim"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jpegtran"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jpgicc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jq"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "json_pp"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "json_xs"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jsonlint"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jstack"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "julia"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jupyter"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jupyter-nbconvert"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "jupytext"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "just"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "k6"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kafka-console-consumer"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kafka-consumer-groups"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kafka-topics"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kamal"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kapp"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "karma"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kcc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kdestroy"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kernprof"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kextfind"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kextlibs"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kextstat"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "keytool"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kgetcred"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kill"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "killall"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kind"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kinit"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "klist"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "klist_cdhashes"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kn"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "knex"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "knip"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kotlinc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "koyeb"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kpt"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kramdown"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "krb5-config"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "krew"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kswitch"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ktlint"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ktrace"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kubectl"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kubectx"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kubens"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "kustomize"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lake"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lam"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lame"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "last"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lastcomm"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lastlog"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "latency"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "latexmk"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "launchctl"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "layerutil"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ld"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ldapcompare"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ldapsearch"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ldapurl"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ldapwhoami"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ldd"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "leaks"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lean"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lein"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "less"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lessecho"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lesskey"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "libnetcfg"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "libtool"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "libtoolize"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "license-checker"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "license_finder"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "linear"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "linkerd"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "linkicc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "linode-cli"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lint"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lint-staged"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lipo"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "liquibase"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "litecli"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lld"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lldb"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lli"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llm"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-ar"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-as"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-config"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-cov"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-cxxfilt"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-dis"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-dwp"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-libtool-darwin"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-link"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-mc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-nm"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-objcopy"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-objdump"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-otool"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-pdbutil"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-profdata"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-readobj"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-size"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-strip"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-symbolizer"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-undname"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "llvm-xray"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ln"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lnav"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lncli"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "locale"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "localedef"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "locate"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lockf"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lockstat"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "locust"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "log"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "logger"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "logname"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "look"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lorder"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lore"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lp"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lpoptions"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lpq"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lpr"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lprm"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lpstat"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ls"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lsappinfo"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lsblk"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lsbom"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lskq"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lsm"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lsmp"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lsof"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lsvfs"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lua"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "luarocks"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lz4"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lzip"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "lzmainfo"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "m"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "m4"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "macbinary"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "machine"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "madge"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mage"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "magick"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "make"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "malloc_history"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mamba"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "man"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mandoc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "manpath"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "markdownlint"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "markdownlint-cli2"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "marp"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "masscan"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mcs"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "md5"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "md5sum"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mdbook"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mdfind"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mdls"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mediainfo"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mesg"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "meson"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "micro"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "middleman"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mig"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "migcom"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "migrate"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mill"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "minikube"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mise"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mix"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mkbom"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mkcert"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mkdir"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mkdocs"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mkfifo"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mkfile"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mktemp"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mlflow"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mlr"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mocha"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "molecule"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mongodump"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mongoexport"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mongoimport"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mongorestore"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mongosh"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mongostat"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mongotop"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mono"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "monolith"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "more"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mosh"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mount"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mountpoint"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mprof"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "msbuild"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "msgattrib"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "msgcat"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "msgcmp"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "msgcomm"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "msgconv"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "msgen"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "msgexec"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "msgfilter"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "msgfmt"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "msggrep"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "msginit"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "msgmerge"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "msgunfmt"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "msguniq"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mtr"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mtree"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mutant"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mutool"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mv"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mycli"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mypy"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mysql"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mysqladmin"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mysqlcheck"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mysqldump"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "mythril"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nano"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nasm"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nbqa"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nbstripout"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ncal"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ncat"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ncu"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "near"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "neon"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nerdctl"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "netlify"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "netlog"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "netstat"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nettop"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "netusage"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "networksetup"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "newman"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "newrelic"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "next"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nfsstat"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ngettext"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nginx"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ngrok"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nice"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nim"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nimble"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ninja"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nix"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nix-build"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nix-channel"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nix-collect-garbage"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nix-env"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nix-instantiate"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nix-prefetch-url"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nix-shell"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nix-store"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nixos-rebuild"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nl"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nm"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nmap"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nmedit"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "node"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nodemon"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nodenv"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nodetool"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nohup"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nomad"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "northflank"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "notifyutil"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "notion"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nox"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "npm"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "npm-run-all"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nproc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nroff"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nu"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nuget"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nuke"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "numfmt"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nvim"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nvm"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nvtop"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nx"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "nyc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "objdump"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "oc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ocamlformat"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "oci"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ocsptool"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "od"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "odbc_config"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "odbcinst"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "oha"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "oid2name"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ollama"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "op"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "opam"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "open"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "opencode"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "openocd"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "openssl"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "opj_compress"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "opj_decompress"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "opj_dump"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "opt"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "optipng"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "oras"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "orb"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "orbctl"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ormolu"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "osacompile"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "osadecompile"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "osalang"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "osql"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "otel-cli"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "otool"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "overcommit"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "overmind"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "oxlint"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "p11tool"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "packer"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "packwerk"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pagesize"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pagestuff"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "paket"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pal2rgb"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pandoc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pants"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "papermill"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "par.pl"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "parallel"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "parallel_test"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "parcel"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "parl"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pass"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "paste"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "path_helper"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pathchk"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pax"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pbcopy"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pbzip2"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pcp-htop"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pcre2grep"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pcre2test"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pcsstatus"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pdf2dsc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pdf2ps"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pdfcrop"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pdfdetach"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pdffonts"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pdfgrep"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pdfimages"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pdfinfo"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pdfjam"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pdflatex"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pdfseparate"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pdftk"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pdftocairo"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pdftohtml"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pdftoppm"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pdftops"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pdftotext"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pdfunite"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pdm"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "peco"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pee"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "periphery"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "perl"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pest"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pf2afm"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pfbtopfa"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pg_amcheck"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pg_archivecleanup"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pg_basebackup"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pg_checksums"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pg_combinebackup"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pg_config"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pg_controldata"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pg_ctl"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pg_dump"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pg_dumpall"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pg_isready"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pg_receivewal"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pg_recvlogical"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pg_restore"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pg_rewind"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pg_test_fsync"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pg_test_timing"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pg_upgrade"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pg_verifybackup"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pg_waldump"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pg_walsummary"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pgbench"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pgcli"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pgrep"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "php"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "phpstan"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "phpunit"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pick"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pigz"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pijul"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ping"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pinky"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pio"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pip"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pip-audit"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pip-compile"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pip-sync"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pipx"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pkg-config"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pkgbuild"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pkgutil"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pkill"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pl"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pl2pm"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "platform"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "please"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "plenv"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "plockstat"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "plop"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "plutil"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pm2"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pmset"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pngquant"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pnpm"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pod"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pod2html"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pod2man"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pod2readme"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pod2text"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pod2usage"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "podchecker"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "podman"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "poetry"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "polkadot"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "porter"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pp"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ppm2tiff"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pr"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pre-commit"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "prettier"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "printafm"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "printenv"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "printf"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "prisma"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "procs"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "productbuild"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "productutil"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "promtool"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "protoc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "prove"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pry"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ps"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ps2ascii"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ps2epsi"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ps2pdf"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ps2pdf12"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ps2pdf13"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ps2pdf14"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ps2pdfwr"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ps2ps"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pscale"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "psicc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "psktool"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "psql"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pstree"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ptar"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ptardiff"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ptargrep"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ptx"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pulumi"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pup"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "puppet"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pv"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pwd"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "py-spy"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pycodestyle"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pydocstyle"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pyenv"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pyflakes"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pylint"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pyright"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pytest"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "python3"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "pyupgrade"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "qemu-img"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "qlmanage"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "qpdf"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "qsv"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "quota"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "racc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "raco"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "railroady"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rails"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "railway"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rake"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "raw2tiff"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rbenv"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rbs"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rclone"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rdfind"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rdjpgcom"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rdoc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "re2c"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "react-native"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "read"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "readelf"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "readlink"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "realpath"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rebar3"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "recode"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "recode-sr-latin"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "redis-benchmark"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "redis-cli"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "redis-server"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "reek"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "reindexdb"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rename"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "render"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "reset"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "resolveLinks"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "restic"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rev"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "revive"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rex"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rg"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rgb2ycbcr"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ri"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rm"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rmdir"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "roc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rollup"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ros"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rs"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rspec"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rsync"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rubocop"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ruby"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ruby-audit"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rubycritic"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ruff"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rufo"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rustc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rustup"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "rvm"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "s2p"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "safe-chains"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "safety"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "salt"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sam"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sample"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sandbox-exec"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "say"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sbcl"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sbt"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sc_usage"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "scala"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "scalac"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "scalafix"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "scalafmt"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "scalar"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "scalene"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "scalingo"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "scandeps.pl"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sccache"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "scp"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "screen"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "screencapture"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "scutil"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "scw"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sdef"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sdiff"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sdk"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sdkmanager"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sdoc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sdp"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "secretlint"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "security"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sed"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "segedit"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "selecta"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "selene"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sem"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "semgrep"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sentry-cli"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "seq"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sequelize"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "serve"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sfltool"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sftp"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sha1"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sha1sum"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sha224"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sha224sum"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sha256"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sha256sum"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sha384"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sha384sum"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sha512"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sha512sum"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "shar"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "shards"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "shasum"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "shazam"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "shellcheck"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "shfmt"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "shopt"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "shred"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "shuf"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "siege"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "simctl"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sips"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "size"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "size-limit"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "skaffold"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "skopeo"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sleep"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "slim-lint"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "slimrb"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "slither"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sls"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "smbutil"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "snmpbulkget"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "snmpbulkwalk"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "snmpdelta"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "snmpdf"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "snmpget"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "snmpgetnext"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "snmpnetstat"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "snmpstatus"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "snmptable"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "snmptest"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "snmptranslate"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "snmpwalk"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sntp"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "snyk"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "soelim"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "solana"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "solc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sops"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sort"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sox"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "spack"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "spctl"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "specdiff"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sphinx-apidoc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sphinx-build"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sphinx-quickstart"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "spin"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "spindump"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "spl-token"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sponge"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "spring"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sqlite3"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sqlx"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "srb"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ss"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ssh"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ssh-add"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ssh-agent"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ssh-copy-id"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ssh-keygen"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ssh-keyscan"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sshfs"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "stack"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "stackprof"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "standardrb"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "stapler"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "starship"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "stat"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "staticcheck"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "stdbuf"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "steep"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "stern"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "streamzip"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "stree"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "stringdups"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "strings"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "strip"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "stylelint"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "stz"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "subcontract"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "subl"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sum"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "supabase"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "svelte-check"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "svn"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sw_vers"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "swc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "swift"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "swiftformat"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "swiftlint"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "swipl"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "syft"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sync"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "sysctl"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "system_profiler"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "systemctl"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "systemstats"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tab2space"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tabs"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tac"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tail"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tailscale"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tap"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tar"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "task"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "taskinfo"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "taskpolicy"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tbtdiagnose"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tcc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tclsh"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tcpdump"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tea"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tee"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "terraform"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "terraform-docs"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "terragrunt"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "test"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "textutil"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tflint"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tfsec"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "thor"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "thumbnail"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tidy"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tiff2bw"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tiff2icns"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tiff2pdf"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tiff2ps"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tiff2rgba"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tiffcmp"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tiffcp"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tiffcrop"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tiffdither"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tiffdump"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tiffinfo"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tiffmedian"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tiffset"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tiffsplit"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tiffutil"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tificc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tig"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tilt"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "time"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "timeout"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "timerfires"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tkn"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tldr"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tmutil"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tns"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "todoist"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tofu"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tokei"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tomlq"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "toolbox"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "top"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "touch"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tox"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tpmtool"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tput"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tr"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "trace"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "traceroute"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "traefik"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "transicc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tree"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "trello"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "trivy"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "true"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "truffle"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ts"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ts-node"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tsc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tshark"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tsort"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tsql"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tsup"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tsx"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tty"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "tuist"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "turbo"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "twine"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "type"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "typedoc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "typeprof"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "uconv"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ul"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "umtool"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "uname"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "unbound-host"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "unbrotli"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "unbuffer"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "unexpand"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "unifdef"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "uniq"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "units"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "unset"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "unvis"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "unwinddump"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "unzip"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "unzipsfx"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "uptime"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "usdcat"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "usdchecker"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "usdcrush"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "usdextract"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "usdrecord"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "usdtree"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "usdzip"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "users"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "usql"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "uttype"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "uudecode"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "uuencode"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "uuidgen"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "uv"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "vacuumdb"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "vagrant"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "valet"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "vault"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "vcpkg"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "vegeta"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "velero"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "vercel"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "vibe"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "vidir"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "viewdiagnostic"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "vim"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "vipe"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "vis"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "vite"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "vitepress"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "vitest"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "vm_stat"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "vmmap"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "volta"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "vultr-cli"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "vulture"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "vyper"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "w"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "waf"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "wait"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "wait4path"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "wandb"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "wasm-objdump"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "wasm-pack"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "wasm-strip"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "wasm-tools"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "wasm-validate"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "wasm2wat"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "wasmer"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "wasmtime"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "wat2wasm"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "watchexec"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "wc"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "wdiff"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "wdutil"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "weasyprint"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "webpack"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "webpinfo"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "webpmux"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "west"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "wg"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "wget"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "what"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "whenever"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "whereis"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "which"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "whisper"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "whisper-cpp"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "who"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "whoami"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "whois"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "wkhtmltopdf"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "word-list-compress"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "workon"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "wrangler"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "wrjpgcom"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "wrk"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xar"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xattr"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xcbeautify"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xccov"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xclip"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xcode-select"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xcodebuild"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xcodegen"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xcresulttool"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xcrun"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xctest"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xctrace"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xgettext"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xgettext.pl"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xh"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xip"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xmake"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xmlcatalog"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xmllint"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xpath"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xq"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xsel"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xsltproc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xsubpp"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xsv"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xv"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xxd"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xz"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xzcmp"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xzdec"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xzgrep"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "xzless"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "yacc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "yamllint"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "yapf"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "yapp"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "yard"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "yardoc"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "yarn"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "yasm"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "yes"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "yo"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "yq"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "yt-dlp"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ytt"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zcat"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zcmp"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zed"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zellij"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zf"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zforce"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zgrep"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zig"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zip"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zipalign"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zipcloak"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zipcmp"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zipdetails"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zipgrep"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zipinfo"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zipmerge"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zipnote"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zipsplit"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "ziptool"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zless"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zlib-flate"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "znew"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zola"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zoxide"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zsh"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zstd"
+effect = "ask"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zstdgrep"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"
+
+[[command]]
+name = "zstdless"
+effect = "allow"
+source = "safe-chains(mit-or-apache-2.0)"

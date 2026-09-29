@@ -57,6 +57,42 @@ source = "prodagent(apache-2.0)"
 
 # ─────────── systemd / 日志（overlay 手工标注，见 overlay.toml）───────────
 
+# ─────────── 收紧 generated.toml 的过宽判定 ───────────
+# safe-chains 的 level 是**命令级**，丢失 flag 粒度：下面这些命令被标 SafeRead，
+# 但在特定 flag 下会写盘，必须靠 dangerous_flags 升格为 ask（见 kb.rs 的匹配逻辑，
+# 短选项簇也命中：声明 `-x` 能拦住 `-xzf`）。
+
+[[command]]
+name = "sed"
+effect = "allow"
+dangerous_flags = ["-i", "--in-place", "-s", "--separate"]
+escalate_to = "ask"
+source = "manual(clum): safe-chains 标 SafeRead，但 -i/--in-place 原地改写文件"
+
+[[command]]
+name = "tar"
+effect = "allow"
+dangerous_flags = [
+    "-c", "--create", "-x", "--extract", "-r", "--append",
+    "-u", "--update", "-A", "--catenate", "--delete",
+]
+escalate_to = "ask"
+source = "manual(clum): safe-chains 标 SafeRead，但 -c/-x/-r/-u/--delete 会写盘"
+
+[[command]]
+name = "awk"
+effect = "allow"
+dangerous_flags = ["-i", "--inplace"]
+escalate_to = "ask"
+source = "manual(clum): awk -i inplace 会原地改写文件"
+
+[[command]]
+name = "sort"
+effect = "allow"
+dangerous_flags = ["-o", "--output"]
+escalate_to = "ask"
+source = "manual(clum): sort -o/--output 会写文件"
+
 # ─────── 只读白名单（脚本生成，源：gemini-cli apache-2.0）───────
 [[command]]
 name = "__read"

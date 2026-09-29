@@ -67,9 +67,15 @@ impl KnowledgeBase {
         })
     }
 
-    /// 内置知识库（编译期嵌入）
+    /// 内置知识库（编译期嵌入）。
+    ///
+    /// 三层，后者按同名整条覆盖前者：
+    ///   1. `generated.toml` —— 由 `scripts/kb-fuse-safe-chains.py` 批量生成（约 1,600 条，最粗）
+    ///   2. `commands.toml`  —— 人工 vet 过的核心条目（可收紧 generated 的判定）
+    ///   3. `overlay.toml`   —— 本地运维 CLI 增量（优先级最高）
     pub fn builtin() -> Result<Self> {
-        let mut kb = Self::from_toml_str(include_str!("../data/commands.toml"))?;
+        let mut kb = Self::from_toml_str(include_str!("../data/generated.toml"))?;
+        kb.merge_overlay_str(include_str!("../data/commands.toml"))?;
         kb.merge_overlay_str(include_str!("../data/overlay.toml"))?;
         Ok(kb)
     }
@@ -124,11 +130,19 @@ impl KnowledgeBase {
         };
 
         // dangerous_flags 升级（本体与命中子命令的 flag 都算），取最严。
-        // flag 匹配支持 `--flag=value` 形态（如 journalctl --vacuum-size=500M）。
+        // 匹配三种形态：精确（`--force`）、`--flag=value`、以及**短选项簇**
+        // （声明 `-i` 命中 `-in`；声明 `-x` 命中 `-xzf`）——后者是 safe-chains 的
+        // 命令级 level 丢失 flag 粒度后必须补的防线（如 `tar -czf` 会写盘）。
         let matches_flag = |declared: &[String], arg: &String| {
-            declared
-                .iter()
-                .any(|f| f == arg || arg.starts_with(&format!("{f}=")))
+            declared.iter().any(|f| {
+                f == arg
+                    || arg.starts_with(&format!("{f}="))
+                    || (f.len() == 2
+                        && f.starts_with('-')
+                        && arg.starts_with('-')
+                        && !arg.starts_with("--")
+                        && arg[1..].contains(&f[1..]))
+            })
         };
         let hit = args
             .iter()
@@ -287,5 +301,65 @@ effect = "deny"
         let kb = KnowledgeBase::builtin().unwrap();
         // overlay 中标注的运维命令必须生效（Task 4 Step 2 会写入）
         assert!(kb.lookup("journalctl", &["--vacuum-size=500M".into()]).0 >= Effect::Ask);
+    }
+
+    #[test]
+    fn fused_data_covers_common_commands() {
+        let kb = KnowledgeBase::builtin().unwrap();
+        // 融合数据存在的意义：常见只读命令必须放行，否则闸门会因噪声被运维关掉
+        for cmd in ["ps", "top", "netstat", "ss", "du", "df", "awk", "sort"] {
+            assert_eq!(
+                kb.lookup(cmd, &[]).0,
+                Effect::Allow,
+                "`{cmd}` 应放行（融合数据/手工收紧）"
+            );
+        }
+        for cmd in ["rsync", "find", "dd", "mkfs.ext4", "chmod"] {
+            assert!(kb.lookup(cmd, &[]).0 >= Effect::Ask, "`{cmd}` 必须至少 ask");
+        }
+    }
+
+    #[test]
+    fn safe_read_commands_escalate_on_write_flags() {
+        let kb = KnowledgeBase::builtin().unwrap();
+        // safe-chains 的命令级 level 丢失 flag 粒度 → 必须靠 dangerous_flags 升格；
+        // 短选项簇形态（-xzf / -in）也要拦住，否则等于没拦。
+        assert_eq!(
+            kb.lookup("tar", &["-tzf".to_string(), "x.tar.gz".to_string()])
+                .0,
+            Effect::Allow,
+            "tar 列表是只读，应放行"
+        );
+        for write_flag in ["-czf", "-xzf", "--delete"] {
+            assert!(
+                kb.lookup("tar", &[write_flag.to_string(), "x".to_string()])
+                    .0
+                    >= Effect::Ask,
+                "tar {write_flag} 会写盘，必须至少 ask"
+            );
+        }
+        assert_eq!(
+            kb.lookup("sed", &["-n".to_string(), "1p".to_string()]).0,
+            Effect::Allow,
+            "sed -n 是只读，应放行"
+        );
+        for write_flag in ["-i", "-in", "--in-place"] {
+            assert!(
+                kb.lookup("sed", &[write_flag.to_string(), "s/a/b/".to_string()])
+                    .0
+                    >= Effect::Ask,
+                "sed {write_flag} 会原地改写，必须至少 ask"
+            );
+        }
+    }
+
+    #[test]
+    fn fused_knowledge_base_is_large_enough() {
+        // 覆盖度守卫：知识库若退回几十条，闸门会因为「每条命令都要批准」被关掉
+        let count = KnowledgeBase::from_toml_str(include_str!("../data/generated.toml"))
+            .unwrap()
+            .commands
+            .len();
+        assert!(count >= 1500, "融合数据不应少于 1500 条，实际 {count}");
     }
 }
