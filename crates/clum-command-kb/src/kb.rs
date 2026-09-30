@@ -93,6 +93,15 @@ impl KnowledgeBase {
         self.default_effect
     }
 
+    /// 已加载的命令条目数（供 reload_config 回显与覆盖度守卫使用）。
+    pub fn len(&self) -> usize {
+        self.commands.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.commands.is_empty()
+    }
+
     /// 查询：返回 (Effect, source 描述)。`args` 为 program 之后的参数。
     pub fn lookup(&self, program: &str, args: &[String]) -> (Effect, String) {
         let Some(entry) = self.commands.get(basename(program)) else {

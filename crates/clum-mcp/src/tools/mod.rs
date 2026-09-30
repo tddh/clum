@@ -45,7 +45,10 @@ pub struct ToolContext {
     pub bridge_registry: Arc<crate::registry::BridgeRegistry>,
     pub bridge_store: Arc<crate::bridge_store::BridgeStore>,
     pub file_transfer: crate::server_config::FileTransferConfig,
-    pub command_kb: Arc<clum_command_kb::KnowledgeBase>,
+    pub command_kb: Arc<std::sync::RwLock<clum_command_kb::KnowledgeBase>>,
+    /// 命令知识库的运行时覆盖文件路径。内嵌数据只是「开箱默认值」，
+    /// 任何修正/新增都改这个文件（reload_config 生效），**不需要重新编译**。
+    pub command_kb_path: PathBuf,
     pub rules: Arc<std::sync::RwLock<clum_command_kb::RuleSet>>,
     /// 规则文件路径（启动时解析；reload_config 时按此路径重载）
     pub rules_path: PathBuf,
@@ -84,6 +87,7 @@ impl Clone for ToolContext {
             bridge_store: Arc::clone(&self.bridge_store),
             file_transfer: self.file_transfer.clone(),
             command_kb: Arc::clone(&self.command_kb),
+            command_kb_path: self.command_kb_path.clone(),
             rules: Arc::clone(&self.rules),
             rules_path: self.rules_path.clone(),
             approvals: Arc::clone(&self.approvals),
@@ -695,9 +699,10 @@ mod tests {
             bridge_registry: Arc::new(crate::registry::BridgeRegistry::new()),
             bridge_store: Arc::new(bridge_store),
             file_transfer: crate::server_config::FileTransferConfig::default(),
-            command_kb: Arc::new(
+            command_kb: Arc::new(std::sync::RwLock::new(
                 clum_command_kb::KnowledgeBase::builtin().expect("builtin command kb"),
-            ),
+            )),
+            command_kb_path: tmp.path().join("command-kb.toml"),
             rules: Arc::new(std::sync::RwLock::new(clum_command_kb::RuleSet::default())),
             rules_path: tmp.path().join("command-rules.toml"),
             approvals: Arc::new(
@@ -816,6 +821,32 @@ mod tests {
             Some("rm -rf /\n")
         );
         assert_eq!(rules::extract_command("capture_pane", &json!({})), None);
+    }
+
+    #[tokio::test]
+    async fn runtime_kb_override_changes_verdict_without_recompiling() {
+        let tmp = tempfile::tempdir().unwrap();
+        let kb_path = tmp.path().join("command-kb.toml");
+        std::fs::write(
+            &kb_path,
+            "schema_version = 1\n[[command]]\nname = \"ls\"\neffect = \"ask\"\n",
+        )
+        .unwrap();
+
+        let kb = crate::load_command_kb(&kb_path).unwrap();
+        assert_eq!(
+            kb.lookup("ls", &[]).0,
+            clum_command_kb::Effect::Ask,
+            "运行时覆盖必须压过内嵌默认值"
+        );
+        assert_eq!(
+            kb.lookup("cat", &[]).0,
+            clum_command_kb::Effect::Allow,
+            "未被覆盖的条目应保持内嵌默认值"
+        );
+
+        let missing = crate::load_command_kb(&tmp.path().join("does-not-exist.toml")).unwrap();
+        assert_eq!(missing.lookup("ls", &[]).0, clum_command_kb::Effect::Allow);
     }
 
     #[tokio::test]

@@ -48,6 +48,10 @@ struct Cli {
     #[arg(long)]
     command_rules: Option<PathBuf>,
 
+    /// 命令知识库覆盖文件路径（默认 config/command-kb.toml）
+    #[arg(long)]
+    command_kb: Option<PathBuf>,
+
     #[arg(long, env = "CLUM_CA_CERT")]
     ca_cert: Option<String>,
 
@@ -93,6 +97,30 @@ struct Cli {
     /// Log level: trace/debug/info/warn/error (also via RUST_LOG env)
     #[arg(long, default_value = "info")]
     log_level: String,
+}
+
+/// 知识库 = 内嵌默认值 + 运行时覆盖文件（后者按同名整条覆盖，两种方向都可改）。
+///
+/// 覆盖文件**不存在不是错误**（内嵌默认值已可用）；但存在却解析失败必须启动失败——
+/// 否则运维以为覆盖生效、实际在跑默认值，属于静默失效。
+pub(crate) fn load_command_kb(
+    path: &std::path::Path,
+) -> anyhow::Result<clum_command_kb::KnowledgeBase> {
+    let mut kb =
+        clum_command_kb::KnowledgeBase::builtin().context("load builtin command knowledge base")?;
+    match std::fs::read_to_string(path) {
+        Ok(text) => kb
+            .merge_overlay_str(&text)
+            .map_err(|e| anyhow::anyhow!("parse {}: {e}", path.display()))?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            tracing::info!(
+                "no command knowledge base override at {} — using built-in defaults",
+                path.display()
+            );
+        }
+        Err(e) => return Err(anyhow::anyhow!("read {}: {e}", path.display())),
+    }
+    Ok(kb)
 }
 
 fn load_rules(path: &std::path::Path) -> anyhow::Result<clum_command_kb::RuleSet> {
@@ -287,9 +315,12 @@ async fn main() -> anyhow::Result<()> {
     ));
     let bridge_store = Arc::new(bridge_store::BridgeStore::open(&db_path)?);
 
-    let command_kb = Arc::new(
-        clum_command_kb::KnowledgeBase::builtin().context("load builtin command knowledge base")?,
-    );
+    let command_kb_path = cli
+        .command_kb
+        .clone()
+        .or_else(|| file_config.command_kb_file.as_ref().map(PathBuf::from))
+        .unwrap_or_else(|| PathBuf::from("config/command-kb.toml"));
+    let command_kb = Arc::new(std::sync::RwLock::new(load_command_kb(&command_kb_path)?));
     let rules_path = cli
         .command_rules
         .clone()
@@ -313,6 +344,7 @@ async fn main() -> anyhow::Result<()> {
         bridge_store: Arc::clone(&bridge_store),
         file_transfer: file_config.file_transfer.clone(),
         command_kb,
+        command_kb_path,
         rules,
         rules_path,
         approvals,

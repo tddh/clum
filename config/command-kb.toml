@@ -1,0 +1,35 @@
+# clum 命令知识库 —— 运行时覆盖文件（reload_config 热重载，**无需重新编译**）
+#
+# 二进制内嵌的是「开箱默认值」（约 1,600 条，来自 safe-chains，见 scripts/kb-fuse-safe-chains.py）。
+# 本文件用于在**不下发新版本**的前提下修正或新增判定：同名命令整条覆盖内嵌默认值。
+#
+# 行为约定：
+#   · 文件不存在  = 使用内嵌默认值（正常，不是错误）
+#   · 存在但解析失败 = 启动失败（fail-closed，避免"以为覆盖生效、实际在跑默认值"）
+#
+# 职责边界：本文件是**分类**层（这条命令是只读还是会写盘）；**策略**层（谁、在什么环境、
+# 能否执行）在 config/command-rules.toml。要"更严"，优先改策略层。
+
+schema_version = 1
+
+# ───────── 示例（取消注释即生效）─────────
+
+# 内部工具其实是只读查询 → 放行（避免每次都弹批准）
+# [[command]]
+# name = "our-deploy-status"
+# effect = "allow"
+# source = "manual: 内部工具，只做查询"
+
+# 内嵌把它当只读，但我们环境里它会写盘 → 收紧
+# [[command]]
+# name = "some-tool"
+# effect = "ask"
+# dangerous_flags = ["--write", "-w"]
+# escalate_to = "deny"
+# source = "manual: 生产环境实测会改配置"
+
+# 内嵌没收录的命令 → 补一条（否则未知命令一律 ask）
+# [[command]]
+# name = "internal-cli"
+# effect = "ask"
+# source = "manual: 未收录，保守处理"

@@ -659,7 +659,10 @@ mod tests {
             current_op: Arc::new(std::sync::Mutex::new(None)),
             forward_manager: Arc::new(crate::forward::ForwardManager::new()),
             stream_manager: Arc::new(crate::stream::StreamManager::new()),
-            command_kb: Arc::new(clum_command_kb::KnowledgeBase::builtin().unwrap()),
+            command_kb: Arc::new(std::sync::RwLock::new(
+                clum_command_kb::KnowledgeBase::builtin().unwrap(),
+            )),
+            command_kb_path: std::path::PathBuf::from("/dev/null"),
             rules: Arc::new(std::sync::RwLock::new(clum_command_kb::RuleSet::default())),
             rules_path: std::path::PathBuf::from("/dev/null"),
             approvals: Arc::new(

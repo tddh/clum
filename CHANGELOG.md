@@ -7,6 +7,8 @@
 - **`ask` 走人工审批，agent 无批准权限**：命中 `ask` 时写入 audit.db 的 `pending_approvals` 表并返回 `APPROVAL_REQUIRED`（携带 `approval_id` + 过期时间）；人类在服务端执行 `clum-mcp approval list|approve|deny` 放行或拒绝。工具面维持 68 个不变（不新增 MCP 工具）。新增错误码 `COMMAND_DENIED` / `APPROVAL_REQUIRED`，新增审计动作 `CommandDenied` / `ApprovalRequested` / `ApprovalDecided`。
 - **`reload_config` 同时热重载命令规则**，解析失败时保留旧规则（绝不退化为「无规则」），并在返回中回显 `command_rules` 状态。
 - **绕过回归集**（`crates/clum-command-kb/tests/e2e_bypass.rs`）：固化 27 条真实绕过路径（引号拆解、紧凑链式 `ls&&rm`、包装器穿透、命令替换、重定向、未知命令等）必须至少 `ask`，并保证 11 条只读命令不打扰人。
+- **知识库运行时可改（无需重新编译）**：二进制内嵌的约 1,600 条命令判定只是「开箱默认值」，新增 `config/command-kb.toml` 作为运行时覆盖文件（同名整条覆盖，`reload_config` 热重载），任何判定修正或新增命令都不需要重新构建/部署 MCP Server。覆盖文件缺失 = 用默认值；存在但解析失败 = 启动失败（禁止静默退回默认值）。
+- **知识库融合**：新增 `scripts/kb-fuse-safe-chains.py`，把 safe-chains（MIT OR Apache-2.0）的 1,586 条命令标注转成本项目 schema（`Inert`/`SafeRead` → allow，`SafeWrite` → ask），补上此前只有 70 条导致的"几乎每条命令都要批准"问题。同时用短选项簇匹配（`-x` 拦 `-xzf`）+ 手工收紧 `sed -i`/`tar -c/-x`/`awk -i`/`sort -o`，堵住"命令级标注丢失 flag 粒度"的漏洞。
 - **`term` 默认 raw 透明直通，`--mux` 保留完整 rmux UI**：`clum-cli term` 默认改为**透明 raw 直通**——本地终端直接消费 pane 字节流，无 rmux UI 层（无状态栏、无 Ctrl+B 前缀），交互行为对齐 ssh。新增 `--mux` 显式启用完整 `rmux attach-session` UI（状态栏 + Ctrl+B 前缀）。
 - **attach payload 的 mode 尾字节**：在原有 payload 后追加 1 字节（`0x00` mux / `0x01` raw）。旧 CLI 不带该字节时 bridge 回落 mux，**旧客户端零改动兼容**。bridge raw 桥订阅 pane 输出经 QUIC 转发；首帧 Rebase keyframe 负责屏幕重建，**不写入录制**（重连不膨胀 cast）。
 - **按模式决定的窗口尺寸策略**（bridge `window_rows_for`）：raw 无状态栏用满 `rows`，mux 用 `rows-1` 与 client 可用区一致（实测 rmux 窗口高 = client 行数 − 状态栏行数）；`pane.resize` 与窗口尺寸共用该函数，避免两者不一致导致的中间闪烁。

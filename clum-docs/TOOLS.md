@@ -961,6 +961,15 @@ clum-mcp audit cleanup [--db <path>] [--older-than <days>] [--max-size <mb>]
 
 挂起项默认存活 15 分钟，超时后不可再批准。批准是**对某一条具体命令的一次性授权**，不是对规则的永久修改。裁决在权限层（`authorize` 的 caller-group 隔离）之后生效——规则不能授予权限层已拒绝的访问。
 
+### 两个运行时可改的文件（都不需要重新编译）
+
+| 文件 | 层 | 作用 |
+|---|---|---|
+| `config/command-kb.toml` | 分类 | 修正/新增"某条命令是只读还是会写盘"。同名命令整条覆盖二进制内嵌的默认值（约 1,600 条，来自 safe-chains） |
+| `config/command-rules.toml` | 策略 | 谁、在什么环境、能否执行（`deny`/`ask`/`allow`，按 tool/program/host_group/argv 匹配） |
+
+两者都由 `reload_config`（或 `kill -HUP`）热重载。要"更严"优先改策略层。知识库覆盖文件**缺失 = 用内嵌默认值**；**存在但解析失败 = 启动失败**（避免静默退回默认值）。
+
 ### 不检查的通道（已知边界）
 
 | 不检查 | 原因 |

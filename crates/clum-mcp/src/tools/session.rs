@@ -6,6 +6,7 @@ use crate::transport::{connect_to_host, recv_json_frame, send_json_frame};
 use clum_core::types::AuditAction;
 
 pub(crate) async fn reload_config(ctx: &ToolContext) -> Result<Value> {
+    let kb_status = reload_command_kb(ctx);
     let rules_status = reload_rules(ctx);
 
     match ctx.router.reload() {
@@ -16,7 +17,10 @@ pub(crate) async fn reload_config(ctx: &ToolContext) -> Result<Value> {
                 "",
                 "",
                 None,
-                &format!("reloaded {} hosts; command rules: {}", count, rules_status),
+                &format!(
+                    "reloaded {} hosts; command kb: {}; command rules: {}",
+                    count, kb_status, rules_status
+                ),
                 None,
                 true,
                 0,
@@ -26,6 +30,7 @@ pub(crate) async fn reload_config(ctx: &ToolContext) -> Result<Value> {
             Ok(json!({
                 "ok": true,
                 "hosts_count": count,
+                "command_kb": kb_status,
                 "command_rules": rules_status,
                 "message": format!("successfully reloaded {} hosts", count),
             }))
@@ -48,8 +53,33 @@ pub(crate) async fn reload_config(ctx: &ToolContext) -> Result<Value> {
             Ok(json!({
                 "ok": false,
                 "error": err_msg,
+                "command_kb": kb_status,
                 "command_rules": rules_status,
             }))
+        }
+    }
+}
+
+/// 重载命令知识库（内嵌默认值 + 运行时覆盖文件）。解析失败保留旧知识库。
+fn reload_command_kb(ctx: &ToolContext) -> String {
+    match crate::load_command_kb(&ctx.command_kb_path) {
+        Ok(new_kb) => {
+            let count = new_kb.len();
+            *ctx.command_kb.write().unwrap_or_else(|e| e.into_inner()) = new_kb;
+            tracing::info!(
+                "reloaded {count} command knowledge base entries from {}",
+                ctx.command_kb_path.display()
+            );
+            format!("reloaded {count}")
+        }
+        Err(e) => {
+            let kept = ctx
+                .command_kb
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .len();
+            tracing::error!("command kb reload failed ({e}) — keeping previous {kept} entries");
+            format!("unchanged ({kept} kept): {e}")
         }
     }
 }

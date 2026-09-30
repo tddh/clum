@@ -40,9 +40,10 @@ pub(crate) fn evaluate_call(
         .unwrap_or_else(|e| e.into_inner())
         .clone();
     let rules = ctx.rules.read().unwrap_or_else(|e| e.into_inner());
+    let command_kb = ctx.command_kb.read().unwrap_or_else(|e| e.into_inner());
 
     let decision = clum_command_kb::evaluate(
-        &ctx.command_kb,
+        &command_kb,
         &rules,
         &command,
         &EvalContext {
