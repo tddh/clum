@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
-use super::exec::unescape_keys;
 use super::ToolContext;
 use crate::transport::{connect_to_host, recv_json_frame, send_json_frame};
 use clum_core::types::AuditAction;
@@ -10,8 +9,7 @@ pub(crate) async fn send_keys(ctx: &ToolContext, args: Value) -> Result<Value> {
     let host_name = args["host"].as_str().context("missing 'host'")?;
     let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_id_arg = args["pane_id"].as_str();
-    let raw_keys = args["keys"].as_str().context("missing 'keys'")?;
-    let keys = unescape_keys(raw_keys);
+    let keys = args["keys"].as_str().context("missing 'keys'")?;
     let sensitive = args["sensitive"].as_bool().unwrap_or(false);
     let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
@@ -23,7 +21,7 @@ pub(crate) async fn send_keys(ctx: &ToolContext, args: Value) -> Result<Value> {
     super::common::enrich_pane_response(&mut response, &pane_id, auto_resolved);
     let pre_state = response["pre_terminal_state"].as_str();
     let prompt_line = response["prompt_line"].as_str();
-    let (detail, redacted) = input_audit_detail("", &keys, sensitive, pre_state, prompt_line);
+    let (detail, redacted) = input_audit_detail("", keys, sensitive, pre_state, prompt_line);
     if redacted {
         response["redacted"] = json!(true);
     }

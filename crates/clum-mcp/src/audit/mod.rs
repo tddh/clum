@@ -66,6 +66,7 @@ impl AuditDb {
     /// and ensures the `audit_events` table and indexes exist.
     pub fn open(path: &Path) -> Result<Self> {
         let conn = Connection::open(path).context("failed to open audit database")?;
+        conn.busy_timeout(std::time::Duration::from_secs(5))?;
 
         // Restrict the db (and the WAL/-shm siblings the journal mode creates)
         // to owner-only regardless of the ambient umask.

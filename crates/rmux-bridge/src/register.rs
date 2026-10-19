@@ -315,6 +315,7 @@ async fn connect_and_register(config: &RegisterConfig) -> anyhow::Result<()> {
                                 rec_fsync,
                                 audit_db,
                                 idle_timeout,
+                                true,
                                 rec_pubkey,
                             )
                             .await

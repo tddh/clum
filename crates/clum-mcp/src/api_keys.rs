@@ -7,7 +7,9 @@ use anyhow::{Context, Result};
 use sha2::{Digest, Sha256};
 use tokio::sync::RwLock;
 
-const CACHE_TTL: Duration = Duration::from_secs(600);
+/// 撤销延迟窗口。600s 让已撤销的 key 最长还能用 10 分钟；60s 在「每次请求最多
+/// 多一次 DB 读」与「撤销及时生效」之间取平衡（CLI 进程无法清 server 内缓存）。
+const CACHE_TTL: Duration = Duration::from_secs(60);
 
 pub struct AgentIdentity {
     pub name: String,
@@ -54,6 +56,7 @@ impl ApiKeyStore {
     pub fn open(path: &Path) -> Result<Arc<Self>> {
         let conn = rusqlite::Connection::open(path)
             .with_context(|| format!("open api key db: {}", path.display()))?;
+        conn.busy_timeout(std::time::Duration::from_secs(5))?;
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS api_keys (
                 id           TEXT PRIMARY KEY,

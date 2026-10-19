@@ -49,6 +49,9 @@
 | `REFUSED_STATE` | exec 安全检查拒绝（终端非 ready），`error` 含具体恢复建议 |
 | `CLI_FAILED` | bridge 端 rmux CLI 回退失败：检查 rmux 安装完整性（`rmux list-commands`） |
 | `PROTOCOL_ERROR` | 桥侧帧协议错误（不应发生）：检查 bridge 版本是否过旧，考虑升级 |
+| `COMMAND_DENIED` | 命令被规则硬拒绝：**不要重试**，看 `rule_id`/`recovery_hint`，改用只读等价命令 |
+| `APPROVAL_REQUIRED` | 命令挂起等人工批准：客户端支持 elicitation 时会先在同一次调用内弹框；否则把 `approval_id` 与 `command` 告知用户，批准后带同一 id 原样重发 |
+| `APPROVAL_INVALID` | 审批凭证不可用（已消费/已过期/命令或主机不符）：去掉 `approval_id` 重新申请 |
 | `UNKNOWN` | 未分类错误，看 `error` 详情 |
 
 > 错误码由 MCP 与 bridge 共用 `clum_core::error_code` 分类器产生：bridge 响应出口自动注入 `error_code`，旧 bridge（无注入）由 MCP 侧消息分类兜底，两者结果一致。`REFUSED_STATE` 例外——由 MCP 层在 exec 安全检查拒绗时特判注入，不在共享分类器内。
@@ -98,15 +101,17 @@
 
 ### `reload_config`
 
-重新加载 `hosts.yaml` 配置，无需重启 MCP Server。修改配置文件（增删改主机）后调用此工具即可生效。加载失败时保留原有配置不变。
+重新加载 `hosts.yaml`、**命令知识库覆盖文件**（`config/command-kb.toml`）与**命令规则文件**（`config/command-rules.toml`），无需重启 MCP Server。修改这些文件后调用此工具即可生效。任一文件加载失败时**保留原有内容不变**（绝不因配置解析错误退化为「无规则」）。
 
 | 参数 | 类型 | 必填 |
 |------|------|:---:|
 | 无 | | |
 
-**返回** `{"ok": true, "hosts_count": 3, "message": "successfully reloaded 3 hosts"}`
+**返回** `{"ok": true, "hosts_count": 3, "command_kb": "reloaded 1607", "command_rules": "reloaded 2", "message": "successfully reloaded 3 hosts"}`
 
-失败时返回 `{"ok": false, "error": "failed to parse hosts YAML: ..."}` — 此时运行中服务不受影响。
+`command_kb` / `command_rules` 是状态字符串：成功为 `reloaded <N>`，失败为 `unchanged (<N> kept): <原因>`。**据此确认规则是否真的生效**，不要只看 `ok`——主机加载成功但规则解析失败时，`ok` 仍是 `true`。
+
+主机加载失败时返回 `{"ok": false, "error": "failed to parse hosts YAML: ...", "command_kb": "...", "command_rules": "..."}` — 此时运行中服务不受影响。
 
 > **两种触发方式**：除了通过此 MCP 工具触发，运维人员也可以通过 `kill -HUP <pid>` 向 MCP Server 进程发送 SIGHUP 信号来触发配置重载。
 
@@ -940,7 +945,7 @@ clum-mcp audit cleanup [--db <path>] [--older-than <days>] [--max-size <mb>]
 | `host_name` | string | 目标主机 |
 | `session_name` | string | 会话名 |
 | `pane_id` | string | 窗格 ID（非 pane 操作为空） |
-| `action` | string | 操作类型（69 种 AuditAction） |
+| `action` | string | 操作类型（73 种 AuditAction） |
 | `detail` | string | 操作参数 |
 | `output_summary` | string | Exec/CmdEscape 的输出摘要（前 500 字符） |
 | `success` | bool | 操作是否成功 |
@@ -951,15 +956,26 @@ clum-mcp audit cleanup [--db <path>] [--older-than <days>] [--max-size <mb>]
 
 ## 命令规则引擎
 
-所有携带命令的工具在执行前会经过规则裁决：`exec`、`shell_command`、`batch_exec`（读 `command`）、`send_keys`、`batch_send_keys`（读 `keys`）、`send_text`（读 `text`）。
+所有携带命令的工具在执行前会经过规则裁决：`exec`、`shell_command`、`batch_exec`（读 `command`）、`send_keys`、`batch_send_keys`、`broadcast_keys`（读 `keys`）、`send_text`（读 `text`）、`respawn_pane` / `split_pane_with`（读 `command` + `args`）、`cmd_escape`（读 rmux CLI 参数）。
+
+> `send_keys` 族在裁决**之前**统一解码 `\n` / `\xNN` 等转义：裁决与执行看到同一个字符串。历史缺陷是「评估原始转义串、执行解码串」，`ls \x0arm -rf /` 曾因此被判 `allow` 却执行了两条命令。
 
 | 裁决 | 返回 | AI 应如何反应 |
 |---|---|---|
 | allow | 正常执行（无额外字段） | — |
 | deny | `{"ok":false,"error_code":"COMMAND_DENIED","rule_id":"...","recovery_hint":"..."}` | **不要重试**；看 `rule_id`，改用只读等价命令，或请管理员调整 `config/command-rules.toml` |
-| ask | `{"ok":false,"error_code":"APPROVAL_REQUIRED","approval_id":"...","expires_at":"...","rule_id":"..."}` | **不要重试、不要试图批准**；把 `approval_id` 与 `command` 告知用户，等人类在服务端执行 `clum-mcp approval approve <approval_id>` 后**再重新执行原命令** |
+| ask | `{"ok":false,"error_code":"APPROVAL_REQUIRED","approval_id":"...","expires_at":"...","rule_id":"..."}` | **不要自己批准**；客户端支持 elicitation 时先在同一次调用内弹框（Accept 继续）；否则把 `approval_id` 与 `command` 告知用户，等人类在服务端执行 `clum-mcp approval approve <approval_id>`，然后**带上 `approval_id` 原样重发同一条命令** |
+| 放行失败 | `{"ok":false,"error_code":"APPROVAL_INVALID","reason":"..."}` | 批准是一次性的：已消费 / 已过期 / 命令被改 / 换了工具或主机都会落到这里。**去掉 `approval_id` 重新申请**，不要重试同一个 id |
 
-挂起项默认存活 15 分钟，超时后不可再批准。批准是**对某一条具体命令的一次性授权**，不是对规则的永久修改。裁决在权限层（`authorize` 的 caller-group 隔离）之后生效——规则不能授予权限层已拒绝的访问。
+挂起项默认存活 15 分钟，超时后不可再批准。批准是**对「同一条命令 + 同一工具 + 同一主机」的一次性授权**（batch 类工具绑定整个 `hosts` 集合），不是对规则的永久修改；消费后状态置为 `consumed`，无法复用。同一命令在过期前重复触发 `ask` 会**复用同一个 `approval_id`**，不会堆积。裁决在权限层（`authorize` 的 capability + resource selector 判定）之后生效——规则不能授予权限层已拒绝的访问。
+
+> **`require_approval` 升格**：`clum-mcp role grant … --require-approval` 命中的 grant 会把原本 `allow` 的调用升格为 `ask`；客户端支持 elicitation 时在同一次调用内弹框，否则返回 `APPROVAL_REQUIRED` + `approval_id`。`deny` 与已有的 `ask` 不会被放宽。
+>
+> **`command:read`**：只读执行能力。只放行 `exec`/`batch_exec` 中被显式标记为只读且最终 `Allow` 的命令；未标记、未知、危险结构/flag、`sudo`/`doas` 一律拒绝。规则 `allow` 不能提升为只读。
+
+> **`approval_id` 参数**：10 个受裁决工具与 `paste_buffer`（可被 `tool` 规则强制 ask）的 schema 都接受可选 `approval_id`。命中 `ask` 后带该 id 重发同一调用即可消费批准；工具参考里不再逐条重复列出。
+
+> **与 AI 客户端自身权限层的关系**：OpenCode v2 等客户端有自己的 `permissions` 配置（可 deny 掉 `clum_*` 工具）。那是**客户端侧、用户可改**的一层；本节的 deny/ask 由 **MCP 服务端强制**，客户端配置无法放松它。两层是纵深防御关系，不互相替代。
 
 ### 两个运行时可改的文件（都不需要重新编译）
 
@@ -970,15 +986,21 @@ clum-mcp audit cleanup [--db <path>] [--older-than <days>] [--max-size <mb>]
 
 两者都由 `reload_config`（或 `kill -HUP`）热重载。要"更严"优先改策略层。知识库覆盖文件**缺失 = 用内嵌默认值**；**存在但解析失败 = 启动失败**（避免静默退回默认值）。
 
-### 不检查的通道（已知边界）
+### 无命令载荷的通道（可用 `tool` 规则强制 ask）
 
-| 不检查 | 原因 |
+| 工具 | 为什么无法静态检查 |
 |---|---|
 | `paste_buffer` | 内容在远端 paste buffer，服务端拿不到 |
-| `cmd_escape` | 参数是 rmux CLI 而非 shell 命令 |
-| `respawn_pane` | 重新执行 pane 的既有进程规格 |
 
-不检查 ≠ 放行：这些工具仍受权限层约束，且可用规则的 `tool` 过滤对其强制 `ask`（见 `config/command-rules.toml` 中的注释示例）。
+`paste_buffer` 默认不裁决（否则每次粘贴都要人工批准，闸门会被运维关掉），但 `config/command-rules.toml` 里按 `tool` 限定的规则对它**确实生效**——取消注释示例规则即可强制 `ask`。由于拿不到命令文本，其审批指纹是 `sha256(tool_name + 规范化 args)`（`approval_id` 作为重试凭证不参与哈希）：参数变一个字符就要重新批准，批准后带 id 原样重发可正常消费。
+
+> `respawn_pane` / `split_pane_with` 带 `command` 时是**真实执行载荷**，已纳入裁决；**不带 `command` 的 `respawn_pane` 同样 fail-closed 到 `ask`**（它会重跑 pane 既有进程规格，可能来自一次已批准的命令，否则一次性审批可被无限重放）。`cmd_escape` 的参数是 rmux CLI（tmux 兼容命令面，可能触达 shell），按命令文本评估——未收录的 rmux 子命令 fail-closed 到 `ask`。管理员可用 `tool` 维度规则显式放行这些通道。
+
+这些通道仍受权限层（`authorize` 的 capability + selector 判定）约束——不裁决 ≠ 无约束。
+
+### CLI 通道边界
+
+`clum-cli term/forward/push/pull/list` 走 QUIC 服务端中继，**不经过**本规则引擎，也没有逐命令审批与命令级审计；连接建立时按 purpose 做 capability 判定（`term` 还需 `session:attach` + `terminal:input` + `session:read`）。它是持 API Key 的人类通道；Agent 不得通过 Bash 调用 `clum-cli` 绕过 MCP 工具。`clum-cli replay` 不走中继，而是 HTTPS `GET /recordings`，按 host + `recording:read` + selector 判定。
 
 ## 快速参考
 

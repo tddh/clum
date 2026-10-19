@@ -226,6 +226,9 @@ json!({"ok": false, "error": ...})
 | `REFUSED_STATE` | exec 安全检查拒绝 | false | MCP `exec` precheck（refused 标记）——**非共享分类器常量**，MCP 侧 `error.rs` 硬编码注入 |
 | `CLI_FAILED` | rmux CLI 回退失败 | false | bridge CLI 回退 9 处（**新增**） |
 | `PROTOCOL_ERROR` | 帧协议错误 | false | bridge proxy.rs（**新增**） |
+| `COMMAND_DENIED` | 命令被规则硬拒绝 | false | MCP 规则引擎（`tools/rules.rs` deny 命中） |
+| `APPROVAL_REQUIRED` | 命令挂起等人工批准 | false | MCP 规则引擎（`tools/rules.rs` ask 命中） |
+| `APPROVAL_INVALID` | 审批凭证不可用（已消费/过期/命令或主机不符） | false | 审批消费校验（`tools/mod.rs`） |
 | `UNKNOWN` | 未分类兜底 | false | 其余 |
 
 ---
@@ -332,4 +335,4 @@ async fn send_response(writer: &..., response: &mut serde_json::Value) -> Result
 | 6 | 文档同步 | `clum-docs/TOOLS.md` |
 | 7 | 验证 | `just check && just test && just lint` |
 
-> 原"后续演进"章节内容已并入本节，作为本次实施的最终方案。错误码契约见 §4 表：**19 个共享分类器常量**（`clum_core::error_code.rs`）+ 1 个 MCP 侧特例 `REFUSED_STATE`（`error.rs` 硬编码，不走分类器）。
+> 原"后续演进"章节内容已并入本节，作为本次实施的最终方案。错误码契约见 §4 表：**22 个共享分类器常量**（`clum_core::error_code.rs`）+ 1 个 MCP 侧特例 `REFUSED_STATE`（`error.rs` 硬编码，不走分类器）。

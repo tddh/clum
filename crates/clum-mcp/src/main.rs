@@ -5,11 +5,14 @@ mod approvals;
 mod audit;
 mod audit_cli;
 mod bridge_store;
+mod capability;
 mod error;
 mod files;
 mod forward;
 mod handler;
 mod http_server;
+mod policy;
+mod policy_cli;
 mod progress;
 mod quic_server;
 mod recording_keyring;
@@ -160,6 +163,12 @@ async fn main() -> anyhow::Result<()> {
     if args.len() > 1 && args[1] == "agent" {
         return run_agent_command(&args[2..]).await;
     }
+    if args.len() > 1 && args[1] == "role" {
+        return policy_cli::run_role_command(&args[2..]).await;
+    }
+    if args.len() > 1 && args[1] == "policy" {
+        return policy_cli::run_policy_command(&args[2..]).await;
+    }
     if args.len() > 1 && args[1] == "bridge" {
         return run_bridge_command(&args[2..]).await;
     }
@@ -230,6 +239,12 @@ async fn main() -> anyhow::Result<()> {
     let db_path = cli.audit_db.unwrap_or(file_audit_db);
     let audit_db = Arc::new(audit::AuditDb::open(&db_path)?);
     tracing::info!("audit database: {}", db_path.display());
+    let policy = policy::PolicyStore::open(&db_path)?;
+    tracing::info!(
+        "authorization policy: {} (revision {})",
+        db_path.display(),
+        policy.snapshot().revision
+    );
 
     let cleanup_db = audit_db.clone();
     tokio::spawn(async move {
@@ -244,51 +259,6 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     });
-
-    #[cfg(unix)]
-    {
-        let sig_router = Arc::clone(&router);
-        let sig_audit_db = Arc::clone(&audit_db);
-        tokio::spawn(async move {
-            let mut sig =
-                match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup()) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        tracing::warn!("SIGHUP handler not available: {e}");
-                        return;
-                    }
-                };
-            loop {
-                sig.recv().await;
-                match sig_router.reload() {
-                    Ok(count) => {
-                        tracing::info!("SIGHUP: successfully reloaded {} hosts from config", count);
-                        sig_audit_db
-                            .log(clum_core::types::AuditEvent {
-                                event_id: uuid::Uuid::new_v4(),
-                                timestamp: chrono::Utc::now(),
-                                agent_name: "system".to_string(),
-                                host_name: String::new(),
-                                session_name: String::new(),
-                                pane_id: None,
-                                operation_id: None,
-                                action: clum_core::types::AuditAction::ConfigReload,
-                                detail: "SIGHUP received".to_string(),
-                                redacted: false,
-                                output_summary: None,
-                                success: true,
-                                duration_ms: 0,
-                                error_message: None,
-                            })
-                            .await;
-                    }
-                    Err(e) => {
-                        tracing::error!("SIGHUP: config reload failed: {e}");
-                    }
-                }
-            }
-        });
-    }
 
     let bridge_registry = Arc::new(registry::BridgeRegistry::new());
 
@@ -327,7 +297,90 @@ async fn main() -> anyhow::Result<()> {
         .or_else(|| file_config.command_rules_file.as_ref().map(PathBuf::from))
         .unwrap_or_else(|| PathBuf::from("config/command-rules.toml"));
     let rules = Arc::new(std::sync::RwLock::new(load_rules(&rules_path)?));
-    let approvals = Arc::new(approvals::ApprovalStore::open(&db_path)?);
+    let approvals = Arc::new(approvals::ApprovalStore::open_with_ttl(
+        &db_path,
+        file_config.approval_ttl_secs,
+    )?);
+
+    // SIGHUP 与 reload_config 工具的重载行为一致：hosts / 命令知识库 / 命令规则一起
+    // 重载，任一读取或解析失败保留旧值（绝不退化为空规则）。审计的 success 口径比
+    // 工具路径更严格：三项全部成功才记 true。旧实现无论规则是否重载都写 success，
+    // 文档又声称 HUP 会重载规则，两者叠加制造了「以为生效」的静默失效。
+    #[cfg(unix)]
+    {
+        let sig_router = Arc::clone(&router);
+        let sig_audit_db = Arc::clone(&audit_db);
+        let sig_kb = Arc::clone(&command_kb);
+        let sig_rules = Arc::clone(&rules);
+        let sig_kb_path = command_kb_path.clone();
+        let sig_rules_path = rules_path.clone();
+        tokio::spawn(async move {
+            let mut sig =
+                match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup()) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        tracing::warn!("SIGHUP handler not available: {e}");
+                        return;
+                    }
+                };
+            loop {
+                sig.recv().await;
+
+                let (kb_ok, kb_status) = match load_command_kb(&sig_kb_path) {
+                    Ok(new_kb) => {
+                        let n = new_kb.len();
+                        *sig_kb.write().unwrap_or_else(|e| e.into_inner()) = new_kb;
+                        (true, format!("kb reloaded {n}"))
+                    }
+                    Err(e) => (false, format!("kb unchanged: {e}")),
+                };
+                // 与 reload_config 工具同语义：读取/解析失败一律保留旧规则。
+                // 不能用 load_rules —— 它对 NotFound 返回空规则集（启动期语义），
+                // 热重载时会把「文件被删/改名」静默解释成「规则被清空」。
+                let (rules_ok, rules_status) = match std::fs::read_to_string(&sig_rules_path)
+                    .map_err(|e| e.to_string())
+                    .and_then(|text| {
+                        clum_command_kb::RuleSet::from_toml_str(&text).map_err(|e| e.to_string())
+                    }) {
+                    Ok(new_rules) => {
+                        let n = new_rules.rule.len();
+                        *sig_rules.write().unwrap_or_else(|e| e.into_inner()) = new_rules;
+                        (true, format!("rules reloaded {n}"))
+                    }
+                    Err(e) => (false, format!("rules unchanged: {e}")),
+                };
+                let (hosts_ok, hosts_status) = match sig_router.reload() {
+                    Ok(count) => (true, format!("hosts reloaded {count}")),
+                    Err(e) => (false, format!("hosts unchanged: {e}")),
+                };
+
+                let ok = hosts_ok && kb_ok && rules_ok;
+                tracing::info!("SIGHUP: {hosts_status}; {kb_status}; {rules_status}");
+                sig_audit_db
+                    .log(clum_core::types::AuditEvent {
+                        event_id: uuid::Uuid::new_v4(),
+                        timestamp: chrono::Utc::now(),
+                        agent_name: "system".to_string(),
+                        host_name: String::new(),
+                        session_name: String::new(),
+                        pane_id: None,
+                        operation_id: None,
+                        action: clum_core::types::AuditAction::ConfigReload,
+                        detail: format!("SIGHUP: {hosts_status}; {kb_status}; {rules_status}"),
+                        redacted: false,
+                        output_summary: None,
+                        success: ok,
+                        duration_ms: 0,
+                        error_message: if ok {
+                            None
+                        } else {
+                            Some("reload incomplete".into())
+                        },
+                    })
+                    .await;
+            }
+        });
+    }
 
     let ctx = Arc::new(tools::ToolContext {
         router,
@@ -348,6 +401,8 @@ async fn main() -> anyhow::Result<()> {
         rules,
         rules_path,
         approvals,
+        policy: Arc::clone(&policy),
+        principal_name: Arc::new(std::sync::Mutex::new(None)),
     });
 
     match cli.mode.as_str() {
@@ -414,6 +469,8 @@ async fn main() -> anyhow::Result<()> {
                 router: Arc::clone(&ctx.router),
                 ca_cert_path: ctx.ca_cert_path.clone(),
                 audit_db: Arc::clone(&audit_db),
+                policy: Arc::clone(&policy),
+                bridge_store: Arc::clone(&bridge_store),
             };
             let reg = Arc::clone(&bridge_registry);
             tokio::spawn(async move {

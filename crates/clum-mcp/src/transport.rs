@@ -221,30 +221,13 @@ pub async fn send_json_frame<S: tokio::io::AsyncWriteExt + Unpin>(
     stream: &mut S,
     value: &serde_json::Value,
 ) -> anyhow::Result<()> {
-    let json_str = serde_json::to_string(value)?;
-    let len = json_str.len() as u32;
-    stream.write_all(&len.to_le_bytes()).await?;
-    stream.write_all(json_str.as_bytes()).await?;
-    stream.flush().await?;
-    Ok(())
+    clum_core::json_frame::write_json_frame(stream, value).await
 }
 
 pub async fn recv_json_frame<S: tokio::io::AsyncReadExt + Unpin>(
     stream: &mut S,
 ) -> anyhow::Result<serde_json::Value> {
-    let mut len_buf = [0u8; 4];
-    stream.read_exact(&mut len_buf).await?;
-    let len = u32::from_le_bytes(len_buf) as usize;
-    if len > clum_core::MAX_FRAME_SIZE {
-        anyhow::bail!(
-            "frame too large: {} bytes (max {})",
-            len,
-            clum_core::MAX_FRAME_SIZE
-        );
-    }
-    let mut buf = vec![0u8; len];
-    stream.read_exact(&mut buf).await?;
-    Ok(serde_json::from_slice(&buf)?)
+    clum_core::json_frame::read_json_frame(stream).await
 }
 
 pub async fn connect_to_bridge_hybrid_stream(

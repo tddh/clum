@@ -657,10 +657,8 @@ async fn send_response(
         response["error_code"] =
             serde_json::json!(clum_core::error_code::classify_error_message(msg));
     }
-    let resp_json = serde_json::to_string(response)?;
     let mut w = writer.lock().await;
-    w.write_all(&(resp_json.len() as u32).to_le_bytes()).await?;
-    w.write_all(resp_json.as_bytes()).await?;
+    clum_core::json_frame::write_json_frame(&mut *w, response).await?;
     Ok(())
 }
 

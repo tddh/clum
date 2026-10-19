@@ -114,3 +114,29 @@ impl BridgeRegistry {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn empty_registry_lists_nothing() {
+        let reg = BridgeRegistry::new();
+        assert!(reg.list().await.is_empty());
+        assert!(reg.get("nope").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn unregister_missing_host_is_noop() {
+        let reg = BridgeRegistry::new();
+        reg.unregister("missing").await;
+        assert!(reg.list().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn update_heartbeat_missing_host_is_noop() {
+        let reg = BridgeRegistry::new();
+        reg.update_heartbeat("missing").await;
+        assert!(reg.list().await.is_empty());
+    }
+}

@@ -581,6 +581,7 @@ dependencies = [
  "getrandom 0.2.17",
  "glob",
  "hex",
+ "parking_lot",
  "quinn",
  "regex",
  "rmcp",
@@ -2568,6 +2569,7 @@ dependencies = [
  "tokio-util",
  "tower-service",
  "tracing",
+ "url",
  "uuid",
 ]
 

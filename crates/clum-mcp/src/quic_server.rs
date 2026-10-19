@@ -32,6 +32,10 @@ pub struct QuicServerConfig {
     pub router: Arc<crate::router::HostRouter>,
     pub ca_cert_path: Option<String>,
     pub audit_db: Arc<crate::audit::AuditDb>,
+    pub policy: Arc<crate::policy::PolicyStore>,
+    /// Shared registration/metadata store. Reused instead of opening a new
+    /// SQLite connection (and re-running DDL) per relay connection.
+    pub bridge_store: Arc<crate::bridge_store::BridgeStore>,
 }
 
 pub(crate) async fn refresh_bridge_state(
@@ -150,11 +154,24 @@ pub async fn run_quic_server(
         let ca_cert = config.ca_cert_path.clone();
         let audit = Arc::clone(&config.audit_db);
         let groups = Arc::clone(&host_groups);
+        let policy = Arc::clone(&config.policy);
+        let bridge_store = Arc::clone(&config.bridge_store);
         let keyring = Arc::clone(&config.recording_keyring);
         tokio::spawn(async move {
             if let Err(e) = handle_connection(
-                connecting, registry, token_map, rec_dir, store, agents, router, ca_cert, audit,
-                groups, keyring,
+                connecting,
+                registry,
+                token_map,
+                rec_dir,
+                store,
+                agents,
+                router,
+                ca_cert,
+                audit,
+                groups,
+                keyring,
+                policy,
+                bridge_store,
             )
             .await
             {
@@ -179,6 +196,8 @@ async fn handle_connection(
     audit_db: Arc<crate::audit::AuditDb>,
     host_groups: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
     keyring: Arc<crate::recording_keyring::RecordingKeyring>,
+    policy: Arc<crate::policy::PolicyStore>,
+    bridge_store: Arc<crate::bridge_store::BridgeStore>,
 ) -> anyhow::Result<()> {
     let conn = connecting.await?;
     let remote_addr = conn.remote_address();
@@ -218,6 +237,8 @@ async fn handle_connection(
                 ca_cert_path,
                 audit_db,
                 host_groups,
+                policy,
+                bridge_store,
             )
             .await
         }
@@ -468,10 +489,13 @@ async fn handle_agent_connection(
     ca_cert_path: Option<String>,
     audit_db: Arc<crate::audit::AuditDb>,
     host_groups: Arc<tokio::sync::RwLock<HashMap<String, String>>>,
+    policy: Arc<crate::policy::PolicyStore>,
+    bridge_store: Arc<crate::bridge_store::BridgeStore>,
 ) -> anyhow::Result<()> {
     // Validate API key if auth is enabled
     let mut agent_name = "unknown".to_string();
     let mut caller_group: Option<String> = None;
+    let mut authenticated = false;
     let store_empty = match &api_key_store {
         Some(store) => store.is_empty().await,
         None => true,
@@ -485,6 +509,7 @@ async fn handle_agent_connection(
             Some(identity) => {
                 agent_name = identity.name;
                 caller_group = identity.group;
+                authenticated = true;
             }
             None => {
                 write_frame(&mut send, &serde_json::json!({"type": "agent_ack", "ok": false, "error": "invalid api key"})).await?;
@@ -524,26 +549,94 @@ async fn handle_agent_connection(
         anyhow::bail!("agent_connect without host from {remote_addr}");
     }
 
-    // Group isolation: reject before establishing any bridge connection.
-    // The runtime registration DB is authoritative; hosts.yaml is a fallback.
-    if let Some(ref cg) = caller_group {
-        let registered_group = host_groups.read().await.get(&host).cloned();
-        let host_group = registered_group.filter(|g| !g.is_empty()).or_else(|| {
+    let purpose = msg
+        .get("purpose")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+
+    // Destination metadata is needed by selectors regardless of the caller's
+    // group. The runtime registration DB is authoritative; hosts.yaml is a
+    // fallback.
+    let registered_group = host_groups.read().await.get(&host).cloned();
+    let host_group = registered_group
+        .filter(|group| !group.is_empty())
+        .or_else(|| {
             router
                 .get(&host)
                 .map(|h| h.group.clone())
-                .filter(|g| !g.is_empty())
+                .filter(|group| !group.is_empty())
         });
-        if host_group.as_deref() != Some(cg.as_str()) {
+
+    // Capability check at connection establishment (authorization-design.md
+    // §6.2). The relay is a byte stream and cannot be adjudicated per command;
+    // this closes the "CLI bypasses the policy layer" hole. Bootstrap loopback
+    // (no API keys configured) keeps its pre-P0 superadmin behaviour.
+    if authenticated {
+        let Some(capabilities) = purpose_capabilities(purpose) else {
+            let error = format!("unsupported relay purpose '{purpose}'");
             write_frame(
                 &mut send,
-                &serde_json::json!({"type": "agent_ack", "ok": false, "error": format!("host '{host}' is not in your group '{cg}'")}),
+                &serde_json::json!({"type": "agent_ack", "ok": false, "error": error}),
             )
             .await?;
             conn.close(quinn::VarInt::from_u32(0), b"forbidden");
-            anyhow::bail!(
-                "agent group mismatch: caller={cg} host={host_group:?} from {remote_addr}"
+            anyhow::bail!("agent relay with unsupported purpose '{purpose}' from {remote_addr}");
+        };
+
+        let mut labels = bridge_store
+            .get_all_host_meta()
+            .await
+            .into_iter()
+            .find(|meta| meta.hostname == host)
+            .map(|meta| meta.labels)
+            .unwrap_or_default();
+        if labels.is_empty() {
+            // Mirror tools::resolve_call_host_resources: hosts.yaml labels are
+            // authoritative when the registration DB has none.
+            if let Some(configured) = router.get(&host) {
+                labels = configured.labels.clone();
+            }
+        }
+        let resource = crate::policy::HostResource {
+            name: host.clone(),
+            group: host_group.clone(),
+            labels,
+        };
+
+        for capability in capabilities {
+            let decision = policy.check(
+                &agent_name,
+                caller_group.as_deref(),
+                *capability,
+                Some(&resource),
             );
+            // The relay is a byte stream with no human in the loop: a grant
+            // that requires approval cannot be satisfied here, so fail closed
+            // instead of silently bypassing the approval requirement.
+            if !decision.allowed || decision.require_approval {
+                let error = if decision.require_approval {
+                    format!(
+                        "forbidden: purpose '{purpose}' requires capability '{}' which is configured to require human approval; use the MCP tools instead of the CLI relay",
+                        capability.as_str()
+                    )
+                } else {
+                    format!(
+                        "forbidden: purpose '{purpose}' requires capability '{}'; host '{host}' is not in your group or role selector",
+                        capability.as_str()
+                    )
+                };
+                write_frame(
+                    &mut send,
+                    &serde_json::json!({"type": "agent_ack", "ok": false, "error": error}),
+                )
+                .await?;
+                conn.close(quinn::VarInt::from_u32(0), b"forbidden");
+                anyhow::bail!(
+                    "agent relay denied: principal={agent_name} purpose={purpose} capability={} host={host} approval={} from {remote_addr}",
+                    capability.as_str(),
+                    decision.require_approval
+                );
+            }
         }
     }
 
@@ -579,10 +672,6 @@ async fn handle_agent_connection(
         .insert(host.clone(), agent_name.clone());
     tracing::info!(%host, %remote_addr, %agent_name, "agent connected, starting relay");
 
-    let purpose = msg
-        .get("purpose")
-        .and_then(|v| v.as_str())
-        .unwrap_or("unknown");
     audit_db
         .log(clum_core::types::AuditEvent {
             event_id: uuid::Uuid::new_v4(),
@@ -621,6 +710,22 @@ async fn handle_agent_connection(
 
     tracing::info!(%host, %remote_addr, "agent disconnected");
     Ok(())
+}
+
+/// Capabilities required to open a CLI relay for one purpose. A byte-stream
+/// relay cannot be adjudicated per command, so the decision is made once at
+/// connection establishment.
+fn purpose_capabilities(purpose: &str) -> Option<&'static [crate::capability::Capability]> {
+    use crate::capability::Capability::*;
+    match purpose {
+        "term" => Some(&[SessionAttach, TerminalInput, SessionRead]),
+        "forward" => Some(&[ForwardCreate]),
+        "push" => Some(&[FileWrite]),
+        "pull" => Some(&[FileRead]),
+        "list" => Some(&[HostRead]),
+        "replay" => Some(&[RecordingRead]),
+        _ => None,
+    }
 }
 
 async fn relay_stream(
@@ -689,6 +794,46 @@ fn load_server_tls(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::capability::Capability;
+
+    #[test]
+    fn purpose_capabilities_maps_every_relay_purpose() {
+        assert_eq!(
+            purpose_capabilities("term"),
+            Some(
+                &[
+                    Capability::SessionAttach,
+                    Capability::TerminalInput,
+                    Capability::SessionRead
+                ][..]
+            )
+        );
+        assert_eq!(
+            purpose_capabilities("forward"),
+            Some(&[Capability::ForwardCreate][..])
+        );
+        assert_eq!(
+            purpose_capabilities("push"),
+            Some(&[Capability::FileWrite][..])
+        );
+        assert_eq!(
+            purpose_capabilities("pull"),
+            Some(&[Capability::FileRead][..])
+        );
+        assert_eq!(
+            purpose_capabilities("list"),
+            Some(&[Capability::HostRead][..])
+        );
+        assert_eq!(
+            purpose_capabilities("replay"),
+            Some(&[Capability::RecordingRead][..])
+        );
+        assert_eq!(
+            purpose_capabilities("unknown"),
+            None,
+            "unknown purposes must fail closed"
+        );
+    }
 
     #[tokio::test]
     async fn refresh_empties_token_map_when_db_has_no_bridges() {

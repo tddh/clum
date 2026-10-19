@@ -95,22 +95,11 @@ pub async fn write_detach(send: &mut SendStream) -> Result<()> {
 }
 
 pub async fn send_json_frame(send: &mut SendStream, value: &serde_json::Value) -> Result<()> {
-    let json_str = serde_json::to_string(value)?;
-    let len = json_str.len() as u32;
-    send.write_all(&len.to_le_bytes()).await?;
-    send.write_all(json_str.as_bytes()).await?;
-    Ok(())
+    clum_core::json_frame::write_json_frame(send, value).await
 }
 
 pub async fn recv_json_frame(recv: &mut quinn::RecvStream) -> Result<serde_json::Value> {
-    let mut len_buf = [0u8; 4];
-    recv.read_exact(&mut len_buf).await?;
-    let len = u32::from_le_bytes(len_buf) as usize;
-
-    let mut buf = vec![0u8; len];
-    recv.read_exact(&mut buf).await?;
-    let value: serde_json::Value = serde_json::from_slice(&buf)?;
-    Ok(value)
+    clum_core::json_frame::read_json_frame(recv).await
 }
 
 #[cfg(test)]

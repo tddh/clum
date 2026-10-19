@@ -6,8 +6,9 @@ effect = "ask"
 arity = 2
 source = "manual(clum)"
   [[command.subcommand]]
-  name = ["status", "is-active", "is-enabled", "list-units", "show", "cat"]
+  name = ["status", "is-active", "is-enabled", "is-failed", "list-units", "list-unit-files", "show", "cat"]
   effect = "allow"
+  read_only = true
   [[command.subcommand]]
   name = ["restart", "reload", "start", "stop", "enable", "disable", "mask"]
   effect = "ask"
@@ -18,7 +19,8 @@ source = "manual(clum)"
 [[command]]
 name = "journalctl"
 effect = "allow"
-dangerous_flags = ["--vacuum-size", "--vacuum-time", "--rotate", "--flush"]
+read_only = true
+dangerous_flags = ["--vacuum-size", "--vacuum-time", "--vacuum-files", "--rotate", "--flush", "--sync"]
 escalate_to = "ask"
 source = "manual(clum)"
 
@@ -28,8 +30,9 @@ effect = "ask"
 arity = 2
 source = "manual(clum)"
   [[command.subcommand]]
-  name = ["ps", "images", "logs", "inspect", "version", "info"]
+  name = ["ps", "images", "logs", "inspect", "stats", "version", "info"]
   effect = "allow"
+  read_only = true
   [[command.subcommand]]
   name = ["rm", "rmi", "stop", "kill", "restart", "run", "exec", "compose"]
   effect = "ask"

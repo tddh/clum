@@ -45,6 +45,9 @@ pub async fn handle_quic_stream(
     fsync_interval_secs: u64,
     audit_db: Arc<BridgeAuditDb>,
     idle_timeout_secs: u64,
+    // true = 这条 QUIC 连接在多个客户端之间共享（enrolled 模式：bridge↔server
+    // 的唯一注册连接）。idle 超时不得 close 它，否则会切断该主机的所有客户端。
+    shared_connection: bool,
     recording_pubkey: std::sync::Arc<tokio::sync::RwLock<Option<(String, String)>>>,
 ) -> anyhow::Result<()> {
     let mut type_buf = [0u8; 1];
@@ -76,12 +79,14 @@ pub async fn handle_quic_stream(
         0x08 => handle_list_quic(send, recv).await,
         0x06 => {
             crate::interactive::handle_interactive_control(
+                conn.clone(),
                 send,
                 recv,
                 protocol_proxy.clone(),
                 session_state.clone(),
                 audit_db,
                 idle_timeout_secs,
+                shared_connection,
             )
             .await
         }

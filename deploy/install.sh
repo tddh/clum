@@ -33,13 +33,18 @@ if systemctl is-active rmux-bridge >/dev/null 2>&1; then
     systemctl stop rmux-bridge
 fi
 
-# Migrate legacy layouts (idempotent)
+# Migrate legacy layouts (idempotent). 迁移前先备份：与 deploy-bridge.sh 保持同样的
+# 风险姿态，迁移出错时可以回退。两个目录必须使用**不同**的备份名——同一秒内
+# 两次 `date +%s` 结果相同，同名 tar 会互相覆盖。
+MIGRATION_STAMP=$(date +%s)
 if [ -d /etc/yunying ] && [ ! -d /etc/clum ]; then
-    echo ">>> Migrating /etc/yunying -> /etc/clum"
+    echo ">>> Migrating /etc/yunying -> /etc/clum (backup first)"
+    tar czf "/root/clum-migration-backup-${MIGRATION_STAMP}-etc.tar.gz" /etc/yunying
     mv /etc/yunying /etc/clum
 fi
 if [ -d /opt/agent-ops ] && [ ! -d /opt/clum ]; then
     echo ">>> Migrating /opt/agent-ops -> /opt/clum"
+    tar czf "/root/clum-migration-backup-${MIGRATION_STAMP}-opt.tar.gz" /opt/agent-ops
     mv /opt/agent-ops /opt/clum
 fi
 
@@ -53,6 +58,21 @@ mkdir -p /etc/clum /opt/clum/recordings
 echo ">>> Downloading rmux-bridge..."
 curl -fsSLk -H "Authorization: Bearer ${BRIDGE_TOKEN}" \
     "${BASE_URL}/releases/rmux-bridge-linux-${ARCH}" -o /tmp/rmux-bridge.download
+
+# 首次安装无法验证服务端身份（自签 CA 的鸡蛋问题），但至少支持带外 checksum：
+# 发布侧提供 sha256 后，运维通过 CLUM_RELEASE_SHA256 传入即可校验二进制；
+# CA 证书同样提供 CLUM_CA_SHA256，避免二进制校验通过后被替换 CA。
+if [ -n "${CLUM_RELEASE_SHA256:-}" ]; then
+    echo ">>> Verifying binary checksum"
+    echo "${CLUM_RELEASE_SHA256}  /tmp/rmux-bridge.download" | sha256sum -c - || {
+        echo "ERROR: binary checksum mismatch" >&2
+        rm -f /tmp/rmux-bridge.download
+        exit 1
+    }
+else
+    echo "WARNING: CLUM_RELEASE_SHA256 not set — binary integrity is NOT verified"
+fi
+
 chmod +x /tmp/rmux-bridge.download
 mv -f /tmp/rmux-bridge.download /usr/local/bin/rmux-bridge
 
@@ -60,6 +80,17 @@ mv -f /tmp/rmux-bridge.download /usr/local/bin/rmux-bridge
 echo ">>> Downloading CA certificate..."
 curl -fsSLk -H "Authorization: Bearer ${BRIDGE_TOKEN}" \
     "${BASE_URL}/releases/ca.crt" -o /etc/clum/ca.crt
+
+if [ -n "${CLUM_CA_SHA256:-}" ]; then
+    echo ">>> Verifying CA checksum"
+    echo "${CLUM_CA_SHA256}  /etc/clum/ca.crt" | sha256sum -c - || {
+        echo "ERROR: CA certificate checksum mismatch" >&2
+        rm -f /etc/clum/ca.crt
+        exit 1
+    }
+else
+    echo "WARNING: CLUM_CA_SHA256 not set — CA certificate integrity is NOT verified"
+fi
 
 # Detect rmux socket (same logic as deploy-bridge.sh), fall back to standard path
 RMUX_SOCKET=""

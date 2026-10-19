@@ -32,6 +32,11 @@ fn lookup(code: &str) -> Classified {
             "a human must approve — run 'clum-mcp approval approve <approval_id>' on the server host, or change the command to a read-only equivalent",
             false,
         ),
+        CODE_APPROVAL_INVALID => c(
+            "APPROVAL_INVALID",
+            "approval was not usable (one-shot, bound to the exact command/tool/host) — re-run WITHOUT approval_id to request a fresh one; do not retry the same id",
+            false,
+        ),
         CODE_COMMAND_DENIED => c(
             "COMMAND_DENIED",
             "command blocked by policy — the rule id is in recovery_hint; use a safer equivalent or ask an admin to adjust command-rules.toml",

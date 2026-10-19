@@ -147,6 +147,10 @@ fn decode_base64(input: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
+/// 回放几何的硬上限。头部与 `"r"` resize 事件都必须遵守：恶意 .cast 只要
+/// 一条超大 resize 就能让 avt 分配巨量 Cell（raw mode 下 abort，终端留在坏状态）。
+const MAX_CAST_DIM: usize = 1000;
+
 /// Parse an asciinema `"r"` payload.
 ///
 /// The v2 format uses the string `"COLSxROWS"`; some hand-made files use the
@@ -166,7 +170,7 @@ fn parse_resize(payload: &serde_json::Value) -> Option<(usize, usize)> {
         (arr[0].as_u64()? as usize, arr[1].as_u64()? as usize)
     };
 
-    if cols == 0 || rows == 0 {
+    if cols == 0 || rows == 0 || cols > MAX_CAST_DIM || rows > MAX_CAST_DIM {
         return None;
     }
     Some((cols, rows))
@@ -238,6 +242,13 @@ fn load_and_prepare(file: std::fs::File) -> anyhow::Result<(Vec<CastEvent>, Vt, 
     let header: serde_json::Value = serde_json::from_str(&header_line)?;
     let width = header["width"].as_u64().unwrap_or(80) as usize;
     let height = header["height"].as_u64().unwrap_or(24) as usize;
+    // 0 会让 avt 内部下溢 panic；超大值会触发巨额分配/OOM。损坏或恶意的
+    // .cast 文件不能让回放进程崩溃（replay 没有 term 路径的 panic hook）。
+    if !(1..=MAX_CAST_DIM).contains(&width) || !(1..=MAX_CAST_DIM).contains(&height) {
+        anyhow::bail!(
+            "invalid cast geometry {width}x{height} (each dimension must be 1..={MAX_CAST_DIM})"
+        );
+    }
     let timestamp = header["timestamp"].as_i64().unwrap_or(0);
 
     let mut events: Vec<CastEvent> = Vec::new();
@@ -283,7 +294,17 @@ fn load_and_prepare(file: std::fs::File) -> anyhow::Result<(Vec<CastEvent>, Vt, 
     // The returned terminal is pristine — header geometry only, no events
     // applied. Feeding events here would make every rendered frame a composite
     // of the file's end state and the current replay position.
-    Ok((events, Vt::new(width, height), timestamp))
+    Ok((events, make_vt(width, height), timestamp))
+}
+
+/// 构造回放用的虚拟终端。`scrollback_limit` 必须显式设置：avt 默认无上限，
+/// 小时级持续滚动的录制会让内存随总滚动行数线性增长。
+fn make_vt(cols: usize, rows: usize) -> Vt {
+    const REPLAY_SCROLLBACK_LIMIT: usize = 10_000;
+    Vt::builder()
+        .size(cols, rows)
+        .scrollback_limit(REPLAY_SCROLLBACK_LIMIT)
+        .build()
 }
 
 fn rebuild_vt(
@@ -292,7 +313,7 @@ fn rebuild_vt(
     header_cols: usize,
     header_rows: usize,
 ) -> (Vt, ByteDecoder) {
-    let mut vt = Vt::new(header_cols, header_rows);
+    let mut vt = make_vt(header_cols, header_rows);
     let mut decoder = ByteDecoder::default();
     replay_into(&mut vt, &mut decoder, events, target_idx);
     (vt, decoder)
@@ -323,7 +344,12 @@ fn calc_delay(current: f64, previous: f64, speed: f64, idle_limit: Option<f64>) 
         Some(limit) => raw.min(limit),
         None => raw,
     };
-    Duration::from_secs_f64(secs)
+    // `Duration::from_secs_f64` 对负数/NaN/inf **以及超过 u64 秒上限**都会 panic。
+    // 恶意时间戳（如 1e25）+ 用户显式 --idle 超大值都能到达这里。
+    if !secs.is_finite() || secs < 0.0 {
+        return Duration::ZERO;
+    }
+    Duration::try_from_secs_f64(secs).unwrap_or(Duration::ZERO)
 }
 
 fn run_player(
@@ -376,13 +402,12 @@ fn run_player(
                 state.current_idx = idx + 1;
                 if state.current_idx < state.events.len() {
                     let next_time = state.events[state.current_idx].time();
-                    state.next_event_at = elapsed
-                        + calc_delay(
-                            next_time,
-                            state.last_event_time,
-                            state.speed,
-                            state.idle_limit,
-                        );
+                    state.next_event_at = elapsed.saturating_add(calc_delay(
+                        next_time,
+                        state.last_event_time,
+                        state.speed,
+                        state.idle_limit,
+                    ));
                 }
             }
         }
@@ -488,7 +513,7 @@ fn seek_abs(state: &mut PlayerState, vt: &mut Vt, target_time: f64) {
             state.last_event_time = state.events[idx].time();
         }
         None => {
-            *vt = Vt::new(state.header_cols, state.header_rows);
+            *vt = make_vt(state.header_cols, state.header_rows);
             state.decoder = ByteDecoder::default();
             state.current_idx = 0;
             state.last_event_time = 0.0;
@@ -743,6 +768,44 @@ mod tests {
         file.write_all(contents.as_bytes()).expect("write cast");
         file.seek(std::io::SeekFrom::Start(0)).expect("rewind cast");
         file
+    }
+
+    #[test]
+    fn resize_events_are_bounded() {
+        assert_eq!(parse_resize(&serde_json::json!("80x24")), Some((80, 24)));
+        assert_eq!(parse_resize(&serde_json::json!([80, 24])), Some((80, 24)));
+        assert_eq!(parse_resize(&serde_json::json!("0x24")), None);
+        assert_eq!(parse_resize(&serde_json::json!("1001x24")), None);
+        assert_eq!(parse_resize(&serde_json::json!([80, 1001])), None);
+    }
+
+    #[test]
+    fn calc_delay_rejects_non_finite_and_overflow() {
+        assert_eq!(calc_delay(-1.0, 0.0, 1.0, None), Duration::ZERO);
+        assert_eq!(calc_delay(f64::NAN, 0.0, 1.0, None), Duration::ZERO);
+        assert_eq!(
+            calc_delay(1e25, 0.0, 1.0, Some(1e25)),
+            Duration::ZERO,
+            "finite but beyond Duration's range must not panic"
+        );
+        assert_eq!(
+            calc_delay(2.0, 1.0, 2.0, None),
+            Duration::from_secs_f64(0.5)
+        );
+    }
+
+    #[test]
+    fn cast_geometry_is_bounded() {
+        let ok = cast_file("{\"version\":2,\"width\":80,\"height\":24}\n");
+        assert!(load_and_prepare(ok).is_ok());
+        for bad in [
+            "{\"version\":2,\"width\":0,\"height\":24}\n",
+            "{\"version\":2,\"width\":1001,\"height\":24}\n",
+            "{\"version\":2,\"width\":80,\"height\":2000000}\n",
+        ] {
+            let f = cast_file(bad);
+            assert!(load_and_prepare(f).is_err(), "should reject {bad:?}");
+        }
     }
 
     fn vt_row(vt: &Vt, row: usize) -> String {

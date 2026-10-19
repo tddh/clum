@@ -147,6 +147,7 @@ bash deploy/install-daemon.sh root@<your-bridge-ip>
 
 ```bash
 # 方式 1：Central Server 模式一键安装（推荐，bridge 主动注册到 Server）
+# 可选带外校验：CLUM_RELEASE_SHA256=<binary sha256> CLUM_CA_SHA256=<ca sha256>
 curl -fsSLk -H "Authorization: Bearer <download_token>" \
   https://SERVER:9788/releases/install.sh | \
   BRIDGE_TOKEN=<token> SERVER_ADDR=SERVER:9788 sh
@@ -161,7 +162,8 @@ BRIDGE_TOKEN=<token> CLUM_SERVER_ADDR=SERVER:9788 just deploy-bridge host=root@<
 - 下载 CA 证书到 `/etc/clum/ca.crt`
 - 写入配置到 `/etc/clum/bridge.env`（权限 600）：`BRIDGE_AUTH_TOKEN`、`RMUX_SOCKET`（自动检测）、`RECORDING_ENABLED`、`RECORDING_DIR`、`BRIDGE_AUDIT_DB`、`CLUM_SERVER_ADDR`、`CLUM_CA_CERT`；direct 模式另含 `QUIC_LISTEN_ADDR`、`BRIDGE_TLS_CERT`、`BRIDGE_TLS_KEY`（enrolled 模式即配置了 `CLUM_SERVER_ADDR` 时不监听本地 QUIC 端口，无需这些参数，消除多余端口占用与攻击面）
 - 可选 `BRIDGE_CC`（bridge 侧拥塞控制：`auto`/`bbr`/`cubic`，默认 `auto`——注册连接按目标地址自动判定，直连监听在 auto 下回退 bbr）
-- 创建 `rmux-bridge.service`（`systemctl enable --now`）
+- 可选完整性校验：`CLUM_RELEASE_SHA256` 校验二进制、`CLUM_CA_SHA256` 校验 CA 证书（未设置时仅打印 warning）
+- 创建 `rmux-bridge.service` 并 **`daemon-reload` + `enable` + `restart`**——`enable --now` 不会重启已运行的服务，而 TLS 证书与二进制只在启动时加载，因此证书轮换（`FORCE=1`）或二进制更新必须显式 restart 才生效
 
 **其他 Justfile 命令：**
 

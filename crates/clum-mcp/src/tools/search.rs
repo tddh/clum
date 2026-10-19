@@ -622,6 +622,7 @@ mod tests {
             audit_db: Arc::new(audit_db),
             agent_name: Arc::new(std::sync::Mutex::new("test".to_string())),
             caller_group: Arc::new(std::sync::Mutex::new(Some(caller_group.to_string()))),
+            principal_name: Arc::new(std::sync::Mutex::new(Some("test".to_string()))),
             current_op: Arc::new(std::sync::Mutex::new(None)),
             forward_manager: Arc::new(crate::forward::ForwardManager::new()),
             stream_manager: Arc::new(crate::stream::StreamManager::new()),
@@ -634,6 +635,8 @@ mod tests {
             approvals: Arc::new(
                 crate::approvals::ApprovalStore::open_in_memory().expect("open approval store"),
             ),
+            policy: crate::policy::PolicyStore::open(&tmp.path().join("policy.db"))
+                .expect("open policy store"),
             recordings_dir: tmp.path().join("recordings"),
             recording_keyring: Arc::new(
                 crate::recording_keyring::RecordingKeyring::load_or_create(

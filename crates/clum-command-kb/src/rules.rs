@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
@@ -27,6 +27,10 @@ pub struct Rule {
     /// 对「program + 空格连接的 argv」做正则匹配
     #[serde(default)]
     pub argv_regex: Option<String>,
+    /// 加载时预编译；`argv_regex` 非法会让整个规则文件 fail-closed。
+    /// 每次匹配重新 `Regex::new` 会让规则数线性放大单次裁决延迟（实测 200 条 ≈7ms/次）。
+    #[serde(skip)]
+    pub compiled_regex: Option<Regex>,
     /// 空 = 任意主机组
     #[serde(default)]
     pub host_group: Vec<String>,
@@ -39,8 +43,23 @@ pub struct Rule {
 }
 
 impl RuleSet {
+    /// 解析并**预编译**规则。任何结构性错误（非法正则、重复 id）都返回 Err——
+    /// 规则文件解析失败必须 fail-closed，绝不静默丢弃一条规则。
     pub fn from_toml_str(text: &str) -> Result<Self> {
         let mut rs: RuleSet = toml::from_str(text).context("parse command rules TOML")?;
+
+        let mut seen = std::collections::HashSet::new();
+        for rule in &mut rs.rule {
+            if !seen.insert(rule.id.clone()) {
+                bail!("duplicate rule id '{}' in command rules", rule.id);
+            }
+            if let Some(pat) = &rule.argv_regex {
+                let re = Regex::new(pat)
+                    .with_context(|| format!("rule '{}': invalid argv_regex {pat:?}", rule.id))?;
+                rule.compiled_regex = Some(re);
+            }
+        }
+
         rs.rule.sort_by_key(|r| r.priority);
         Ok(rs)
     }
@@ -71,9 +90,21 @@ impl RuleSet {
                 if !rule.host_group.is_empty() && !rule.host_group.iter().any(|g| g == hg) {
                     continue;
                 }
-            } else if !rule.host_group.is_empty() {
-                continue; // 规则限定了主机组，但当前无主机组 → 不命中
+            } else if !rule.host_group.is_empty() && rule.action == Effect::Allow {
+                // Unknown host group: deny/ask rules still apply (strict), but a
+                // group-scoped allow must not leak onto a host whose group could
+                // not be resolved. Falling through to the KB is fail-closed.
+                continue;
             }
+            // 注意：host_group 规则在「当前主机组未知」时，deny/ask **仍然匹配**
+            // （从严）。未知不等于不属于该组；静默跳过会让 prod 规则在组解析
+            // 失败时失效。但 allow 例外（见上），否则 `host_group=["dev"] allow`
+            // 会放行任何组信息缺失的主机。
+            // caller_group 与 host_group 刻意不对称：host 组未知时 deny/ask
+            // 规则仍然匹配（从严），而调用者组未知时跳过该规则。调用者是已
+            // 认证主体，缺失值通常意味着「superadmin/无组」，把 prod 类规则
+            // 套到所有无组调用者会误伤管理操作；host 组缺失则可能只是注册
+            // 信息不全，从严更安全。
             if !rule.caller_group.is_empty()
                 && !caller_group
                     .map(|cg| rule.caller_group.iter().any(|g| g == cg))
@@ -81,12 +112,19 @@ impl RuleSet {
             {
                 continue;
             }
-            if let Some(pat) = &rule.argv_regex {
-                match Regex::new(pat) {
-                    Ok(re) if !re.is_match(&joined) => continue,
-                    Ok(_) => {}
-                    Err(_) => continue, // 非法正则 → 该规则视为不命中（规则文件加载时已告警）
+            if let Some(re) = &rule.compiled_regex {
+                if !re.is_match(&joined) {
+                    continue;
                 }
+            } else {
+                // 只有 `from_toml_str` 会编译正则；若有人绕过它构造 RuleSet
+                // （字段全 pub + Deserialize），argv_regex 会静默失效。debug 构建
+                // 下立即暴露这个 footgun。
+                debug_assert!(
+                    rule.argv_regex.is_none(),
+                    "rule '{}' has argv_regex but no compiled regex; construct RuleSet via from_toml_str",
+                    rule.id
+                );
             }
             return Some(rule);
         }
@@ -194,5 +232,47 @@ action = "deny"
     fn no_match_returns_none() {
         let rs = set();
         assert!(rs.match_rule("exec", "ls", &[], None, None).is_none());
+    }
+
+    /// 非法正则必须在加载期失败（fail-closed），不能静默丢弃一条规则。
+    #[test]
+    fn invalid_argv_regex_fails_loading() {
+        let err = RuleSet::from_toml_str(
+            r#"
+schema_version = 1
+[[rule]]
+id = "bad-regex"
+argv_regex = "^(unclosed"
+action = "ask"
+"#,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("invalid argv_regex"), "got: {err}");
+    }
+
+    #[test]
+    fn duplicate_rule_ids_fail_loading() {
+        let err = RuleSet::from_toml_str(
+            r#"
+schema_version = 1
+[[rule]]
+id = "same"
+action = "ask"
+[[rule]]
+id = "same"
+action = "deny"
+"#,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("duplicate rule id"), "got: {err}");
+    }
+
+    /// 主机组未知时，按主机组限定的规则仍然生效（从严），而不是静默跳过。
+    #[test]
+    fn unknown_host_group_still_matches_scoped_rule() {
+        let rs = set();
+        let args = vec!["restart".to_string(), "nginx".to_string()];
+        let got = rs.match_rule("exec", "systemctl", &args, None, None);
+        assert_eq!(got.map(|r| r.id.as_str()), Some("prod-write-approval"));
     }
 }

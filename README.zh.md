@@ -107,6 +107,7 @@ graph LR
 | **操作审计**    | SQLite 审计日志 + bridge 端 PTY 全量录制（asciinema v2 内容，X25519 + AES-256-GCM 静态加密）+ 事件日志 + 推送/定期同步 + `clum-cli replay` 回放 |
 | **终端状态感知**  | `capture_pane`、`exec`、`wait_for_text`、`wait_stable`、`pane_info` 返回 `terminal_state`（ready/running/editor/pager/password/confirm/repl/unknown）和光标位置，让 AI Agent 理解终端当前状态 |
 | **exec 安全检查** | `exec` 在终端非 `ready` 状态时拒绝执行（如在 vim、less、密码提示中），状态检测不可用（连接错误或旧版 bridge）时同样拒绝（fail-closed），返回 `refused: true` 并给出操作建议，防止命令注入到非 shell 上下文 |
+| **命令规则引擎** | 执行前的 **`deny` / `ask` / `allow`** 三态裁决（`clum-command-kb`）。quote-aware 归一化切分 `&&`/`;`/`\|`/重定向/命令替换，并剥离 `sudo`/`env`/`timeout` 等包装器；复合命令取**最严**（`Effect` 派生 `Ord`、以 `max()` 聚合——fail-closed 由代数保证，而非调用方约定）；未知命令与解析失败一律回落到 `ask`。1,607 条知识库，粒度细到命令 / 子命令 / 危险 flag（含短选项簇：声明 `-x` 可拦 `-xzf`），**运行时可覆盖、无需重新编译**。策略维度为 工具 × 程序 × argv 正则 × **主机组** × **调用者组**。`ask` 挂入服务端待批表：人类执行 `clum-mcp approval approve <id>` 后，agent 带 `approval_id` **原样重发**即放行——一次性授权，绑定「同命令 + 同工具 + 同主机」，由单条原子 UPDATE 消费。审批表只存 `sha256:` 指纹（不存命令原文），人类看到的是经凭据脱敏的摘要 |
 
 ### AI 对话面板快捷键
 
@@ -223,6 +224,13 @@ clum-mcp agent revoke <name>    # 吊销 Key
 # Group 隔离：组内 Key 只能访问本组主机。
 # host_list/audit_query/recordings 自动过滤；reload_config/host_set_meta 不可用。
 
+# 角色 / 能力策略（P0）：默认拒绝；旧 Key 迁移为 legacy role，行为不变
+clum-mcp role list
+clum-mcp role grant operator --group dev --actions host:read,session:attach,command:exec
+clum-mcp role grant operator --group prod --actions command:exec --require-approval
+clum-mcp role bind --key agent-dev --role operator
+clum-mcp policy explain --key agent-dev --tool exec --host tf001
+
 # Bridge 注册（动态注册，无需编辑 hosts.yaml）
 clum-mcp bridge add <hostname> --tags <t1,t2> [--group <g>]
 clum-mcp bridge list
@@ -244,6 +252,8 @@ clum-mcp bridge join <hostname>   # 生成新 join token（离线恢复用）
 - **路径穿越防护**：文件上传/下载拒绝包含 `..` 的路径
 - **隧道目标白名单**：`hosts.yaml` 中可选配置 `allowed_forward_targets` 限制端口转发目标（支持 glob 模式）——仅对 `hosts.yaml` 中定义的主机生效；动态注册（enrolled）且无对应条目的主机无白名单约束（全部目标放行）
 - **exec 安全检查**：`exec` 在终端非 `ready` 状态时拒绝执行（防止命令注入到 vim/less/密码提示等）；状态检测不可用时同样拒绝（fail-closed，与英文版一致）
+- **角色能力层（P0）**：每个 API Key 是独立 principal，按 `role → grant（资源选择器 × capability）` 判定，**先于**命令规则引擎。默认拒绝；旧 Key 自动迁移为 legacy role（行为不变）；`admin` 不含审批权；策略与审计同库，`role` 写操作全部写入审计哈希链。审批优先使用 MCP elicitation（客户端声明能力时弹框，120s 超时回退 `APPROVAL_REQUIRED`）；`command:read` 只放行显式标记的只读命令（白名单、默认拒绝、`sudo` 非只读）。CLI relay（`term`/`forward`/`push`/`pull`/`list`）在连接建立时按 purpose 判定 capability，跨组/缺能力直接拒绝；`replay` 走 HTTPS `/recordings`，同样按 host + `recording:read` 判定
+- **命令规则引擎**：所有携带命令的工具调用（`exec`、`shell_command`、`batch_exec`、`send_keys`、`send_text`、`batch_send_keys`、`broadcast_keys`、`respawn_pane`、`split_pane_with`、`cmd_escape`）在**服务端**归一化并裁决 `deny`/`ask`/`allow`——AI 客户端自己的权限配置只能更严、不能更松。`deny` 返回 `COMMAND_DENIED`；`ask` 返回 `APPROVAL_REQUIRED`，需有服务端访问权的人类批准。裁决确定、可重放，每次拒绝与批准都封入审计哈希链
 - **敏感输入脱敏**：终端处于 `password` 状态时发送的输入在审计日志中自动脱敏（`[REDACTED:N bytes]`，服务端强制、无法关闭）；输入工具的 `sensitive` 标志可强制脱敏 token/2FA 码
 
 ## 审计查询
@@ -413,4 +423,5 @@ just release-linux  # 交叉编译 Linux x86_64 musl
 
 ## License
 
-MIT
+MIT。命令知识库内嵌了第三方项目的数据；归属与许可证见
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

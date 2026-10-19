@@ -3,10 +3,13 @@
 ## [Unreleased]
 
 ### Added
-- **命令规则引擎（deny / ask / allow 三态）**：新增 `clum-command-kb` crate——命令先经 quote-aware 归一化（切分 `&&`/`;`/`|`/重定向/命令替换，剥离 `sudo`/`env`/`timeout` 等包装器）再裁决；复合命令取最严、危险结构强制升格、解析失败 fail-closed。内置知识库随代码维护（70 条命令，全部带 `source` provenance），`data/overlay.toml` 为运维 CLI 增量标注，`config/command-rules.toml` 为可热重载的用户规则（priority 升序、首中即停）。
+- **角色/能力授权模型（P0）**：API Key → principal → role → grant（资源选择器 × capability）判定，**先于**命令规则引擎；默认拒绝，旧 key 自动迁移为 `legacy-group:*` / `legacy-superadmin`（行为不变）。策略与审计同库（`principals`/`roles`/`grants`/`bindings` + `policy_meta` revision，≤1s 热加载）。CLI：`clum-mcp role list|grant|bind|unbind`、`clum-mcp policy explain`，变更写入审计哈希链。新增 `require_approval`（命中时即使规则 allow 也走 `APPROVAL_REQUIRED`）。CLI relay（term/forward/push/pull/list）在连接建立时按 purpose 判定 capability；`replay` 经 HTTPS `/recordings` 下载，按 host + `recording:read` + selector 判定。68 工具 capability 映射由守卫测试锁定。
+- **elicitation 审批、只读执行与通道收敛（P1/P2）**：HTTP MCP 模式下 `ask` 优先通过 rmcp elicitation 在同一次调用内弹框（Accept 继续、Decline/Cancel 拒绝、120s 超时回退 `APPROVAL_REQUIRED`；stdio 自动回退）。新增 `command:read` capability：`exec`/`batch_exec` 只有被 KB 显式标记 `read_only=true` 且最终 `Allow` 的命令可执行；默认拒绝，危险 flag/结构、`sudo`/`doas`、规则 allow 均不能提升为只读。HTTP `/recordings` 从「有组 key 403」改为按路径首段 host + `recording:read` + selector 判定，与 MCP 一致；`host_list`/`host_filter`/`audit_query`/`list_recordings`/`get_recording`/`search_recordings` 的结果过滤改用 role selector 并集（legacy 行为不变）。KB 合并去重后 1,607 条。
+- **命令规则引擎（deny / ask / allow 三态）**：新增 `clum-command-kb` crate——命令先经 quote-aware 归一化（切分 `&&`/`;`/`|`/重定向/命令替换，剥离 `sudo`/`env`/`timeout` 等包装器）再裁决；复合命令取最严、危险结构强制升格、解析失败 fail-closed。内置知识库随代码维护（124 条人工 vet 命令，全部带 `source` provenance），`data/overlay.toml` 为运维 CLI 增量标注，`config/command-rules.toml` 为可热重载的用户规则（priority 升序、首中即停）。
 - **`ask` 走人工审批，agent 无批准权限**：命中 `ask` 时写入 audit.db 的 `pending_approvals` 表并返回 `APPROVAL_REQUIRED`（携带 `approval_id` + 过期时间）；人类在服务端执行 `clum-mcp approval list|approve|deny` 放行或拒绝。工具面维持 68 个不变（不新增 MCP 工具）。新增错误码 `COMMAND_DENIED` / `APPROVAL_REQUIRED`，新增审计动作 `CommandDenied` / `ApprovalRequested` / `ApprovalDecided`。
 - **`reload_config` 同时热重载命令规则**，解析失败时保留旧规则（绝不退化为「无规则」），并在返回中回显 `command_rules` 状态。
-- **绕过回归集**（`crates/clum-command-kb/tests/e2e_bypass.rs`）：固化 27 条真实绕过路径（引号拆解、紧凑链式 `ls&&rm`、包装器穿透、命令替换、重定向、未知命令等）必须至少 `ask`，并保证 11 条只读命令不打扰人。
+- **绕过回归集**（`crates/clum-command-kb/tests/e2e_bypass.rs`）：固化 27 条真实绕过路径（引号拆解、紧凑链式 `ls&&rm`、包装器穿透、命令替换、重定向、未知命令等）必须至少 `ask`，并保证 11 条只读命令不打扰人。断言纪律：任一失败即安全缺陷，**修实现、绝不放宽断言**。
+- **审批放行闭环**：`ask` 命中后，人类批准 → agent **带 `approval_id` 原样重发同一条命令**即可放行。批准是「同命令 + 同工具 + 同主机（batch 为整个 `hosts` 集合）」的**一次性**授权，由单条带完整 WHERE 的**原子 UPDATE** 消费（`affected == 1` 才放行），并发重放只有一个赢家；任何一项校验不符返回新错误码 `APPROVAL_INVALID`，绝不降级放行。同一命令在过期前重复 `ask` **复用同一 `approval_id`**（不再堆积 pending）。10 个受裁决工具新增可选 `approval_id` 参数，工具面仍为 68 个。
 - **知识库运行时可改（无需重新编译）**：二进制内嵌的约 1,600 条命令判定只是「开箱默认值」，新增 `config/command-kb.toml` 作为运行时覆盖文件（同名整条覆盖，`reload_config` 热重载），任何判定修正或新增命令都不需要重新构建/部署 MCP Server。覆盖文件缺失 = 用默认值；存在但解析失败 = 启动失败（禁止静默退回默认值）。
 - **知识库融合**：新增 `scripts/kb-fuse-safe-chains.py`，把 safe-chains（MIT OR Apache-2.0）的 1,586 条命令标注转成本项目 schema（`Inert`/`SafeRead` → allow，`SafeWrite` → ask），补上此前只有 70 条导致的"几乎每条命令都要批准"问题。同时用短选项簇匹配（`-x` 拦 `-xzf`）+ 手工收紧 `sed -i`/`tar -c/-x`/`awk -i`/`sort -o`，堵住"命令级标注丢失 flag 粒度"的漏洞。
 - **`term` 默认 raw 透明直通，`--mux` 保留完整 rmux UI**：`clum-cli term` 默认改为**透明 raw 直通**——本地终端直接消费 pane 字节流，无 rmux UI 层（无状态栏、无 Ctrl+B 前缀），交互行为对齐 ssh。新增 `--mux` 显式启用完整 `rmux attach-session` UI（状态栏 + Ctrl+B 前缀）。
@@ -24,8 +27,42 @@
 
 - **`file_transfer.max_upload_concurrency` 此前静默失效**：`files.rs` 硬编码 16，配置项被解析但从不读取。现真正作用于目录上传的并发闸门；`0` = unlimited，超界值钳制到 `Semaphore::MAX_PERMITS` 以免 `Semaphore::new` panic。
 - **CLI 端口转发 buffer 8KB → 1MB**：`clum-cli/src/forward.rs` 的 `relay_one` 双向搬运此前用 8KB 缓冲，是全项目唯一残留的 8KB 路径——hub 模式下 server relay 与 bridge 两侧都已是 1MB，CLI 的 8KB 反而成为 forward 吞吐的前端供给瓶颈。现统一为 `COPY_BUF_SIZE`（1MB），与 MCP/Bridge 对齐。
+- **命令归一化对 UTF-8 多字节字符 panic**：`scan_markers` 按**字节**推进（主循环 `i += 1`、转义分支 `i += 2`），遇到中文/emoji/重音字符会落进字符内部，随后 `&input[i..]` 在非 char boundary 切片直接 panic——`grep 错误 /var/log/app.log`、`kubectl get pods -n 生产`、`systemctl status nginx # 检查状态` 全部崩溃，绕过 `evaluate()`「永不返回 Err」的契约。现改为按**字符**推进，并补多字节回归断言（不只断言"不 panic"，还断言语义正确：中文参数不得被误切、不得误判为危险结构、与真实分隔符共存时仍正确切分）。
+- **双引号内的 `>` `<` `<<` 被误判为危险结构**：`echo "a > b"`、`printf "%s\n" "x->y"`、`grep "a << b" f` 等日常命令被无谓升格为 `ask`，持续制造审批噪声（闸门会因此被运维关掉）。shell 语义中双引号内它们是**字面字符**，只有 `$()` 与反引号仍生效——现给 `<<` / `>` / `<` / `<(` / `>(` 补 `!in_double` 保护，`$()` 与反引号的双引号内检测**保持不变**（三条反向守卫断言固定住）。此前单引号路径正确、双引号路径错误，这个不对称本身即指向遗漏。
+- **`sudo -h` 被当作取值选项**：sudo 的 `-h` 是 help（不带参数），列入 `takes_value` 后会吞掉后续真实命令——`sudo -h rm -rf /` 的 `rm` 被吃掉、`program` 退化为 `basename("/")` = 空串。方向上仍 fail-closed（空 program → 未知 → `ask`），但审计记录的 segments 与真实命令不符，且违反「不得产生空 program 段」不变量（原测试只覆盖连续分隔符一条路径）。现移除 `-h`、丢弃空 program 段，并把该路径纳入绕过回归集。
+- **wrapper 的数值参数判定把空字符串当数字**：`all` 对空迭代器返回 `true`，使 `timeout 30 "" rm` 的空词被当成数值跳过。现加 `!w.is_empty()`。
+- **`decide` 的过期检查存在 TOCTOU**：先 `get` 判过期、UPDATE 的 WHERE 只带 `status='pending'`，跨过 TTL 边界的批准仍可能成功。现 UPDATE 补 `expires_at >= ?`（与 `consume` 同款双保险）。
+- **过期审批长期滞留 `pending`**：`purge_expired` 此前只在 `approval list` 时触发，无后台调度，`approval list` 里混着早已无效的条目。现 `create` 时顺带清理（ask 是低频路径，一次 UPDATE 的开销可接受）。
+- **放行（`Allow`）裁决的 `source` 为空**：聚合器只在「出现更严的段」时写入来源，全 Allow 的命令拿到空串，审计与复盘无从知道命中了哪条知识库条目。现补记首条命中来源；**规则命中**的 allow 另写入 `AuditAction::CommandAllowed`（知识库 allow 不重复写，避免每条命令双倍记录）。
+- **命令闸门的两个执行载荷缺口（安全）**：`respawn_pane` / `split_pane_with` 带 `command` 时是真实执行载荷，但 `extract_command` 未覆盖 → 完全绕过裁决；现纳入，并用 **schema 驱动的守卫测试**（`every_payload_tool_is_adjudicated_or_whitelisted`）替代人工清单——新增带 `command`/`keys`/`text`/`args` 的工具忘记登记时测试直接失败。
+- **`send_keys` 族的裁决/执行字符串不一致（安全）**：旧实现评估原始转义串、执行解码串。`send_keys(keys="ls \x0arm -rf /")` 被判 `allow`，实际执行 `ls` + `rm -rf /`。现于 `execute_tool` 入口统一解码一次（`normalize_payload_args`），执行侧不再二次解码（`unescape_keys` 不幂等）。
+- **TTY 语义盲区（安全）**：`send_keys` 的载荷是按键流而非 shell 命令行。CR（`0x0D`）在终端上是 Enter，Ctrl-U/Ctrl-W/ESC 会触发行编辑；旧归一化只把 `\n` 当分隔符，`cat /etc/shadow\rrm -rf /` 会被当成一条 `cat` 判 `allow`。现 `normalize` 把 CR 按 Enter 切段，并对 C0 控制字符记 `Hazard::ControlChar`（至少 `ask`）。
+- **空 program 段丢弃 hazard（安全回归）**：`ls && "" > /etc/passwd` / `ls && "" $(rm -rf /tmp)` 在被丢弃的空段上丢失了重定向/替换 hazard，整体被聚合为 `Allow`。现携带 hazard 的空段保留为哨兵段（unknown → `ask`），无 hazard 时才丢弃。
+- **bare `respawn_pane` 可重放一次性审批（安全）**：不带 `command` 的 respawn 会重跑 pane 既有进程规格（可能来自一次已批准的 `split_pane_with(command=…)`），旧实现返回 `None`、零裁决 → 一次性授权被无限放大。现 fail-closed 到 `ask`（管理员可用 tool 维度规则显式放行）。
+- **审批指纹未绑定执行上下文**：`call_fingerprint` 只哈希 `tool + command`，批准后可改用不同的 `env`/`cwd`/`shell`/`kill` 执行（如 `LD_PRELOAD`）。现这些字段一并进指纹；`approval_id` 本身不参与（保证重试可匹配）。
+- **规则文件被删除时 SIGHUP 静默清空规则**：`load_rules` 的 NotFound 分支返回空规则集（启动期语义），热重载路径误用后会把「文件消失」当成「规则清空」并审计为 success。现 SIGHUP 与 `reload_config` 同语义：读取/解析失败保留旧规则，审计按真实结果记录。
+- **目录下载未套用单文件大小上限**：`read_single_file` 有 32 GiB 上限，但 `read_directory` 的每个文件无上限（同一文件「单发被拒、放进目录却能下」）。现共用模块级上限。
+- **bridge idle 超时误关共享连接**：enrolled 模式下 0x06/0x07 跑在 bridge↔server 的唯一注册连接上，`conn.close()` 会切断该主机所有用户。现仅对直连（1:1）连接执行 close；共享连接只退出本客户端控制流。
+- **正常 detach 被当成异常断线**：子进程退出后 PTY master 的 EIO 走 `Err` 分支，使 mux 布局恢复在每次正常退出时重排 window 0。现 EIO 按正常结束处理。
+- **运维 CLI 的子命令级放行**：`clum-mcp approval list` / `audit verify|stats` 与 `clum-cli push|pull|list|replay` 加入知识库 allow，解决「agent 连查看审批/传文件都被判 unknown → ask」的自举缺口；`approval approve|deny` 与 `clum-cli term|forward` **保持 ask**——前者是「agent 不得自我批准」的边界，后者可打开交互终端/隧道绕过闸门。新增 `ops_cli_subcommands_are_scoped` 回归锁定该边界（KB 1607 条）。
+- **知识库 allow 面按执行闸门威胁模型重建**：解释器（`python3`/`perl`/`ruby`/`node`/`php`/`lua`/`awk`/`tclsh`/`expect`）、交互式 shell escape（`vim`/`less`/`man`/`screen`…）、网络外联（`nc`/`ncat`/`socat`/`ssh`/`tcpdump`）、数据库客户端、包管理器与主机管理命令统一收紧到 `ask`；生成脚本内置同一份 `FORCE_ASK`（重新融合不会回归），并新增 `high_risk_commands_are_never_allowed` 回归。
+- **SIGHUP 与文档承诺不一致**：文档称 KB/规则可由 `kill -HUP` 热重载，实现只重载 `hosts.yaml`，且审计恒记 success。现 HUP 同时重载 hosts / KB / 规则，解析失败保留旧值，审计记录真实结果。
+- **规则加载 fail-closed**：`argv_regex` 改为加载时预编译（此前每次匹配重新 `Regex::new`，200 条规则 ≈7ms/次），非法正则与重复 rule id 直接拒绝加载（此前静默跳过且注释声称"加载时已告警"）。主机组未知时按 `host_group` 限定的规则**仍然匹配**（从严），不再静默失效。
+- **审批与资源边界**：审批 TTL 由 `approval_ttl_secs` 配置（默认 900s）；同一 SQLite 文件的四个连接统一设置 `busy_timeout=5s`；API key 缓存 TTL 600s → 60s（缩短撤销窗口）；目录下载的远端 `file_count`/路径长度、单文件大小、stream 帧长度均加上限。
+- **CLI 中继通道的边界显式化**：schema 系统提示、TOOLS.md、INVARIANTS 明确 `clum-cli term/forward/push/pull` 不经过规则引擎，Agent 不得经 Bash 调用 CLI 绕过 MCP 工具。
+- **契约单源化**：JSON 帧编解码下沉 `clum_core::json_frame`（此前 CLI/MCP/bridge 三份实现，CLI 对长度无界）。
+- **bridge**：idle 超时现在真正 `conn.close()`（此前只退出控制流，PTY 泵与录制继续存活）；mux 异常断线的布局恢复改用局部变量（此前先 `remove` 后 `get`，恢复路径从不生效）。
+- **CLI replay 防护**：cast 头部几何限制 1..=1000（0 会 panic）、`--speed`/`--idle` 拒绝负值/NaN、回放滚动缓冲设上限。
+- **部署脚本**：证书 SAN 按 IP/域名区分（域名此前直接签发失败）、主机证书默认不覆盖（`FORCE=1` 才轮换）、direct 模式缺证书改为 fail-closed、install.sh 迁移前备份并支持 `CLUM_RELEASE_SHA256` 校验。
+- **文档/数据**：知识库条数由测试锁定（1,607）；补第三方数据 NOTICE；`safe-chains` 生成文件记录 `source-version`。
 
 ### Security
+- **解释器/外联类命令的 allow 面补齐**：`ipython`、`nu`、`deno`、`julia`、`erl`、`groovy`、`scala`、`sbcl`、`swipl`、`csi`、`ts-node`、`nodemon`、`pry`、`java`、`mix`、`phpunit`、`luarocks`、`dc`（`!` 可逃逸到 shell）、`mosh`、`autossh` 在 safe-chains 数据中仍标为 allow。现同步加入人工层（`data/commands.toml`）、生成脚本 `FORCE_ASK` 与 `MUST_NOT_ALLOW` 回归三处；`ipython -c '…'`、`dc -e '!cmd'` 不再被放行。generated.toml 因缺上游 checkout 未重生成，三处清单保持一致以防重新融合后回退。
+- **`broadcast_keys` 完全绕过命令规则引擎**：它携带 `keys`（与 `send_keys` 同构）却不在 `extract_command` 覆盖表内，`broadcast_keys(keys="rm -rf /\n")` 可不经任何裁决直达多个 pane。该工具在计划文档中 **0 次提及**，既不在"被检查"也不在"不检查"清单——属枚举遗漏，且违反实现后新增的 INVARIANTS §14.6 自定不变量。现已纳入覆盖并补断言。
+- **`batch_exec` 丢失 `host_group`，按主机组限定的规则被整体跳过**：入口只读 `args["host"]`，而 batch 类工具的字段是 `hosts` 数组 → `host_group` 恒为 `None` → `RuleSet::match_rule` 对所有含 `host_group` 的规则 `continue`。实测同一条 `host_group=["prod"] program=["cat"] action="deny"`：`exec` → Deny、`batch_exec` → **Allow**；而 `config/command-rules.toml` 的官方示例规则正是 `host_group=["prod"]`，运维照抄即中招。现按 `hosts` 逐主机解析、跨组取最严。
+- **`tool` 过滤规则对无命令载荷工具从未生效**：`evaluate_call` 在 `extract_command` 返回 `None` 时提前 return，使 TOOLS.md、INVARIANTS §14.6 与 `command-rules.toml:30-38` 三处共同承诺的「可用 `tool` 规则对 `paste_buffer`/`cmd_escape` 强制 `ask`」成为死规则——运维启用后得到的是**虚假安全感**（`reload_config` 还回显 `reloaded 1`，让它看起来生效了）。现改为无命令载荷时仍按 tool/group 维度匹配规则，指纹取 `sha256(tool+args)`；未命中规则时保持不裁决（不误升 ask，否则每次粘贴都要人工批准）。
+- **命令原文（可能含密钥）明文落盘**：`pending_approvals.command` 与审计 detail 此前存命令原文，与既有「password 态输入强制脱敏」策略不一致。现审批表只存 `sha256:` **指纹**，人类可读摘要经凭据脱敏（`Bearer x` / `--password=x` / `*TOKEN*=x` / URL 内嵌凭据）后写入 `reason`，审计 detail 同样使用脱敏摘要。脱敏**只做高置信度模式、不做熵检测**（误判会让审批列表不可读，反而促使橡皮图章）。
+- **审批归因可伪造**：`--approver` 此前默认固定串 `human:cli` 且可任意填写，审计里"谁批准的"不可信。现默认取 OS 身份（`SUDO_USER` 优先，sudo 下 `USER` 通常是 root 会丢掉真实发起人），且审计 detail **独立**记录 `approver_os=`，伪造 `--approver` 会留下不一致线索。**注意这不是强认证**——真正的授权边界仍是「能登录服务端主机执行本 CLI」，已写入 INVARIANTS §14.9。
 - **`get_recording` 组隔离绕过修复（越权）**：组校验此前基于**未规范化**路径的首分量（`strip_prefix` + `components().next()`），而实际读取基于 `canonicalize` 后的路径——受限 group 的 key 传 `<recordings>/<本组host>/../<他组host>/<date>/file.cast` 即可读取他组主机的录制（含明文密码）。现改为**先 canonicalize、再用同一规范化路径做组校验并读取**（host 分量仅接受 `Component::Normal`）；路径越界/校验失败也重新纳入审计（此前这类失败不落审计）。
 - **Bridge token 撤销失效修复**：`refresh_bridge_state` 此前在「DB 读出为空 且 无静态 token」时跳过内存 map 更新——撤销**最后一台** bridge 后其 token 长期留在内存（直到重启或新增 bridge），被撤销的 bridge 持旧 token 仍能重新注册。现区分「合法空集」（写穿，撤销立即生效）与「DB 读失败」（保留旧 map，避免误踢全体）；`token_map()` 返回 `Result` 以支持该区分（12h rotate 宽限期语义原样保留）。
 - **`bridge join` 复活旧 token 修复**：`join` 此前不清 `previous_token_hash`——先 `rotate` 再 `remove` 再 `join` 后，rotate 掉的旧 token 在 12h 宽限期内被「复活」。现 `join` 一并清空 `previous_token_hash` / `rotated_at`。
@@ -52,6 +89,7 @@
 ### Added
 - **PTY 录制加密**：bridge 端录制改为加密信封格式（明文 `clum-enc` 头行 + 加密的 asciinema v2 内容）——X25519 ECDH 信封封装 per-recording DEK + 分块 AES-256-GCM。公钥由 Server 在 bridge 注册（`register_ack`）时下发；keyring 持久化为 `current.key`（0700 目录 / 0600 文件）。`search_recordings`/`get_recording`/`list_recordings` 自动解密。设计文档 `clum-docs/recording-encryption-design.md`（v2.2，标注已实施）。
 - **审计哈希链（tamper-evident）**：`audit_events` 新增 `prev_hash`/`entry_hash` 前向哈希链（`chain.rs` 长度前缀 payload 编码，不经 serde，写入与校验两侧共用同一实现；幂等迁移，旧行不回填、不参与校验）；新增 `clum-mcp audit verify` 子命令（全链重算 + 链头输出，非零退出码报首个断点，对被篡改数据报告 BROKEN 而非 panic）；cleanup 删除哈希行时先探测链尾并记录 `audit_chain_checkpoints` 断点再删除（管理删除承认机制）+ 删除后自检 warn。建链统一在 MCP 侧（中央库单点串行写入，天然全局有序），bridge 无改动。链保证"存在的内容未被改"（篡改/删行/塞垃圾 prev_hash 均 verify 可检），不保证"该发生的都已记录"（fail-open 债务另计）；整库回滚/重算整链的检测靠链头外置比对（verify 输出 chain head，外置自动化为后续批次）。**已上线生产并完成 T1–T6 篡改演练**（生产数据副本：改内容/删中间行/垃圾 prev/类型混淆/改脸重算五类全数检出并精确报点；checkpoint 伪造窗口复现已知披露边界并确认 segments/链头双指纹），安全语义详见 SECURITY.md「Audit Hash Chain」与 INVARIANTS §8 演练注。
+
 
 ### Fixed（评审收尾）
 - **生产实测语义核准（全功能测试发现，文档同步对齐）**：`shell_command` 实际仅适用于 **dead pane**——idle 交互 shell 也被 daemon 视为活进程拒绝（`PANE_BUSY`），无 kill 选项，替换活进程须用 `respawn_pane(kill=true)`；`respawn_pane` 无 `command` 参数时**原样重跑该 pane 当前的进程规格**（非回退默认 shell）；`break_pane` 返回体 `pane_id`/`window_index` 未回填（known issue，以 `pane_info` 确认归属）；`cmd_escape` 需真实 TTY，bridge 自动化上下文回报 `open terminal failed: not a terminal`（`exit_code:1`）。schema/TOOLS/SKILL（PANE_BUSY 行）/INVARIANTS（§2/§3 实测核准注）同步更新，TOOLS.md `cmd_escape` 限制注与 `break_pane` 返回注新增。

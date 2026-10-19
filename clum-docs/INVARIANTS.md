@@ -3,13 +3,15 @@
 > 目的：把"为什么这样设计"从脑子里挪到纸面上。每条三段式：**约定** → **理由** → **何时需要重新审视**。
 > 新增功能时对照本清单；修改任何一条前，先更新这里的理由。
 >
-> 基准：v0.18.0（含 09-13 评审修复批次 + 09-14 审计哈希链 / PTY 录制加密）。事实陈述均经代码验证。
+> 基准：v0.18.0（含 09-13 评审修复批次 + 09-14 审计哈希链 / PTY 录制加密 + 10-19 角色能力授权 P0）。事实陈述均经代码验证。
 
 ---
 
 ## 1. 身份与 bootstrap
 
-**约定**：无 group 的 API Key = 超管；**API key store 为空（从未 `agent add`）时服务器处于 bootstrap 模式**——回环连接（127.0.0.1 / ::1）视为超管（供服务器本机完成初始化），非回环请求一律拒绝，直到创建首个 key。stdio 本地模式天然等同超管。
+**约定**：无 group 的 API Key 映射到 `legacy-superadmin`（全部业务能力 + `config:reload` + `host:admin`，**不含** `policy:write`）；有 group 的 key 映射到 `legacy-group:<g>`（同组全工具，排除 `host_set_meta` / `reload_config`）。**API key store 为空（从未 `agent add`）时服务器处于 bootstrap 模式**——回环连接（127.0.0.1 / ::1）视为超管（供服务器本机完成初始化），非回环请求一律拒绝，直到创建首个 key。stdio 本地模式天然等同超管。
+
+自 P0 起，key 先经 `principals/roles/grants/bindings` 判定（见 §15）；上述映射是迁移兼容层。尚未 materialise 的新 key 在运行期走 `legacy_fallback`，行为与旧 group 规则一致。
 
 **理由**：首次部署的鸡蛋问题——必须先连上服务器才能创建第一个 key。设计正确性依赖**部署边界**（端口不暴露给不可信网络），不依赖代码。自 2026-09-13 起由机制强制（非回环不再自动获得超管身份）。
 
@@ -55,9 +57,9 @@
 
 **约定**：工具面已冻结（§13），本条的"新增义务"仅在解冻时生效——若未来新增访问审计或录制数据的工具（当前：`audit_query` / `list_recordings` / `get_recording` / `search_recordings`，见 `tools/mod.rs` 的 `GROUP_SCOPED_TOOLS`），必须经 `hosts_in_group` 强制 caller-group 过滤，**且必须覆盖"不传 host 参数"的场景**。注意：`GROUP_SCOPED_TOOLS` 是文档锚点 + debug 自检，**不是运行时拦截**——组过滤的实际强制在四个工具各自的分发分支内。
 
-**理由**：历史教训——search_recordings 曾遗漏，受限 key 不传 host 即可跨组解密检索全部录制（2026-09-13 修复）。authorize() 只校验 args 里显式出现的 host/hosts，可选 host 参数不能被当作授权边界。
+**理由**：历史教训——search_recordings 曾遗漏，受限 key 不传 host 即可跨组解密检索全部录制（2026-09-13 修复）。自 P0 起 `authorize` 先做 capability + selector 判定（无 host 上下文时仍要求持有该 capability），四工具分支内的 `hosts_in_group` 过滤是**第二道防线**；两层都必须保留。
 
-**重审时机**：解冻新增审计/录制/回放类工具时走这张清单；组语义变化（如多组归属）时全量回归四个工具。
+**重审时机**：解冻新增审计/录制/回放类工具时走这张清单；组语义变化（如多组归属）时全量回归四个工具；capability 映射新增时同步 `GROUP_SCOPED_TOOLS`。
 
 ## 7. QUIC-only 传输
 
@@ -117,19 +119,40 @@
 
 **理由**：工具表面积 = schema + 测试 + 文档 + "要记住的点"的持续开销。69→68 的减法已经验证了"删除窗口在关闭"；对单人维护者，每新增一个授权矩阵、组隔离清单、错误分类的对照点都是新的记忆负担。
 
-**重审时机**：出现确有生产缺口的候选工具时，先问能否用现有工具组合表达、能否以"删一换一"净零增长替代；确需净增时必须同步补全：GROUP_SCOPED_TOOLS 对照（§6）、错误码契约、TOOLS.md、README×2、SKILL.md、行为测试。
+**重审时机**：出现确有生产缺口的候选工具时，先问能否用现有工具组合表达、能否以"删一换一"净零增长替代；确需净增时必须同步补全：capability 映射（`capability.rs` 守卫测试）、GROUP_SCOPED_TOOLS 对照（§6）、错误码契约、TOOLS.md、README×2、SKILL.md、行为测试。
 
 ---
 
 ## 14. 命令规则引擎（deny / ask / allow）
 
-1. **fail-closed**：解析失败、未知命令、危险结构（重定向 / 命令替换 / 反引号 / heredoc / 包装器嵌套超深）一律**至少 `ask`**；`config/command-rules.toml` 的 `default_effect` 不得配置为 `allow`。
-2. **聚合取最严**：复合命令按 `Deny > Ask > Allow` 取最严，由 `clum-command-kb` 的 `Effect` 派生 `Ord` + `max()` 保证，不是调用方约定。
+1. **fail-closed**：解析失败、未知命令、危险结构（重定向 / 命令替换 / 反引号 / heredoc / 包装器嵌套超深）一律**至少 `ask`**。未知命令的默认动作是**编译期常量** `Ask`（`Effect::default()`）：`RuleSet` 没有 `default_effect` 字段、`merge_overlay_str` 也不覆盖它，所以运行时配置**无法**把默认值改成 `allow`（此前文档把它写成可配置项，属误导，已更正）。
+2. **聚合取最严**：复合命令按 `Deny > Ask > Allow` 取最严，由 `clum-command-kb` 的 `Effect` 派生 `Ord` + `max()` 保证，不是调用方约定。**多主机同理**：`batch_exec` 的每个目标主机组各评估一次，跨组取最严，因此"任一主机命中严规则"即整体从严。**主机组未知时**：`deny` / `ask` 规则仍然匹配（从严，避免组信息缺失导致 prod 规则失效）；组限定的 `allow` 规则**跳过**（否则 `host_group=["dev"] allow` 会放行所有组未知主机），回落到知识库（未知 → `ask`）。
 3. **approval 不经 MCP**：审批通道只在服务端 CLI（`clum-mcp approval`），agent key 没有任何批准权限。工具面维持 68 个不变。
 4. **规则热重载失败保留旧规则**：绝不因配置解析错误退化为「无规则」。
-5. **权限优先**：`authorize`（caller-group 隔离）先于规则裁决执行；规则**不能**授予权限层已拒绝的访问。
-6. **覆盖边界是显式的**：`paste_buffer` / `cmd_escape` / `respawn_pane` 的载荷无法静态检查（不检查 ≠ 放行）——它们仍受权限层约束，可用 `tool` 过滤规则强制 `ask`。**新增携带命令的工具时必须同步 `clum-mcp/src/tools/rules.rs` 的 `extract_command`，否则会形成绕过通道**（JumpServer 的教训：真正被打穿的是过滤器覆盖不到的旁路）。
-7. **知识库是运行时可改的，不需要重新编译**：二进制内嵌的约 1,600 条只是「开箱默认值」；`config/command-kb.toml` 是运行时覆盖文件（同名命令整条覆盖，`reload_config` 一起重载）。任何判定修正或新增都走该文件。覆盖文件**缺失 = 用默认值**（正常）；**存在但解析失败 = 启动失败**（fail-closed，禁止静默退回默认值让运维以为覆盖生效）。`--command-kb` / `command_kb_file` 可改路径。
+5. **权限优先**：`authorize`（P0 capability + resource selector 判定，见 §15）先于规则裁决执行；规则**不能**授予权限层已拒绝的访问。`require_approval` 只能把 `allow` 收紧为 `ask`，不能放宽 `deny`。
+6. **覆盖边界是显式的，且由测试守护**：被裁决的工具 = `extract_command` 覆盖的 **10 个**（`exec`/`shell_command`/`batch_exec` 读 `command`，`send_keys`/`batch_send_keys`/`broadcast_keys` 读 `keys`，`send_text` 读 `text`，`respawn_pane`/`split_pane_with` 读 `command`+`args`，`cmd_escape` 读 rmux CLI 参数）。`paste_buffer` 的内容在远端缓冲区、默认不裁决，但按 `tool` 限定的规则对它**确实生效**（指纹为 `sha256(tool+args)`）。**带 `command` 的 `respawn_pane` 与不带 command 的 bare respawn 都 fail-closed 到 `ask`**（后者会重跑既有进程规格，可能重放已批准命令）。**覆盖集由 `every_payload_tool_is_adjudicated_or_whitelisted` 从 schema 自动校验**：新增任何带 `command`/`keys`/`text`/`args` 的工具却忘记登记，测试立即失败——不再依赖人工清单（历史教训：`broadcast_keys`、`split_pane_with`、`respawn_pane` 均曾因此漏网，真正的绕过永远出现在过滤器覆盖不到的地方）。
+7. **评估对象必须等于执行对象**：任何在执行前会做解码/展开的参数，必须在**裁决之前**完成一次（`normalize_payload_args`），执行侧不得再次解码。`send_keys` 族的 `\x0a` 曾让 `ls \x0arm -rf /` 被判 allow 却执行两条命令；`unescape_keys` 不幂等，因此「入口解码 + 执行侧不解码」是唯一正确形态。
+8. **知识库是运行时可改的，不需要重新编译**：二进制内嵌的约 1,600 条只是「开箱默认值」；`config/command-kb.toml` 是运行时覆盖文件（同名命令整条覆盖，`reload_config` 一起重载）。任何判定修正或新增都走该文件。覆盖文件**缺失 = 用默认值**（正常）；**存在但解析失败 = 启动失败**（fail-closed，禁止静默退回默认值让运维以为覆盖生效）。`--command-kb` / `command_kb_file` 可改路径。
+9. **放行是一次性消费**：`approved` 只能被「同 agent + 同工具 + 同主机 + 同指纹」消费一次，消费即 `consumed`。校验由**单条带完整 WHERE 的原子 UPDATE** 完成（`affected == 1` 才放行），因此并发重放同一 `approval_id` 只有一个赢家；任何一项不符一律 `APPROVAL_INVALID`，**绝不降级为放行**。审批表只存**指纹**（`sha256:`）不存命令原文，人类可读的**脱敏**摘要在 `reason` 列。
+10. **审批归因不是强认证**：`--approver` 可被覆盖，真正的授权边界是「能登录服务端主机执行 `clum-mcp approval`」。审计 detail 因此**独立**记录 `approver_os=`（取自 `SUDO_USER`/`USER`），与声称的 approver 不一致即是伪造线索。
+
+## 15. 角色能力授权（P0）
+
+1. **默认拒绝**：已 materialise 的 principal 没有匹配 grant → 拒绝；空绑定同样拒绝。
+2. **迁移等价**：已有 key 自动绑定 legacy role；运行期未 materialise 的新 key 走 `legacy_fallback`，复刻旧 group 规则。
+3. **绑定权威**：显式 `bind/unbind` 后以 DB 为准；`unbind` 清空绑定不会被重启迁移恢复。
+4. **能力先于命令解析**：无 `command:exec` / `command:read` 的 principal 不进入命令规则引擎；`require_approval` 命中时只能把 `allow` 收紧为 `ask`，不能放宽 `deny`。
+5. **映射完备**：68 个工具全部有 capability；新增工具漏映射时 `capability::tests` 失败。
+6. **加载失败保留旧快照**：策略解析失败绝不退化为全放行（旧快照继续服务）。
+7. **策略写是人类通道**：`clum-mcp role grant/bind/unbind` 只能在 server 本机 shell 执行；CLI 不在 MCP 请求内，无法 elicitation；所有变更写入审计哈希链。
+8. **replay 走统一判定**：`clum-cli replay` 走 HTTPS `/recordings`，`http_server` 按首段 host + `recording:read` + selector 判定，与 MCP 一致。
+9. **无 host 工具按 role selector 过滤**：`host_list` / `host_filter` / `audit_query` / `list_recordings` / `get_recording` / `search_recordings` 使用 `allowed_host_names` 的 selector 并集；legacy principal 结果与旧 group 规则一致。
+10. **全局能力必须用全局 grant**：`config:reload` / `policy:write` 没有目标主机，组/labels/name 作用域的 grant 不能授权它们（判定要求 selector 为 `all`）。
+11. **内置 grant 不可编辑**：`builtin:*`（admin 全权、legacy-*）拒绝 CLI 改写；legacy role 整体由迁移维护。
+12. **只读执行是白名单，不是强隔离**：`command:read` 只放行 `exec`/`batch_exec` 中被显式标记 `read_only=true` 且最终 `Allow` 的命令；未标记/未知/危险结构/危险 flag/`sudo`/`doas` 一律非只读；规则 `allow` 不能提权；非只读命令直接拒绝，不进入审批。
+13. **elicitation 只覆盖 MCP 请求内的 ask**：客户端声明能力且未超时（120s）时优先弹框；否则回退 `APPROVAL_REQUIRED`。stdio 自定义协议没有 rmcp peer。
+
+**重审时机**：MCP 客户端 elicitation 行为变化、新增 resource_type/selector 维度、或命令白名单出现误判时。
 
 ## 不再重复踩的坑（本清单的来历）
 

@@ -32,17 +32,38 @@ pub struct CommandEntry {
     /// 数据来源（provenance，审计与合规）
     #[serde(default)]
     pub source: Option<String>,
+    /// 显式只读分类：只有确定不会写盘、不会执行子进程的命令才可标记。
+    /// 默认 false（fail-closed）。
+    #[serde(default)]
+    pub read_only: Option<bool>,
+}
+
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SubcommandMode {
+    /// name 是**同义组**：任一元素等于 `args[0]` 即命中（如 ["get","logs"]）。
+    #[default]
+    Any,
+    /// name 是**命令前缀序列**：`args` 必须以 name 开头（如 ["approval","list"]）。
+    /// 用于避免 `approval approve` 被 `["approval","list"]` 的同义组语义误放行。
+    Sequence,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SubcommandEntry {
     /// 子命令 token 序列，如 ["get"] / ["rollout", "restart"]
     pub name: Vec<String>,
+    /// name 的匹配语义。默认 `any`（同义组），保持既有数据行为。
+    #[serde(default)]
+    pub mode: SubcommandMode,
     pub effect: Effect,
     #[serde(default)]
     pub dangerous_flags: Vec<String>,
     #[serde(default)]
     pub source: Option<String>,
+    /// 显式只读分类，语义同 `CommandEntry::read_only`。
+    #[serde(default)]
+    pub read_only: Option<bool>,
 }
 
 pub struct KnowledgeBase {
@@ -104,8 +125,15 @@ impl KnowledgeBase {
 
     /// 查询：返回 (Effect, source 描述)。`args` 为 program 之后的参数。
     pub fn lookup(&self, program: &str, args: &[String]) -> (Effect, String) {
+        let (effect, source, _) = self.lookup_with_meta(program, args);
+        (effect, source)
+    }
+
+    /// 查询并返回只读分类。`read_only` 只有在命令被显式标记、且最终动作是
+    /// `Allow`、且未命中危险 flag 时才为 true。
+    pub fn lookup_with_meta(&self, program: &str, args: &[String]) -> (Effect, String, bool) {
         let Some(entry) = self.commands.get(basename(program)) else {
-            return (self.default_effect, "unknown".to_string());
+            return (self.default_effect, "unknown".to_string(), false);
         };
 
         // 子命令匹配，取最长命中。
@@ -113,28 +141,39 @@ impl KnowledgeBase {
         // 也可表示一组同义子命令（任一元素等于 args[0]，如 ["get", "logs", "describe"]）。
         let mut best: Option<(&SubcommandEntry, usize)> = None;
         for sub in &entry.subcommand {
-            let matched_len = if args.starts_with(sub.name.as_slice()) {
-                sub.name.len()
-            } else if args.first().is_some_and(|a| sub.name.contains(a)) {
-                1
-            } else {
-                continue;
+            let matched_len = match sub.mode {
+                SubcommandMode::Sequence => {
+                    if args.starts_with(sub.name.as_slice()) {
+                        sub.name.len()
+                    } else {
+                        continue;
+                    }
+                }
+                SubcommandMode::Any => {
+                    if args.first().is_some_and(|a| sub.name.contains(a)) {
+                        1
+                    } else {
+                        continue;
+                    }
+                }
             };
             if best.map(|(_, l)| matched_len > l).unwrap_or(true) {
                 best = Some((sub, matched_len));
             }
         }
 
-        let (mut effect, mut source, sub_flags) = match best {
+        let (mut effect, mut source, sub_flags, mut read_only) = match best {
             Some((sub, _)) => (
                 sub.effect,
                 format!("kb:{} {}", entry.name, sub.name.join(" ")),
                 sub.dangerous_flags.as_slice(),
+                sub.read_only.unwrap_or(false),
             ),
             None => (
                 entry.effect.unwrap_or(self.default_effect),
                 format!("kb:{}", entry.name),
                 &[][..],
+                entry.read_only.unwrap_or(false),
             ),
         };
 
@@ -159,9 +198,16 @@ impl KnowledgeBase {
         if let Some(flag) = hit {
             effect = effect.max(entry.escalate_to.unwrap_or(Effect::Ask));
             source = format!("{source} dangerous-flag({flag})");
+            read_only = false;
         }
 
-        (effect, source)
+        // Only an explicitly allowed command can be read-only. Ask/Deny are
+        // never eligible, regardless of the entry's marker.
+        if effect != Effect::Allow {
+            read_only = false;
+        }
+
+        (effect, source, read_only)
     }
 }
 
@@ -316,7 +362,7 @@ effect = "deny"
     fn fused_data_covers_common_commands() {
         let kb = KnowledgeBase::builtin().unwrap();
         // 融合数据存在的意义：常见只读命令必须放行，否则闸门会因噪声被运维关掉
-        for cmd in ["ps", "top", "netstat", "ss", "du", "df", "awk", "sort"] {
+        for cmd in ["ps", "top", "netstat", "ss", "du", "df", "sort"] {
             assert_eq!(
                 kb.lookup(cmd, &[]).0,
                 Effect::Allow,
@@ -370,5 +416,216 @@ effect = "deny"
             .commands
             .len();
         assert!(count >= 1500, "融合数据不应少于 1500 条，实际 {count}");
+    }
+
+    /// 威胁模型重定：以下命令能执行任意代码、逃逸到 shell、外联或破坏主机，
+    /// **不得**被判为 allow。列表与 `scripts/kb-fuse-safe-chains.py` 的 FORCE_ASK
+    /// 及 `data/commands.toml` 的人工条目保持一致。
+    #[test]
+    fn high_risk_commands_are_never_allowed() {
+        let kb = KnowledgeBase::builtin().unwrap();
+        const MUST_NOT_ALLOW: &[&str] = &[
+            "python3",
+            "perl",
+            "ruby",
+            "node",
+            "nodejs",
+            "php",
+            "lua",
+            "tclsh",
+            "expect",
+            "R",
+            "Rscript",
+            "awk",
+            "gawk",
+            "mawk",
+            "nawk",
+            "zsh",
+            "vim",
+            "nvim",
+            "emacs",
+            "nano",
+            "less",
+            "more",
+            "man",
+            "screen",
+            "tmux",
+            "watch",
+            "nc",
+            "ncat",
+            "netcat",
+            "socat",
+            "ssh",
+            "tcpdump",
+            "sqlite3",
+            "mysql",
+            "psql",
+            "redis-cli",
+            "mongo",
+            "mongosh",
+            "pip",
+            "pip3",
+            "npm",
+            "npx",
+            "make",
+            "ipython",
+            "nu",
+            "deno",
+            "julia",
+            "erl",
+            "groovy",
+            "scala",
+            "sbcl",
+            "swipl",
+            "csi",
+            "ts-node",
+            "nodemon",
+            "pry",
+            "java",
+            "mix",
+            "phpunit",
+            "luarocks",
+            "dc",
+            "mosh",
+            "autossh",
+            "kill",
+            "pkill",
+            "killall",
+            "crontab",
+            "sysctl",
+            "mount",
+        ];
+        for cmd in MUST_NOT_ALLOW {
+            assert!(
+                kb.lookup(cmd, &[]).0 >= Effect::Ask,
+                "`{cmd}` 属于任意代码执行/逃逸/外联/主机管理类，不得 allow"
+            );
+        }
+    }
+
+    /// 运维 CLI 的放行必须停留在子命令粒度：只读/文件传输放行，
+    /// 审批动作与交互终端保持 ask（否则 agent 可自我批准或绕开闸门）。
+    #[test]
+    fn ops_cli_subcommands_are_scoped() {
+        let kb = KnowledgeBase::builtin().unwrap();
+        let args = |s: &[&str]| s.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+
+        assert_eq!(
+            kb.lookup("clum-mcp", &args(&["approval", "list"])).0,
+            Effect::Allow
+        );
+        assert_eq!(
+            kb.lookup("clum-mcp", &args(&["audit", "verify"])).0,
+            Effect::Allow
+        );
+        assert_eq!(
+            kb.lookup("clum-mcp", &args(&["approval", "approve", "x"]))
+                .0,
+            Effect::Ask,
+            "agent must never be able to self-approve"
+        );
+        assert_eq!(
+            kb.lookup("clum-mcp", &args(&["approval", "deny", "x"])).0,
+            Effect::Ask
+        );
+
+        assert_eq!(
+            kb.lookup("clum-cli", &args(&["push", "host", "a", "b"])).0,
+            Effect::Allow
+        );
+        assert_eq!(
+            kb.lookup("clum-cli", &args(&["pull", "host", "a", "b"])).0,
+            Effect::Allow
+        );
+        assert_eq!(
+            kb.lookup("clum-cli", &args(&["term", "host"])).0,
+            Effect::Ask,
+            "interactive term would bypass the command gate"
+        );
+        assert_eq!(
+            kb.lookup("clum-cli", &args(&["forward", "host"])).0,
+            Effect::Ask,
+            "forward opens a tunnel and must stay gated"
+        );
+    }
+
+    /// 文档中的知识库条数必须与 `builtin()` 的实际条数一致。
+    /// 历史漂移：README 写 1,663（三层加和未去重），实际是 1,594。
+    #[test]
+    fn readonly_whitelist_never_contains_write_verbs() {
+        let kb = KnowledgeBase::builtin().unwrap();
+        let args = |s: &[&str]| s.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+
+        for cmd in ["ls", "cat", "grep", "ps", "stat", "df", "jq"] {
+            assert!(
+                kb.lookup_with_meta(cmd, &[]).2,
+                "`{cmd}` should be read-only"
+            );
+        }
+        assert!(
+            kb.lookup_with_meta("systemctl", &args(&["status", "nginx"]))
+                .2
+        );
+        assert!(kb.lookup_with_meta("kubectl", &args(&["get", "pods"])).2);
+        assert!(kb.lookup_with_meta("git", &args(&["status"])).2);
+
+        for cmd in [
+            "rm", "mv", "dd", "tee", "sed", "awk", "find", "xargs", "sudo", "bash",
+        ] {
+            assert!(
+                !kb.lookup_with_meta(cmd, &[]).2,
+                "`{cmd}` must not be read-only"
+            );
+        }
+        assert!(
+            !kb.lookup_with_meta("systemctl", &args(&["restart", "nginx"]))
+                .2
+        );
+        assert!(
+            !kb.lookup_with_meta("kubectl", &args(&["delete", "pod", "x"]))
+                .2
+        );
+        assert!(!kb.lookup_with_meta("git", &args(&["push"])).2);
+        assert!(!kb.lookup_with_meta("git", &args(&["log", "--output=f"])).2);
+        assert!(!kb.lookup_with_meta("rg", &args(&["--pre", "sh", "x"])).2);
+        // `ip addr add ...` is a mutation: do not mark the `ip` family read-only.
+        assert!(
+            !kb.lookup_with_meta("ip", &args(&["addr", "add", "1.2.3.4/32", "dev", "eth0"]))
+                .2
+        );
+        assert!(!kb.lookup_with_meta("date", &args(&["-s", "2026-01-01"])).2);
+        assert!(
+            !kb.lookup_with_meta("journalctl", &args(&["--vacuum-size=500M"]))
+                .2,
+            "vacuum writes and must not be read-only"
+        );
+    }
+
+    #[test]
+    fn documented_entry_count_matches_builtin() {
+        fn with_thousands(n: usize) -> String {
+            let s = n.to_string();
+            let mut out = String::new();
+            for (i, c) in s.chars().enumerate() {
+                if i > 0 && (s.len() - i).is_multiple_of(3) {
+                    out.push(',');
+                }
+                out.push(c);
+            }
+            out
+        }
+
+        let n = KnowledgeBase::builtin().unwrap().len();
+        let formatted = with_thousands(n);
+        let readme = include_str!("../../../README.md");
+        let readme_zh = include_str!("../../../README.zh.md");
+        assert!(
+            readme.contains(&format!("{formatted}-entry knowledge base")),
+            "README.md 的条数应与 builtin()={n} 一致（{formatted}）"
+        );
+        assert!(
+            readme_zh.contains(&format!("{formatted} 条知识库")),
+            "README.zh.md 的条数应与 builtin()={n} 一致（{formatted}）"
+        );
     }
 }

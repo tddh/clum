@@ -187,3 +187,63 @@ impl StreamManager {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn frame(magic: u8, pane: &[u8], text: &[u8]) -> Vec<u8> {
+        let mut v = vec![magic];
+        v.extend_from_slice(&(pane.len() as u32).to_le_bytes());
+        v.extend_from_slice(pane);
+        v.extend_from_slice(&(text.len() as u32).to_le_bytes());
+        v.extend_from_slice(text);
+        v
+    }
+
+    #[tokio::test]
+    async fn reads_valid_frame() {
+        let mut buf = std::io::Cursor::new(frame(0x02, b"%0", b"hello"));
+        assert_eq!(read_stream_frame(&mut buf).await.unwrap(), "hello");
+    }
+
+    #[tokio::test]
+    async fn rejects_bad_magic() {
+        let mut buf = std::io::Cursor::new(frame(0x09, b"%0", b"x"));
+        let err = read_stream_frame(&mut buf).await.unwrap_err();
+        assert!(err.to_string().contains("magic"), "got: {err}");
+    }
+
+    #[tokio::test]
+    async fn rejects_oversized_pane_id() {
+        // 只给长度前缀，不提供正文：长度校验必须先于分配/读取。
+        let mut v = vec![0x02];
+        v.extend_from_slice(&(1025u32).to_le_bytes());
+        let mut buf = std::io::Cursor::new(v);
+        let err = read_stream_frame(&mut buf).await.unwrap_err();
+        assert!(err.to_string().contains("pane_id too long"), "got: {err}");
+    }
+
+    #[tokio::test]
+    async fn rejects_oversized_text() {
+        let mut v = vec![0x02];
+        v.extend_from_slice(&1u32.to_le_bytes());
+        v.push(b'%');
+        v.extend_from_slice(&(1024u32 * 1024 + 1).to_le_bytes());
+        let mut buf = std::io::Cursor::new(v);
+        let err = read_stream_frame(&mut buf).await.unwrap_err();
+        assert!(err.to_string().contains("text too large"), "got: {err}");
+    }
+
+    #[tokio::test]
+    async fn eof_is_an_error_not_panic() {
+        let mut buf = std::io::Cursor::new(Vec::new());
+        assert!(read_stream_frame(&mut buf).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn manager_starts_empty() {
+        let mgr = StreamManager::new();
+        assert_eq!(mgr.streams.lock().await.len(), 0);
+    }
+}

@@ -29,6 +29,7 @@ impl BridgeStore {
     pub fn open(path: &Path) -> Result<Self> {
         let conn = rusqlite::Connection::open(path)
             .with_context(|| format!("open bridge db: {}", path.display()))?;
+        conn.busy_timeout(std::time::Duration::from_secs(5))?;
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS bridges (
                 token_hash   TEXT PRIMARY KEY,

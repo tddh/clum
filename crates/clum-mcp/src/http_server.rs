@@ -27,6 +27,32 @@ struct AuthState {
     store: Arc<ApiKeyStore>,
     download_tokens: DownloadTokenMap,
     bridge_store: Arc<crate::bridge_store::BridgeStore>,
+    policy: Arc<crate::policy::PolicyStore>,
+    router: Arc<crate::router::HostRouter>,
+}
+
+/// Build the selector input for a `/recordings/<host>/...` request.
+async fn recording_host_resource(auth: &AuthState, host: &str) -> crate::policy::HostResource {
+    let mut resource = crate::policy::HostResource {
+        name: host.to_string(),
+        ..crate::policy::HostResource::default()
+    };
+    if let Some(meta) = auth
+        .bridge_store
+        .get_all_host_meta()
+        .await
+        .into_iter()
+        .find(|meta| meta.hostname == host)
+    {
+        resource.group = Some(meta.group).filter(|group| !group.is_empty());
+        resource.labels = meta.labels;
+        return resource;
+    }
+    if let Some(host) = auth.router.get(host) {
+        resource.group = Some(host.group.clone()).filter(|group| !group.is_empty());
+        resource.labels = host.labels.clone();
+    }
+    resource
 }
 
 /// Caller identity derived from the request's own API key. Inserted into
@@ -132,8 +158,9 @@ impl ServerHandler for ClumServer {
         async move {
             match identity {
                 Some(id) => {
-                    *ctx.agent_name.lock().unwrap_or_else(|e| e.into_inner()) = id.name;
-                    *ctx.caller_group.lock().unwrap_or_else(|e| e.into_inner()) = id.group;
+                    *ctx.agent_name.lock().unwrap_or_else(|e| e.into_inner()) = id.name.clone();
+                    *ctx.caller_group.lock().unwrap_or_else(|e| e.into_inner()) = id.group.clone();
+                    *ctx.principal_name.lock().unwrap_or_else(|e| e.into_inner()) = Some(id.name);
                 }
                 None => {
                     // Fail closed: with auth enabled, every tool call must
@@ -222,17 +249,37 @@ async fn auth_middleware(
     match token {
         Some(t) => {
             if let Some(identity) = auth.store.validate(t).await {
-                // Grouped keys must use MCP get_recording (which enforces
-                // group isolation); direct HTTP access to /recordings is
-                // restricted to superadmin keys without a group.
-                if identity.group.is_some() && request.uri().path().starts_with("/recordings") {
-                    tracing::warn!(
-                        agent = %identity.name,
-                        group = %identity.group.as_deref().unwrap_or(""),
-                        path = %request.uri().path(),
-                        "grouped key attempted HTTP /recordings access (use MCP get_recording instead)"
+                // Direct HTTP recording downloads now use the same
+                // `recording:read` capability + selector as MCP. The first
+                // path segment is the host whose selector must match.
+                if request.uri().path().starts_with("/recordings") {
+                    let host = request
+                        .uri()
+                        .path()
+                        .trim_start_matches("/recordings")
+                        .trim_start_matches('/')
+                        .split('/')
+                        .next()
+                        .unwrap_or("");
+                    if host.is_empty() {
+                        return Err(StatusCode::FORBIDDEN);
+                    }
+                    let resource = recording_host_resource(&auth, host).await;
+                    let decision = auth.policy.check(
+                        &identity.name,
+                        identity.group.as_deref(),
+                        crate::capability::Capability::RecordingRead,
+                        Some(&resource),
                     );
-                    return Err(StatusCode::FORBIDDEN);
+                    if !decision.allowed {
+                        tracing::warn!(
+                            agent = %identity.name,
+                            group = %identity.group.as_deref().unwrap_or(""),
+                            path = %request.uri().path(),
+                            "recording download denied by capability"
+                        );
+                        return Err(StatusCode::FORBIDDEN);
+                    }
                 }
                 // Bind the identity to THIS request only — call_tool reads it
                 // back from the request extensions, so concurrent requests
@@ -357,6 +404,16 @@ pub async fn run_http_server(
         );
     }
     let keyring_for_routes = Arc::clone(&ctx.recording_keyring);
+
+    // rmcp closes a session after `keep_alive` of inactivity, and its 300s default
+    // means idle MCP clients are shed — and reconnect — every 5 minutes. The 15s
+    // SSE keep-alive ping lives in a separate layer and does not reset this timer,
+    // so raise the idle TTL to 1 hour.
+    let mut session_manager = LocalSessionManager::default();
+    session_manager.session_config.keep_alive = Some(std::time::Duration::from_secs(3600));
+
+    let policy_for_auth = Arc::clone(&ctx.policy);
+    let router_for_auth = Arc::clone(&ctx.router);
     let service = StreamableHttpService::new(
         move || {
             Ok(ClumServer {
@@ -364,7 +421,7 @@ pub async fn run_http_server(
                 key_store: Arc::clone(&key_store),
             })
         },
-        Arc::new(LocalSessionManager::default()),
+        Arc::new(session_manager),
         config,
     );
 
@@ -384,6 +441,8 @@ pub async fn run_http_server(
         store: key_store_for_auth,
         download_tokens,
         bridge_store,
+        policy: policy_for_auth,
+        router: router_for_auth,
     };
     let app = app.layer(middleware::from_fn_with_state(auth_state, auth_middleware));
 
@@ -497,6 +556,7 @@ mod tests {
     struct TestEnv {
         app: Router,
         api_key: String,
+        grouped_api_key: String,
         bridge_token: String,
         download_token: String,
         _tmp: tempfile::TempDir,
@@ -529,9 +589,14 @@ mod tests {
         let bridge_store = Arc::new(
             crate::bridge_store::BridgeStore::open(&tmp.path().join("bridges.db")).unwrap(),
         );
+        let grouped_api_key = if with_api_key {
+            key_store.add("grouped", Some("dev")).await.unwrap()
+        } else {
+            String::new()
+        };
         let bridge_token = crate::bridge_store::generate_bridge_token().unwrap();
         bridge_store
-            .add("testhost", &bridge_token, &[], None)
+            .add("testhost", &bridge_token, &[], Some("dev"))
             .await
             .unwrap();
 
@@ -560,16 +625,25 @@ mod tests {
             1,
             keyring,
         );
+        let hosts_path = tmp.path().join("hosts.yaml");
+        std::fs::write(&hosts_path, "hosts: []\n").unwrap();
+        let router =
+            Arc::new(crate::router::HostRouter::from_file(&hosts_path).expect("load empty hosts"));
+        let policy = crate::policy::PolicyStore::open(&tmp.path().join("keys.db"))
+            .expect("open policy store");
         let auth_state = AuthState {
             store: key_store,
             download_tokens,
             bridge_store,
+            policy,
+            router,
         };
         let app = app.layer(middleware::from_fn_with_state(auth_state, auth_middleware));
 
         TestEnv {
             app,
             api_key,
+            grouped_api_key,
             bridge_token,
             download_token,
             _tmp: tmp,
@@ -658,6 +732,35 @@ mod tests {
             request(&env, "GET", "/install.sh", Some(&env.bridge_token)).await,
             StatusCode::FORBIDDEN
         );
+    }
+
+    #[tokio::test]
+    async fn recording_download_uses_capability_and_selector() {
+        let env = setup().await;
+
+        // Same group (dev): the legacy-group role has recording:read.
+        let allowed = request(
+            &env,
+            "GET",
+            "/recordings/testhost/2026-01-01/x.cast",
+            Some(&env.grouped_api_key),
+        )
+        .await;
+        assert_ne!(
+            allowed,
+            StatusCode::FORBIDDEN,
+            "same-group recording must pass the capability check"
+        );
+
+        // Unknown/other host: selector does not match.
+        let denied = request(
+            &env,
+            "GET",
+            "/recordings/otherhost/2026-01-01/x.cast",
+            Some(&env.grouped_api_key),
+        )
+        .await;
+        assert_eq!(denied, StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]

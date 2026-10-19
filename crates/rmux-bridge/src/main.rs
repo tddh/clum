@@ -184,6 +184,7 @@ async fn main() -> anyhow::Result<()> {
                                         rec_fsync,
                                         stream_audit_db,
                                         idle_timeout_secs,
+                                        false,
                                         rec_pubkey,
                                     )
                                     .await

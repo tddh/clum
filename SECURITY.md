@@ -6,6 +6,16 @@ If you discover a security vulnerability in clum, please **do not** open a publi
 
 Instead, email the maintainer directly. We will respond within 48 hours and work on a fix.
 
+## Third-Party Data
+
+The command knowledge base (`crates/clum-command-kb/data/`) embeds risk
+annotations derived from safe-chains (MIT OR Apache-2.0), gemini-cli
+(Apache-2.0) and prodagent (Apache-2.0 OR MIT). See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The upstream version used for
+generation is recorded in `generated.toml`'s header; if it reads `unknown`,
+the snapshot was not anchored to an upstream revision and must be regenerated
+with an explicit version before relying on provenance.
+
 ## Supported Versions
 
 | Version | Supported          |

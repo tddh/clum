@@ -101,20 +101,18 @@ fn host_to_json(h: &UnifiedHost) -> Value {
     })
 }
 
-fn filter_by_caller_group(ctx: &ToolContext, hosts: &mut Vec<UnifiedHost>) {
-    let caller_group = ctx
-        .caller_group
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .clone();
-    if let Some(cg) = caller_group {
-        hosts.retain(|h| h.group == cg);
+/// Restrict host listings to the hosts allowed by the caller's role
+/// selectors. For legacy principals this is equivalent to the old group
+/// filter; for explicitly bound principals it follows their grants.
+async fn filter_by_policy(ctx: &ToolContext, tool_name: &str, hosts: &mut Vec<UnifiedHost>) {
+    if let Some(allowed) = super::allowed_host_names(ctx, tool_name).await {
+        hosts.retain(|h| allowed.contains(&h.name));
     }
 }
 
 pub(crate) async fn host_list(ctx: &ToolContext) -> Result<Value> {
     let mut unified = build_unified_hosts(ctx).await;
-    filter_by_caller_group(ctx, &mut unified);
+    filter_by_policy(ctx, "host_list", &mut unified).await;
     let hosts: Vec<Value> = unified.iter().map(host_to_json).collect();
     super::audit(
         ctx,
@@ -134,7 +132,7 @@ pub(crate) async fn host_list(ctx: &ToolContext) -> Result<Value> {
 
 pub(crate) async fn host_filter(ctx: &ToolContext, args: Value) -> Result<Value> {
     let mut hosts = build_unified_hosts(ctx).await;
-    filter_by_caller_group(ctx, &mut hosts);
+    filter_by_policy(ctx, "host_filter", &mut hosts).await;
 
     if let Some(group) = args["group"].as_str() {
         hosts.retain(|h| h.group == group);

@@ -51,6 +51,9 @@ clum-docs/project-evaluation-2026-08-03.md
 # .omo/plans 下另含本地计划文档；如需将其中某份正式入库，请单独白名单该文件
 .omo/
 
+# zvec-grep 语义检索索引（机器生成，可随时重建；autoUpdate 会自行重写）
+.zvec-grep/
+
 # Git worktrees
 .worktrees/
 
@@ -74,3 +77,6 @@ deploy/*.tar.gz
 downloaded-readme.md
 .workbuddy
 .workbuddy/*
+
+# 本地 watcher 配置（非项目文件）
+WATCHDOG.yml

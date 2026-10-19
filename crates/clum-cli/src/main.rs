@@ -347,6 +347,16 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Commands::Replay { file, speed, idle } => {
+            if !speed.is_finite() || speed <= 0.0 {
+                return Err(anyhow::anyhow!("--speed must be a positive finite number"));
+            }
+            if let Some(v) = idle {
+                if !v.is_finite() || v < 0.0 {
+                    return Err(anyhow::anyhow!(
+                        "--idle must be a non-negative finite number"
+                    ));
+                }
+            }
             let expanded = expand_tilde(&file);
             let path = std::path::Path::new(&expanded);
             let opts = replay::ReplayOptions {

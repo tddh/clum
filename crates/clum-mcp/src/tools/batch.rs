@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
 use super::common::{collect_batch_results, make_semaphore, resolve_hosts, resolve_pane_id};
-use super::exec::{exec_in_session, unescape_keys};
+use super::exec::exec_in_session;
 use super::pane::input_audit_detail;
 use super::ToolContext;
 use crate::files::OverwriteMode;
@@ -458,7 +458,7 @@ pub(crate) async fn batch_send_keys(
 
     let session_name = args["session_name"].as_str().unwrap_or("clum").to_string();
     let pane_id_arg = args["pane_id"].as_str().map(String::from);
-    let keys = unescape_keys(args["keys"].as_str().context("missing 'keys'")?);
+    let keys = args["keys"].as_str().context("missing 'keys'")?.to_string();
     let concurrency_limit = args["concurrency"].as_u64().unwrap_or(5) as usize;
     let sensitive = args["sensitive"].as_bool().unwrap_or(false);
 
@@ -668,6 +668,9 @@ mod tests {
             approvals: Arc::new(
                 crate::approvals::ApprovalStore::open_in_memory().expect("open approval store"),
             ),
+            policy: crate::policy::PolicyStore::open(&tmp.path().join("policy.db"))
+                .expect("open policy store"),
+            principal_name: Arc::new(std::sync::Mutex::new(None)),
             recordings_dir: tmp.path().to_path_buf(),
             recording_keyring: Arc::new(
                 crate::recording_keyring::RecordingKeyring::load_or_create(

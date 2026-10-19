@@ -1,13 +1,15 @@
 # clum 命令规则（人工维护，支持 reload_config 热重载）
 #
 # 三态动作：deny（直接拦截）/ ask（挂起等人工批准）/ allow（放行）
-# 规则按 priority 升序评估，首个命中生效；未命中则查内置知识库，再未命中按 default_effect。
+# 规则按 priority 升序评估，首个命中生效；未命中则查内置知识库，知识库也未命中时按
+# **编译期默认值 `ask`** 处理（fail-closed）。
 # 权限层（authorize 的 group 隔离）先于本文件生效——本文件是权限之后的第二道闸。
 
 schema_version = 1
 
-# 未命中任何规则与知识库时的默认动作。切勿改为 allow。
-default_effect = "ask"
+# ⚠️ 本文件**不支持** `default_effect`：未知命令的默认动作是编译期常量 `ask`，
+# 写在这里会被静默忽略（旧版文档误导，已更正；见 INVARIANTS §14.1）。
+# 要放宽某条命令，请改 config/command-kb.toml 给它加 [[command]] 条目，而不是改默认值。
 
 # ───────── 示例：禁止一切删除类操作（按需启用）─────────
 # [[rule]]
@@ -27,12 +29,28 @@ default_effect = "ask"
 # action = "ask"
 # reason = "生产环境变更需人工批准（clum-mcp approval approve <id>）"
 
-# ───────── 示例：堵住不可静态检查的旁路通道 ─────────
-# paste_buffer 的内容存在于远端缓冲区，无法静态检查。
-# 若你的威胁模型要求覆盖该通道，启用下面规则（会让 paste_buffer 每次都需批准）：
+# ───────── 示例：堵住无命令载荷的旁路通道（默认关闭）─────────
+# paste_buffer 的内容在远端缓冲区，拿不到命令文本，默认**不裁决**
+# （否则每次粘贴都要人工批准，闸门会被运维关掉）。按 `tool` 限定的规则对它们
+# **确实生效**：启用下面这条即可强制 ask。此类调用的审批指纹是
+# sha256(tool_name + 规范化 args)，参数变一个字符就要重新批准。
+#
+# 注意：respawn_pane / split_pane_with 的 `command` 与 cmd_escape 的 rmux 参数
+# 现在都已纳入载荷裁决，不再属于「无命令载荷」通道。
+# 不带 command 的 respawn_pane 也会 fail-closed 到 ask（它会重跑既有进程规格，
+# 可能重放一次已批准的命令）；如需放行，用 tool 维度规则显式 allow。
+# [[rule]]
+# id = "allow-bare-respawn"
+# priority = 80
+# tool = ["respawn_pane"]
+# # 仅放行「裸 respawn」哨兵；带 command 的调用不匹配，仍按载荷裁决。
+# # 没有这一行时，tool 维度 allow 会连 respawn_pane(command="…") 一起放行。
+# argv_regex = "^respawn-pane:existing-process$"
+# action = "allow"
+# reason = "重启 pane 的 shell 属于日常操作"
 # [[rule]]
 # id = "paste-buffer-approval"
 # priority = 20
-# tool = ["paste_buffer", "cmd_escape"]
+# tool = ["paste_buffer"]
 # action = "ask"
 # reason = "该通道内容无法静态检查，需人工确认"

@@ -37,7 +37,7 @@ async fn rotate_expired_tokens(
         };
 
         let age_hours = (now - created).num_hours();
-        if age_hours < ttl_hours as i64 {
+        if !token_is_due(age_hours, ttl_hours) {
             continue;
         }
 
@@ -73,5 +73,25 @@ async fn rotate_expired_tokens(
                 tracing::warn!(hostname = %bridge.hostname, "failed to push token rotation: {e}");
             }
         }
+    }
+}
+
+/// 纯判定：token 年龄（小时）是否达到轮换阈值。
+/// 抽出来是为了给轮换循环的边界条件（刚到期 / 未到期 / ttl=0）留可测试的缝。
+fn token_is_due(age_hours: i64, ttl_hours: u64) -> bool {
+    age_hours >= ttl_hours as i64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rotation_threshold_boundaries() {
+        assert!(!token_is_due(23, 24));
+        assert!(token_is_due(24, 24));
+        assert!(token_is_due(25, 24));
+        assert!(token_is_due(0, 0), "ttl=0 表示每次都到期");
+        assert!(!token_is_due(-1, 24), "创建时间在未来时不应轮换");
     }
 }

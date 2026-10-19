@@ -155,6 +155,7 @@ pub enum AuditAction {
     AgentRelay,
     SearchRecordings,
     CommandDenied,
+    CommandAllowed,
     ApprovalRequested,
     ApprovalDecided,
 }
@@ -684,6 +685,7 @@ mod tests {
             ("AgentRelay", AuditAction::AgentRelay),
             ("SearchRecordings", AuditAction::SearchRecordings),
             ("CommandDenied", AuditAction::CommandDenied),
+            ("CommandAllowed", AuditAction::CommandAllowed),
             ("ApprovalRequested", AuditAction::ApprovalRequested),
             ("ApprovalDecided", AuditAction::ApprovalDecided),
         ];

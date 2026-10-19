@@ -1,6 +1,9 @@
 # 本文件由 scripts/kb-fuse-safe-chains.py 生成，请勿手工编辑。
 # 数据来源: safe-chains (MIT OR Apache-2.0)
+# source-version: unknown
 # 映射: Inert / SafeRead -> allow（只读）; SafeWrite -> ask（会写）; 其余 -> ask
+# 注意: 本条快照尚未按最新 FORCE_ASK 重新生成（缺少上游 checkout）。当前生效的
+# 收紧条目在 data/commands.toml（人工层，优先级更高）；下次融合会在此文件再生。
 # 同命令多处标注时取最严。被 data/commands.toml 与 data/overlay.toml 的同名条目覆盖。
 
 schema_version = 1

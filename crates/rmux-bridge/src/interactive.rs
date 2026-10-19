@@ -205,13 +205,16 @@ async fn read_bytes(recv: &mut RecvStream, len: usize) -> Result<Vec<u8>> {
     Ok(buf)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn handle_interactive_control(
+    conn: quinn::Connection,
     mut send: SendStream,
     mut recv: RecvStream,
     proxy: Arc<tokio::sync::RwLock<ProtocolProxy>>,
     session_state: Arc<Mutex<std::collections::HashMap<String, InteractiveSession>>>,
     audit_db: Arc<BridgeAuditDb>,
     idle_timeout_secs: u64,
+    shared_connection: bool,
 ) -> Result<()> {
     let msg_type = read_u8(&mut recv).await?;
     if msg_type != 0x01 {
@@ -334,12 +337,14 @@ pub async fn handle_interactive_control(
         })
         .await;
 
+    let mut idle_timed_out = false;
     loop {
         let msg_result = if idle_timeout_secs > 0 {
             tokio::select! {
                 r = read_u8(&mut recv) => Some(r),
                 _ = exit_notify.notified() => None,
                 _ = tokio::time::sleep(Duration::from_secs(idle_timeout_secs)) => {
+                    idle_timed_out = true;
                     tracing::warn!(
                         session = %session_name,
                         pane = %pane_id,
@@ -474,6 +479,15 @@ pub async fn handle_interactive_control(
 
     // 清理本客户端的 interactive 状态（enrolled 模式多个客户端共享 map，必须按 client_id 移除）
     session_state.lock().await.remove(&client_id);
+
+    // idle 超时必须真正回收资源：控制流退出本身不会终止 0x07 数据流上的
+    // PTY→QUIC 泵与录制任务。
+    // 但 enrolled 模式下这条 conn 是 bridge↔server 的共享注册连接——close 会
+    // 切断该主机上所有用户。那种模式只退出本客户端的控制流（数据流由客户端
+    // 断线/进程退出回收），不在这里误伤他人。
+    if idle_timed_out && !shared_connection {
+        conn.close(0u32.into(), b"idle timeout");
+    }
 
     Ok(())
 }
@@ -751,6 +765,9 @@ pub async fn handle_interactive_data(
 
             match result {
                 Ok(Ok(0)) => break,
+                // 子进程退出后 master fd 的 EIO 是正常结束（常见于 Ctrl+B D
+                // detach），不是客户端异常断线——否则每次正常退出都会重排布局。
+                Ok(Err(e)) if e.raw_os_error() == Some(libc::EIO) => break,
                 Ok(Ok(n)) => {
                     if let Some(ref rec) = recorder {
                         rec.record_output(&buf[..n]);
@@ -835,30 +852,27 @@ pub async fn handle_interactive_data(
     // 若该会话还有其它活跃 client（多人同时 term），跳过恢复——
     // even-vertical 重排会误伤其它连接的显示。
     if copy_result.is_err() && counter.active_others() == 0 {
-        let state = session_state.lock().await;
-        let sn = state.get(&client_id).map(|s| s.session_name.clone());
-        let pid = state.get(&client_id).map(|s| s.pane_id.clone());
-        drop(state);
-        if let Some(ref sn) = sn {
-            let result = proxy
-                .read()
-                .await
-                .handle_select_layout(sn, 0, "even-vertical")
-                .await;
-            let ok = result.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
-            if ok {
-                tracing::info!(
-                    session = %sn,
-                    pane = %pid.as_deref().unwrap_or("?"),
-                    "layout restored after abnormal disconnect"
-                );
-            } else {
-                tracing::warn!(
-                    session = %sn,
-                    result = %result,
-                    "failed to restore layout after abnormal disconnect"
-                );
-            }
+        // 不能用 session_state.get(&client_id)：控制任务在异常断线时已先 remove，
+        // 这里必然拿到 None（旧实现因此在典型断线路径上从不恢复）。会话/窗格标识
+        // 在本作用域本来就有局部变量，直接借用即可。
+        let result = proxy
+            .read()
+            .await
+            .handle_select_layout(&session_name, 0, "even-vertical")
+            .await;
+        let ok = result.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
+        if ok {
+            tracing::info!(
+                session = %session_name,
+                pane = %pane_id,
+                "layout restored after abnormal disconnect"
+            );
+        } else {
+            tracing::warn!(
+                session = %session_name,
+                result = %result,
+                "failed to restore layout after abnormal disconnect"
+            );
         }
     }
 

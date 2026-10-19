@@ -81,10 +81,9 @@ source = "manual(clum): safe-chains 标 SafeRead，但 -c/-x/-r/-u/--delete 会�
 
 [[command]]
 name = "awk"
-effect = "allow"
+effect = "ask"
 dangerous_flags = ["-i", "--inplace"]
-escalate_to = "ask"
-source = "manual(clum): awk -i inplace 会原地改写文件"
+source = "manual(clum): awk 的 BEGIN{system(...)} 可执行任意命令；-i 会原地改写文件"
 
 [[command]]
 name = "sort"
@@ -432,3 +431,574 @@ source = "gemini-cli(apache-2.0)+prodagent(apache-2.0)"
 name = "shred"
 effect = "ask"
 source = "gemini-cli(apache-2.0)+prodagent(apache-2.0)"
+
+# ─────────── 收紧 generated.toml 的 allow 面（威胁模型重定）───────────
+# safe-chains 的 Inert/SafeRead 是「编码助手沙箱内无副作用」的语义，不是
+# 「生产执行闸门可以无条件放行」的白名单。以下命令要么能执行任意代码
+# （解释器 / 交互式 shell escape），要么能外联、破坏主机或绕过审计。
+# 统一收紧到 ask：仍然允许（经人工批准），但不再静默执行。
+#
+# 注意：scripts/kb-fuse-safe-chains.py 里有同一份 FORCE_ASK 列表，重新生成
+# generated.toml 时会再次应用；两处必须保持一致。
+
+[[command]]
+name = "python3"
+effect = "ask"
+source = "manual(clum): 解释器可执行任意代码（-c / -m / 脚本）"
+
+[[command]]
+name = "perl"
+effect = "ask"
+source = "manual(clum): 解释器可执行任意代码（-e / system）"
+
+[[command]]
+name = "ruby"
+effect = "ask"
+source = "manual(clum): 解释器可执行任意代码（-e / system）"
+
+[[command]]
+name = "node"
+effect = "ask"
+source = "manual(clum): 解释器可执行任意代码（-e / require）"
+
+[[command]]
+name = "nodejs"
+effect = "ask"
+source = "manual(clum): 解释器可执行任意代码（-e / require）"
+
+[[command]]
+name = "php"
+effect = "ask"
+source = "manual(clum): 解释器可执行任意代码（-r / system）"
+
+[[command]]
+name = "lua"
+effect = "ask"
+source = "manual(clum): 解释器可执行任意代码（-e / os.execute）"
+
+[[command]]
+name = "tclsh"
+effect = "ask"
+source = "manual(clum): 解释器可执行任意代码（exec）"
+
+[[command]]
+name = "expect"
+effect = "ask"
+source = "manual(clum): 可 spawn 任意进程并驱动交互式会话"
+
+[[command]]
+name = "R"
+effect = "ask"
+source = "manual(clum): 解释器可执行任意代码（system）"
+
+[[command]]
+name = "Rscript"
+effect = "ask"
+source = "manual(clum): 解释器可执行任意代码（system）"
+
+[[command]]
+name = "gawk"
+effect = "ask"
+source = "manual(clum): BEGIN{system(...)} 可执行任意命令"
+
+[[command]]
+name = "mawk"
+effect = "ask"
+source = "manual(clum): system() 可执行任意命令"
+
+[[command]]
+name = "nawk"
+effect = "ask"
+source = "manual(clum): system() 可执行任意命令"
+
+[[command]]
+name = "zsh"
+effect = "ask"
+source = "manual(clum): shell 可执行任意命令"
+
+[[command]]
+name = "vim"
+effect = "ask"
+source = "manual(clum): :!cmd / :r !cmd 可逃逸到 shell"
+
+[[command]]
+name = "nvim"
+effect = "ask"
+source = "manual(clum): :!cmd / :r !cmd 可逃逸到 shell"
+
+[[command]]
+name = "emacs"
+effect = "ask"
+source = "manual(clum): shell-command 可执行任意命令"
+
+[[command]]
+name = "nano"
+effect = "ask"
+source = "manual(clum): ^R ^X / execute 可逃逸到 shell"
+
+[[command]]
+name = "less"
+effect = "ask"
+source = "manual(clum): !cmd 可逃逸到 shell"
+
+[[command]]
+name = "more"
+effect = "ask"
+source = "manual(clum): !cmd 可逃逸到 shell（部分实现）"
+
+[[command]]
+name = "man"
+effect = "ask"
+source = "manual(clum): 分页器可逃逸到 shell"
+
+[[command]]
+name = "screen"
+effect = "ask"
+source = "manual(clum): 可创建会话并执行任意命令"
+
+[[command]]
+name = "tmux"
+effect = "ask"
+source = "manual(clum): new-session/run-shell 可执行任意命令"
+
+[[command]]
+name = "watch"
+effect = "ask"
+source = "manual(clum): 周期性执行任意命令"
+
+[[command]]
+name = "nc"
+effect = "ask"
+source = "manual(clum): -e 可反弹 shell / 任意网络外联"
+
+[[command]]
+name = "ncat"
+effect = "ask"
+source = "manual(clum): -e/--exec 可反弹 shell"
+
+[[command]]
+name = "netcat"
+effect = "ask"
+source = "manual(clum): -e 可反弹 shell / 任意网络外联"
+
+[[command]]
+name = "socat"
+effect = "ask"
+source = "manual(clum): EXEC 可执行任意命令 / 任意网络外联"
+
+[[command]]
+name = "ssh"
+effect = "ask"
+source = "manual(clum): 可远程执行任意命令 / 建立隧道"
+
+[[command]]
+name = "tcpdump"
+effect = "ask"
+source = "manual(clum): 可抓取含凭据的流量"
+
+[[command]]
+name = "sqlite3"
+effect = "ask"
+source = "manual(clum): .shell/.system 可执行任意命令；SQL 可破坏数据"
+
+[[command]]
+name = "mysql"
+effect = "ask"
+source = "manual(clum): \\! 可执行 shell；SQL 可破坏数据"
+
+[[command]]
+name = "psql"
+effect = "ask"
+source = "manual(clum): \\! 可执行 shell；SQL 可破坏数据"
+
+[[command]]
+name = "redis-cli"
+effect = "ask"
+source = "manual(clum): 可执行破坏性命令 / Lua 脚本"
+
+[[command]]
+name = "mongo"
+effect = "ask"
+source = "manual(clum): 数据库客户端可执行任意查询/脚本"
+
+[[command]]
+name = "mongosh"
+effect = "ask"
+source = "manual(clum): 数据库客户端可执行任意查询/脚本"
+
+[[command]]
+name = "pip"
+effect = "ask"
+source = "manual(clum): 安装包可执行任意代码"
+
+[[command]]
+name = "pip3"
+effect = "ask"
+source = "manual(clum): 安装包可执行任意代码"
+
+[[command]]
+name = "npm"
+effect = "ask"
+source = "manual(clum): package scripts 可执行任意代码"
+
+[[command]]
+name = "npx"
+effect = "ask"
+source = "manual(clum): 可下载并执行任意包"
+
+[[command]]
+name = "make"
+effect = "ask"
+source = "manual(clum): Makefile 可执行任意命令"
+
+[[command]]
+name = "kill"
+effect = "ask"
+source = "manual(clum): 可终止任意进程（含 PID 1）"
+
+[[command]]
+name = "pkill"
+effect = "ask"
+source = "manual(clum): 可按模式批量终止进程"
+
+[[command]]
+name = "killall"
+effect = "ask"
+source = "manual(clum): 可按名字批量终止进程"
+
+[[command]]
+name = "crontab"
+effect = "ask"
+source = "manual(clum): -r 清空任务；编辑可植入持久化命令"
+
+[[command]]
+name = "sysctl"
+effect = "ask"
+source = "manual(clum): 可修改内核参数影响系统稳定性"
+
+[[command]]
+name = "mount"
+effect = "ask"
+source = "manual(clum): 可挂载/覆盖文件系统视图"
+
+# ─────────── 运维 CLI（仅只读/文件传输子命令）───────────
+# 自举缺口：这些 CLI 未收录时，agent 连 `clum-mcp approval list` / `clum-cli push`
+# 都会被判 unknown → ask，无法闭环。
+# 但**不能整体 allow**：
+#   · `clum-mcp approval approve/deny` 会把「agent 不得自我批准」击穿；
+#   · `clum-cli term/forward` 会打开交互终端/隧道，绕开命令闸门。
+# 因此只放行只读与文件传输子命令，其余保持 ask（人类在本地终端执行）。
+[[command]]
+name = "clum-mcp"
+effect = "ask"
+source = "manual(clum): 仅只读子命令放行；approve/deny 必须由人类执行"
+  [[command.subcommand]]
+  name = ["approval", "list"]
+  mode = "sequence"
+  effect = "allow"
+  [[command.subcommand]]
+  name = ["audit", "verify"]
+  mode = "sequence"
+  effect = "allow"
+  [[command.subcommand]]
+  name = ["audit", "stats"]
+  mode = "sequence"
+  effect = "allow"
+  [[command.subcommand]]
+  name = ["--help"]
+  effect = "allow"
+
+[[command]]
+name = "clum-cli"
+effect = "ask"
+source = "manual(clum): 仅只读/文件传输子命令放行；term/forward 不在放行之列"
+  [[command.subcommand]]
+  name = ["push", "pull", "list", "replay"]
+  effect = "allow"
+  [[command.subcommand]]
+  name = ["--help"]
+  effect = "allow"
+
+# ── 解释器 / 外联补齐（safe-chains 未覆盖或误标 allow，人工层兜底）──
+# generated.toml 本轮未重新生成（缺上游 checkout），这些命令必须在人工层
+# 与 FORCE_ASK / MUST_NOT_ALLOW 三处同步，防止重新融合后回退为 allow。
+[[command]]
+name = "ipython"
+effect = "ask"
+source = "manual(clum): 解释器可执行任意代码（-c / 脚本）"
+
+[[command]]
+name = "nu"
+effect = "ask"
+source = "manual(clum): Nushell 可执行任意命令"
+
+[[command]]
+name = "deno"
+effect = "ask"
+source = "manual(clum): deno eval/run 可执行任意代码"
+
+[[command]]
+name = "julia"
+effect = "ask"
+source = "manual(clum): Julia 可执行任意代码"
+
+[[command]]
+name = "erl"
+effect = "ask"
+source = "manual(clum): Erlang shell 可执行任意命令"
+
+[[command]]
+name = "groovy"
+effect = "ask"
+source = "manual(clum): Groovy 可执行任意代码"
+
+[[command]]
+name = "scala"
+effect = "ask"
+source = "manual(clum): Scala 可执行任意代码"
+
+[[command]]
+name = "sbcl"
+effect = "ask"
+source = "manual(clum): Common Lisp 可执行任意代码"
+
+[[command]]
+name = "swipl"
+effect = "ask"
+source = "manual(clum): Prolog 可执行任意命令"
+
+[[command]]
+name = "csi"
+effect = "ask"
+source = "manual(clum): Chicken Scheme 可执行任意代码"
+
+[[command]]
+name = "ts-node"
+effect = "ask"
+source = "manual(clum): TypeScript 运行时，可执行任意代码"
+
+[[command]]
+name = "nodemon"
+effect = "ask"
+source = "manual(clum): 运行任意脚本并监听重启"
+
+[[command]]
+name = "pry"
+effect = "ask"
+source = "manual(clum): Ruby 调试器可执行任意代码（-e / system）"
+
+[[command]]
+name = "java"
+effect = "ask"
+source = "manual(clum): java -jar / JShell 可执行任意代码"
+
+[[command]]
+name = "mix"
+effect = "ask"
+source = "manual(clum): Elixir 构建/任务可执行任意代码"
+
+[[command]]
+name = "phpunit"
+effect = "ask"
+source = "manual(clum): 运行测试代码即执行任意 PHP"
+
+[[command]]
+name = "luarocks"
+effect = "ask"
+source = "manual(clum): 包管理器可安装并执行任意代码"
+
+[[command]]
+name = "dc"
+effect = "ask"
+source = "manual(clum): dc 的 ! 可逃逸到 shell"
+
+[[command]]
+name = "mosh"
+effect = "ask"
+source = "manual(clum): 远程 shell 外联"
+
+[[command]]
+name = "autossh"
+effect = "ask"
+source = "manual(clum): 远程 shell 外联/隧道"
+
+# ─────────── 只读执行白名单（command:read）───────────
+# 默认 false 是 fail-closed；这里只标记确定不会写盘、不会执行子进程的命令。
+# 未列出的命令（find/xargs/tee/sed/awk/sort/sudo/解释器…）永远不是只读。
+
+[[command]]
+name = "ls"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "cat"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "head"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "tail"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "stat"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "file"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "wc"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "du"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "df"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "grep"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "rg"
+effect = "allow"
+read_only = true
+dangerous_flags = ["--pre"]
+escalate_to = "ask"
+source = "manual(clum): read-only whitelist; --pre executes an arbitrary command"
+
+[[command]]
+name = "cut"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "tr"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "uniq"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "jq"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "ps"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "free"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "uptime"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "ss"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "uname"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "id"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "whoami"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "pwd"
+effect = "allow"
+read_only = true
+source = "manual(clum): read-only whitelist"
+
+[[command]]
+name = "date"
+effect = "allow"
+read_only = true
+dangerous_flags = ["-s", "--set"]
+escalate_to = "ask"
+source = "manual(clum): read-only whitelist; -s/--set writes the clock"
+
+[[command]]
+name = "kubectl"
+effect = "ask"
+arity = 2
+source = "manual(clum): read-only subcommands; mutations stay ask"
+  [[command.subcommand]]
+  name = ["get", "describe", "logs", "explain", "version", "api-resources"]
+  effect = "allow"
+  read_only = true
+  [[command.subcommand]]
+  name = ["apply", "create", "edit", "patch", "scale", "rollout", "exec", "cp", "port-forward", "delete", "drain", "cordon", "taint", "replace"]
+  effect = "ask"
+
+[[command]]
+name = "git"
+effect = "ask"
+arity = 2
+source = "manual(clum): read-only subcommands; branch/remote can mutate"
+  [[command.subcommand]]
+  name = ["status", "log", "diff", "show"]
+  effect = "allow"
+  read_only = true
+  dangerous_flags = ["--output"]
+  [[command.subcommand]]
+  name = ["push", "reset", "clean", "rebase", "checkout", "branch", "remote"]
+  effect = "ask"
+  dangerous_flags = ["--force", "-f", "--hard"]
+

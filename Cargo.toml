@@ -30,6 +30,7 @@ quinn = "0.11"
 fastrand = "2"
 clap = "4"
 serde_norway = "0.9"
-rmcp = { version = "=3.0.0", features = ["server", "transport-streamable-http-server"] }
+rmcp = { version = "=3.0.0", features = ["server", "transport-streamable-http-server", "elicitation"] }
 axum = "0.8"
 shell-words = "1.1"
+parking_lot = "0.12"

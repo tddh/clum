@@ -17,6 +17,11 @@ use crate::registry::BridgeRegistry;
 const STREAM_UPLOAD: u8 = 0x02;
 const STREAM_DOWNLOAD: u8 = 0x03;
 
+/// 单个下载文件的声明大小上限。远端声明不可信：受损/恶意的 bridge 可借此
+/// 把 server 磁盘写满。单文件与目录两条路径共用同一上限（否则同一文件
+/// 「单发被拒、放进目录却能下」）。
+const MAX_DOWNLOAD_FILE_BYTES: u64 = 32 * 1024 * 1024 * 1024;
+
 /// 校验本地文件系统路径（server 侧）：拒绝 null byte 和路径穿越（`..`）。
 /// 与 bridge 侧 sanitize_path 规则一致，防止经 MCP 写入/读取任意路径。
 fn sanitize_local_path(raw: &str) -> Result<String> {
@@ -360,7 +365,11 @@ async fn read_single_file(
 ) -> Result<FileResult> {
     let mut size_buf = [0u8; 8];
     recv.read_exact(&mut size_buf).await?;
-    let file_size = u64::from_le_bytes(size_buf) as usize;
+    let file_size = u64::from_le_bytes(size_buf);
+    // 远端声明的大小不可信：防止恶意 bridge 把 server 磁盘写满。
+    if file_size > MAX_DOWNLOAD_FILE_BYTES {
+        bail!("file declares {file_size} bytes (max {MAX_DOWNLOAD_FILE_BYTES})");
+    }
 
     if let Some(parent) = Path::new(local_path).parent() {
         tokio::fs::create_dir_all(parent).await?;
@@ -372,7 +381,7 @@ async fn read_single_file(
     let mut hasher = Sha256::new();
     let mut buf = vec![0u8; COPY_BUF_SIZE];
     let mut received = 0u64;
-    let mut remaining = file_size as u64;
+    let mut remaining = file_size;
     while remaining > 0 {
         let to_read = std::cmp::min(buf.len() as u64, remaining) as usize;
         let n = recv.read(&mut buf[..to_read]).await?.unwrap_or(0);
@@ -386,16 +395,12 @@ async fn read_single_file(
         file.write_all(&buf[..n]).await?;
         received += n as u64;
         remaining -= n as u64;
-        progress
-            .report(received, file_size as u64, "downloading")
-            .await;
+        progress.report(received, file_size, "downloading").await;
     }
-    progress
-        .report(file_size as u64, file_size as u64, "done")
-        .await;
+    progress.report(file_size, file_size, "done").await;
     file.flush().await?;
 
-    if received != file_size as u64 {
+    if received != file_size {
         bail!(
             "truncated transfer: expected {} bytes, got {}",
             file_size,
@@ -408,7 +413,7 @@ async fn read_single_file(
     Ok(FileResult {
         path: local_path.to_string(),
         status: "downloaded".into(),
-        size: Some(file_size as u64),
+        size: Some(file_size),
         sha256: Some(hex::encode(hash)),
         error: None,
     })
@@ -420,19 +425,31 @@ async fn read_directory(
     progress: &mut crate::progress::ProgressReporter,
     limiter: Option<&BandwidthLimiter>,
 ) -> Result<Vec<FileResult>> {
+    // 远端声明的条目数不可信：受损/恶意的 bridge 可用 u32::MAX 触发巨量分配。
+    const MAX_DIR_ENTRIES: usize = 100_000;
+    // 单条相对路径上限（u16 技术上可达 64 KiB，但合法路径远小于此）。
+    const MAX_REL_PATH_LEN: usize = 4096;
+
     let mut count_buf = [0u8; 4];
     recv.read_exact(&mut count_buf).await?;
     let file_count = u32::from_le_bytes(count_buf) as usize;
+    if file_count > MAX_DIR_ENTRIES {
+        bail!("directory listing declares {file_count} entries (max {MAX_DIR_ENTRIES})");
+    }
 
     tokio::fs::create_dir_all(local_base)
         .await
         .with_context(|| format!("failed to create directory: {}", local_base))?;
 
-    let mut results = Vec::with_capacity(file_count);
+    // 不按远端声明值预分配：先给一个小的合理容量，按实际到达逐条增长。
+    let mut results = Vec::with_capacity(file_count.min(1024));
     for i in 0..file_count {
         let mut path_len_buf = [0u8; 2];
         recv.read_exact(&mut path_len_buf).await?;
         let path_len = u16::from_le_bytes(path_len_buf) as usize;
+        if path_len == 0 || path_len > MAX_REL_PATH_LEN {
+            bail!("invalid relative path length {path_len} (max {MAX_REL_PATH_LEN})");
+        }
         let mut path_buf = vec![0u8; path_len];
         recv.read_exact(&mut path_buf).await?;
         let rel_path = String::from_utf8_lossy(&path_buf).to_string();
@@ -447,7 +464,10 @@ async fn read_directory(
 
         let mut size_buf = [0u8; 8];
         recv.read_exact(&mut size_buf).await?;
-        let file_size = u64::from_le_bytes(size_buf) as usize;
+        let file_size = u64::from_le_bytes(size_buf);
+        if file_size > MAX_DOWNLOAD_FILE_BYTES {
+            bail!("file declares {file_size} bytes (max {MAX_DOWNLOAD_FILE_BYTES})");
+        }
 
         let local_path = format!("{}/{}", local_base, rel_path);
         if let Some(parent) = Path::new(&local_path).parent() {
@@ -459,7 +479,7 @@ async fn read_directory(
             .with_context(|| format!("failed to create: {}", local_path))?;
         let mut hasher = Sha256::new();
         let mut buf = vec![0u8; COPY_BUF_SIZE];
-        let mut remaining = file_size as u64;
+        let mut remaining = file_size;
         while remaining > 0 {
             let to_read = std::cmp::min(buf.len() as u64, remaining) as usize;
             let n = recv.read(&mut buf[..to_read]).await?.unwrap_or(0);
@@ -483,7 +503,7 @@ async fn read_directory(
         results.push(FileResult {
             path: rel_path,
             status: "downloaded".into(),
-            size: Some(file_size as u64),
+            size: Some(file_size),
             sha256: Some(hex::encode(hash)),
             error: None,
         });

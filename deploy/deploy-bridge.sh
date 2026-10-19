@@ -126,7 +126,9 @@ BRIDGE_TLS_CERT=/etc/clum/bridge.crt
 BRIDGE_TLS_KEY=/etc/clum/bridge.key
 "
     else
-        echo "WARNING: TLS certs not found for $HOST_IP, QUIC listener disabled"
+        echo "ERROR: TLS certs not found for $HOST_IP; direct-mode bridge would start" >&2
+        echo "       with a dead QUIC listener. Issue certs first (deploy/generate-certs.sh)." >&2
+        exit 1
     fi
 fi
 
@@ -153,8 +155,11 @@ ssh "$REMOTE" "sudo mv /tmp/rmux-bridge.service /etc/systemd/system/rmux-bridge.
 # 9. Cleanup old deployment artifacts
 ssh "$REMOTE" "sudo rm -f /usr/local/bin/rmux-bridge.new; sudo rm -rf /opt/yunying/" 2>/dev/null || true
 
-# 10. Reload and start
-ssh "$REMOTE" "sudo systemctl daemon-reload && sudo systemctl enable --now rmux-bridge"
+# 10. Reload and restart
+# `enable --now` does NOT restart an already-running unit. rmux-bridge loads
+# TLS certs once at startup, so a cert rotation (FORCE=1) or binary update
+# only takes effect after an explicit restart.
+ssh "$REMOTE" "sudo systemctl daemon-reload && sudo systemctl enable rmux-bridge && sudo systemctl restart rmux-bridge"
 
 echo ""
 echo "=== Deployment complete ==="

@@ -46,6 +46,8 @@ pub const CODE_PROTOCOL_ERROR: &str = "PROTOCOL_ERROR";
 pub const CODE_COMMAND_DENIED: &str = "COMMAND_DENIED";
 /// 命令挂起等待人工批准（ask 三态命中）
 pub const CODE_APPROVAL_REQUIRED: &str = "APPROVAL_REQUIRED";
+/// 审批凭证不可用（不存在 / 已被消费 / 指纹不符 / 跨 agent / 跨 scope / 已过期）
+pub const CODE_APPROVAL_INVALID: &str = "APPROVAL_INVALID";
 
 /// 按错误消息分类为稳定 error_code。匹配顺序即优先级：更具体的模式在前。
 ///
@@ -58,6 +60,10 @@ pub fn classify_error_message(msg: &str) -> &'static str {
     // ── 命令规则引擎 ──
     // 必须在宽泛的 RBAC/权限模式之前：deny/ask 消息含 "rule" 与权限语义，
     // 若排在 "not in your group" 之后会被抢走分类。
+    // "cannot be used" 比 "requires approval" 更具体，须先判。
+    if has("cannot be used") {
+        return CODE_APPROVAL_INVALID;
+    }
     if has("requires approval") {
         return CODE_APPROVAL_REQUIRED;
     }
@@ -394,6 +400,21 @@ mod tests {
         assert_eq!(
             classify_error_message("command requires approval (rule 'prod-write-approval')"),
             CODE_APPROVAL_REQUIRED
+        );
+    }
+
+    #[test]
+    fn classifies_approval_invalid() {
+        // 放行校验失败的消息含 "approval"，必须不被 APPROVAL_REQUIRED 抢走分类
+        assert_eq!(
+            classify_error_message(
+                "approval 'ap-1' cannot be used: command differs from the approved one"
+            ),
+            CODE_APPROVAL_INVALID
+        );
+        assert_eq!(
+            classify_error_message("approval 'ap-1' cannot be used: approval expired"),
+            CODE_APPROVAL_INVALID
         );
     }
 

@@ -107,6 +107,7 @@ graph LR
 | **Audit logging** | SQLite audit logs + bridge-side PTY recording (asciinema v2 content, encrypted at rest via X25519 + AES-256-GCM) + event log + push/periodic sync + `clum-cli replay` playback |
 | **Terminal state awareness** | `capture_pane`, `exec`, `wait_for_text`, `wait_stable`, `pane_info` return `terminal_state` (ready/running/editor/pager/password/confirm/repl/unknown) and cursor position, so AI agents know what the terminal is currently doing |
 | **Exec safety check** | `exec` refuses execution when terminal is not in `ready` state (e.g., inside vim, less, password prompt), returning `refused: true` with actionable guidance to prevent command injection; state-detection failures also refuse (fail-closed) |
+| **Command rule engine** | Three-state **`deny` / `ask` / `allow`** verdict before execution (`clum-command-kb`). Quote-aware normalization splits `&&`/`;`/`\|`/redirects/command-substitution and strips `sudo`/`env`/`timeout` wrappers; compound commands take the **strictest** verdict (`Effect` derives `Ord`, aggregated with `max()` — fail-closed by algebra, not by convention); unknown commands and parse failures fall back to `ask`. 1,607-entry knowledge base at command / subcommand / dangerous-flag granularity (short-option clusters included: `-x` catches `-xzf`), **runtime-overridable without recompiling**. Policy keys on tool × program × argv regex × **host group** × **caller group**. `ask` suspends into a server-side approval queue: a human runs `clum-mcp approval approve <id>`, then the agent replays the call with `approval_id` — **one-shot**, bound to the exact command + tool + host, consumed by a single atomic UPDATE. Approvals store only a `sha256:` fingerprint (never the plaintext command), with a credential-redacted summary for the human reviewer |
 
 ### AI Chat Panel Keybindings
 
@@ -223,6 +224,13 @@ clum-mcp agent revoke <name>    # Revoke a key
 # Group isolation: grouped keys can only access hosts in their group.
 # host_list/audit_query/recordings auto-filter; reload_config/host_set_meta blocked.
 
+# Role / capability policy (P0): default deny; existing keys migrate to legacy roles
+clum-mcp role list
+clum-mcp role grant operator --group dev --actions host:read,session:attach,command:exec
+clum-mcp role grant operator --group prod --actions command:exec --require-approval
+clum-mcp role bind --key agent-dev --role operator
+clum-mcp policy explain --key agent-dev --tool exec --host tf001
+
 # Bridge enrollment (dynamic registration, no hosts.yaml edit needed)
 clum-mcp bridge add <hostname> --tags <t1,t2> [--group <g>]
 clum-mcp bridge list
@@ -244,6 +252,8 @@ clum-mcp bridge join <hostname>   # Generate a new join token (offline recovery)
 - **Path traversal prevention**: File upload/download rejects paths containing `..`
 - **Tunnel target whitelist**: Optional `allowed_forward_targets` in `hosts.yaml` restricts port forwarding targets (glob patterns) — applies to hosts defined in `hosts.yaml`; dynamically-enrolled bridges without a matching entry have no whitelist (all targets allowed)
 - **Exec safety check**: `exec` refuses execution when terminal is not in `ready` state (prevents command injection into vim/less/password prompts); detection failures also refuse (fail-closed)
+- **Role/capability layer (P0)**: each API key is an independent principal, evaluated as `role → grant (resource selector × capability)` **before** the command rule engine. Default deny; existing keys migrate to legacy roles (behaviour unchanged); `admin` carries no approval authority; policy lives in the audit DB and every `role` mutation is sealed into the audit hash chain. Approvals prefer MCP elicitation (client-declared capability; 120s timeout falls back to `APPROVAL_REQUIRED`); `command:read` permits only commands explicitly marked read-only (whitelist, default deny, `sudo` is not read-only). CLI relays (`term`/`forward`/`push`/`pull`/`list`) are checked by purpose at connection establishment — cross-group or ungranted relays are rejected; `replay` uses HTTPS `/recordings` and is checked with the same host + `recording:read` rule
+- **Command rule engine**: every command-carrying tool call (`exec`, `shell_command`, `batch_exec`, `send_keys`, `send_text`, `batch_send_keys`, `broadcast_keys`, `respawn_pane`, `split_pane_with`, `cmd_escape`) is normalized and judged `deny`/`ask`/`allow` **server-side** — an AI client's own permission config can only be stricter, never looser. `deny` returns `COMMAND_DENIED`; `ask` returns `APPROVAL_REQUIRED` and requires a human with server access to approve. Verdicts are deterministic and replayable, and every denial/approval is sealed into the audit hash chain
 - **Sensitive input redaction**: Inputs sent while the terminal is in `password` state are auto-redacted in the audit log (`[REDACTED:N bytes]`, server-enforced, no opt-out); the `sensitive` flag on input tools forces redaction for tokens/2FA codes
 
 ## Audit
@@ -415,4 +425,5 @@ just release-linux  # cross-compile Linux x86_64 musl
 
 ## License
 
-MIT
+MIT. The command knowledge base embeds data from third-party projects; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for attribution and licenses.

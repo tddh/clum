@@ -137,7 +137,6 @@ pub(crate) async fn broadcast_keys(ctx: &ToolContext, args: Value) -> Result<Val
     let session_name = args["session_name"].as_str().unwrap_or("clum");
     let pane_ids = args["pane_ids"].as_array().cloned().unwrap_or_default();
     let keys = args["keys"].as_str().context("missing 'keys'")?;
-    let keys = unescape_keys(keys);
     let sensitive = args["sensitive"].as_bool().unwrap_or(false);
     let host = super::common::resolve_host_config(ctx, host_name).await?;
     let mut tls = connect_to_host(ctx, &host).await?;
@@ -147,7 +146,7 @@ pub(crate) async fn broadcast_keys(ctx: &ToolContext, args: Value) -> Result<Val
     let prompt_line = response["prompt_line"].as_str();
     let (detail, redacted) = input_audit_detail(
         &format!("{} panes: ", pane_ids.len()),
-        &keys,
+        keys,
         sensitive,
         pre_state,
         prompt_line,
