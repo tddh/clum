@@ -1,4 +1,6 @@
 schema_version = 1
+# LEGACY (2026-10): permissive 策略下 effect 分类不参与裁决。本文件当前的
+# 主要价值是 `read_only = true` 标注（供 command:read）和少量子命令语义。
 default_effect = "ask"
 
 # ─────────── 只读白名单（Gemini CLI isKnownSafeCommand / prodagent read-only）───────────

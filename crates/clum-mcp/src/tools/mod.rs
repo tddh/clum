@@ -49,7 +49,8 @@ pub struct ToolContext {
     pub rules: Arc<std::sync::RwLock<clum_command_kb::RuleSet>>,
     /// 规则文件路径（启动时解析；reload_config 时按此路径重载）
     pub rules_path: PathBuf,
-    pub approvals: Arc<crate::approvals::ApprovalStore>,
+    /// 命令裁决策略（permissive / strict）。`reload_config` 热更新。
+    pub command_policy: Arc<std::sync::RwLock<crate::server_config::CommandPolicy>>,
     /// Role-based policy snapshot (authorization-design.md P0).
     pub policy: Arc<crate::policy::PolicyStore>,
     /// Authenticated API-key principal. `None` means "no API-key auth"
@@ -93,7 +94,7 @@ impl Clone for ToolContext {
             command_kb_path: self.command_kb_path.clone(),
             rules: Arc::clone(&self.rules),
             rules_path: self.rules_path.clone(),
-            approvals: Arc::clone(&self.approvals),
+            command_policy: Arc::clone(&self.command_policy),
             policy: Arc::clone(&self.policy),
             principal_name: Arc::new(std::sync::Mutex::new(
                 self.principal_name
@@ -160,18 +161,6 @@ fn approval_scope_host(args: &Value) -> String {
     String::new()
 }
 
-/// 宽容解析 agent 传来的 `approval_id`。
-///
-/// OpenCode v2 默认 Code Mode，工具参数由模型写入 JS 调用，存在多带引号或空白的情况
-/// （参见 `exec.rs` 的 `unescape_keys` 同类兜底）。**解析宽容、校验严格**：
-/// 指纹 / agent / tool / host / TTL 全部必须精确匹配，任一不符即拒绝。
-fn sanitize_approval_id(raw: &str) -> String {
-    raw.trim()
-        .trim_matches(|c| c == '"' || c == '\'')
-        .trim()
-        .to_string()
-}
-
 /// 把「执行侧会解码」的参数在入口处解码一次，使**裁决与执行看到同一个字符串**。
 ///
 /// 历史缺陷：`send_keys` 族在执行时调用 `unescape_keys`（`\x0a` → 换行），
@@ -205,25 +194,6 @@ fn decision_suffix(decision: &Option<clum_command_kb::Decision>) -> String {
     match decision {
         Some(d) => format!(" segments={:?} hazards={:?}", d.commands, d.hazards),
         None => String::new(),
-    }
-}
-
-/// 把放行校验的失败原因翻译成 agent 可读的说明。
-fn consume_reason(out: &crate::approvals::ConsumeOutcome) -> String {
-    use crate::approvals::ConsumeOutcome as C;
-    match out {
-        C::Consumed(_) => "already consumed".to_string(),
-        C::NotFound => "approval id not found".to_string(),
-        C::AlreadyDecided(s) => format!(
-            "approval is '{}' — a one-shot authorization cannot be reused; re-run without approval_id to request a fresh one",
-            s.as_str()
-        ),
-        C::FingerprintMismatch => {
-            "command differs from the approved one (byte-exact match required)".to_string()
-        }
-        C::WrongAgent => "approval belongs to a different agent".to_string(),
-        C::ScopeMismatch => "tool or host differs from the approved scope".to_string(),
-        C::Expired => "approval expired before it was used".to_string(),
     }
 }
 
@@ -619,6 +589,21 @@ pub async fn execute_tool(
         );
     }
 
+    // Command policy.
+    //
+    // `permissive` (default) collapses every `Ask` to `Allow` here — after all
+    // Ask sources have converged (KB classification, parse-error/empty,
+    // structural hazards, and require_approval escalation). `Deny` is never
+    // touched. `strict` keeps the legacy three-state behaviour.
+    let command_policy = *ctx.command_policy.read().unwrap_or_else(|e| e.into_inner());
+    if command_policy == crate::server_config::CommandPolicy::Permissive {
+        if let Some(eval) = evaluation.as_mut() {
+            if matches!(eval.verdict, rules::Verdict::Ask { .. }) {
+                eval.verdict = rules::Verdict::Allow;
+            }
+        }
+    }
+
     if let Some(eval) = evaluation {
         let host = args
             .get("host")
@@ -682,233 +667,31 @@ pub async fn execute_tool(
                 ));
             }
             rules::Verdict::Ask { source, reason } => {
-                let agent_name = ctx
-                    .agent_name
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .clone();
-                let caller_group = ctx
-                    .caller_group
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .clone();
-
-                // Elicitation is the preferred approval channel (P1). Accept
-                // falls through to execution; Decline/Cancel deny; an
-                // unsupported client or timeout falls back to the CLI flow.
-                let mut elicitation_accepted = false;
-                if progress.supports_elicitation() {
-                    let message = format!(
-                        "clum requires approval\nhost: {}\ntool: {}\ncommand: {}\nrule: {}\nreason: {}",
-                        if approval_host.is_empty() {
-                            "(none)"
-                        } else {
-                            approval_host.as_str()
-                        },
-                        tool_name,
-                        eval.display,
-                        source,
-                        reason
-                    );
-                    match progress.elicit(message).await {
-                        Some(rmcp::model::ElicitationAction::Accept) => {
-                            audit_flagged(
-                                ctx,
-                                clum_core::types::AuditAction::ApprovalDecided,
-                                host,
-                                "",
-                                None,
-                                &format!(
-                                    "elicitation accepted rule={source} scope={approval_host} cmd={}",
-                                    eval.display
-                                ),
-                                false,
-                                None,
-                                true,
-                                0,
-                                None,
-                            )
-                            .await;
-                            elicitation_accepted = true;
-                        }
-                        Some(action) => {
-                            let why = match action {
-                                rmcp::model::ElicitationAction::Decline => "declined",
-                                rmcp::model::ElicitationAction::Cancel => "cancelled",
-                                _ => "rejected",
-                            };
-                            audit_flagged(
-                                ctx,
-                                clum_core::types::AuditAction::ApprovalDecided,
-                                host,
-                                "",
-                                None,
-                                &format!(
-                                    "elicitation {why} rule={source} scope={approval_host} cmd={}",
-                                    eval.display
-                                ),
-                                false,
-                                None,
-                                false,
-                                0,
-                                Some(why),
-                            )
-                            .await;
-                            return Ok(rules::deny_payload(
-                                "approval:elicitation",
-                                &format!("user {why} the approval request"),
-                                &agent_visible_command(&eval),
-                            ));
-                        }
-                        None => {
-                            // Unsupported client or timeout: use the existing
-                            // APPROVAL_REQUIRED + server CLI flow (fail-closed).
-                        }
-                    }
-                }
-
-                // ① 带 approval_id → 尝试一次性消费放行
-                if elicitation_accepted {
-                    // Accepted interactively: skip the pending-approval flow.
-                } else if let Some(raw_id) = args.get("approval_id").and_then(|v| v.as_str()) {
-                    let approval_id = sanitize_approval_id(raw_id);
-                    match ctx
-                        .approvals
-                        .consume(
-                            &approval_id,
-                            &agent_name,
-                            tool_name,
-                            &approval_host,
-                            &eval.fingerprint,
-                        )
-                        .await
-                    {
-                        Ok(crate::approvals::ConsumeOutcome::Consumed(a)) => {
-                            audit_flagged(
-                                ctx,
-                                clum_core::types::AuditAction::ApprovalDecided,
-                                host,
-                                "",
-                                None,
-                                &format!(
-                                    "consumed approval={} approver={:?} rule={source} scope={approval_host} cmd={}",
-                                    a.approval_id, a.approver, eval.display
-                                ),
-                                false,
-                                None,
-                                true,
-                                0,
-                                None,
-                            )
-                            .await;
-                            // 放行：不 return，落到下方执行层继续
-                        }
-                        Ok(other) => {
-                            let why = consume_reason(&other);
-                            audit_flagged(
-                                ctx,
-                                clum_core::types::AuditAction::ApprovalRequested,
-                                host,
-                                "",
-                                None,
-                                &format!(
-                                    "approval rejected: {why} approval={approval_id} rule={source} scope={approval_host} cmd={}",
-                                    eval.display
-                                ),
-                                false,
-                                None,
-                                false,
-                                0,
-                                Some(&why),
-                            )
-                            .await;
-                            return Ok(rules::approval_invalid_payload(&why, &approval_id));
-                        }
-                        Err(e) => {
-                            // fail-closed：审批存储故障时不得放行，且必须留痕。
-                            let why = format!("approval store error: {e}");
-                            audit_flagged(
-                                ctx,
-                                clum_core::types::AuditAction::ApprovalRequested,
-                                host,
-                                "",
-                                None,
-                                &format!(
-                                    "approval rejected: {why} approval={approval_id} rule={source} scope={approval_host} cmd={}",
-                                    eval.display
-                                ),
-                                false,
-                                None,
-                                false,
-                                0,
-                                Some(&why),
-                            )
-                            .await;
-                            return Ok(rules::approval_invalid_payload(&why, &approval_id));
-                        }
-                    }
-                } else {
-                    // ② 无 approval_id → 幂等复用已有 pending，否则新建。
-                    // 缺了幂等，agent 每次重试都会新增一条 pending，审批表被同一命令撑满。
-                    let existing = ctx
-                        .approvals
-                        .find_pending_by_fingerprint(
-                            &agent_name,
-                            tool_name,
-                            &approval_host,
-                            &eval.fingerprint,
-                        )
-                        .await?;
-                    let (approval_id, expires_at) = match existing {
-                        Some(a) => (a.approval_id, a.expires_at.to_rfc3339()),
-                        None => {
-                            let ttl = ctx.approvals.default_ttl_secs();
-                            let id = ctx
-                                .approvals
-                                .create(crate::approvals::NewApproval {
-                                    agent_name,
-                                    caller_group,
-                                    tool_name: tool_name.to_string(),
-                                    host_name: approval_host.clone(),
-                                    // 只存指纹：命令原文（可能含密钥）不落盘
-                                    command: eval.fingerprint.clone(),
-                                    rule_id: source.clone(),
-                                    // 人类审批要看得到「这是什么命令」，故把脱敏摘要并入 reason
-                                    reason: format!("{reason} | {tool_name} → {}", eval.display),
-                                    ttl_secs: ttl,
-                                })
-                                .await?;
-                            let exp =
-                                (chrono::Utc::now() + chrono::Duration::seconds(ttl)).to_rfc3339();
-                            (id, exp)
-                        }
-                    };
-                    audit_flagged(
-                        ctx,
-                        clum_core::types::AuditAction::ApprovalRequested,
-                        host,
-                        "",
-                        None,
-                        &format!(
-                            "ask approval={approval_id} rule={source} scope={approval_host} cmd={}{}",
-                            eval.display,
-                            decision_suffix(&eval.decision)
-                        ),
-                        false,
-                        None,
-                        true,
-                        0,
-                        None,
-                    )
-                    .await;
-                    return Ok(rules::ask_payload(
-                        &approval_id,
-                        source,
-                        reason,
-                        &agent_visible_command(&eval),
-                        &expires_at,
-                    ));
-                }
+                // The approval channel was removed. In strict mode an `ask`
+                // verdict fails closed; permissive mode never reaches this arm
+                // because Ask is collapsed to Allow before the match.
+                audit_flagged(
+                    ctx,
+                    clum_core::types::AuditAction::CommandDenied,
+                    host,
+                    "",
+                    None,
+                    &format!(
+                        "deny source={source} scope={approval_host} cmd={} why={reason}",
+                        eval.display
+                    ),
+                    false,
+                    None,
+                    false,
+                    0,
+                    Some(reason),
+                )
+                .await;
+                return Ok(rules::deny_payload(
+                    source,
+                    reason,
+                    &agent_visible_command(&eval),
+                ));
             }
         }
     }
@@ -1311,10 +1094,9 @@ mod tests {
             command_kb_path: tmp.path().join("command-kb.toml"),
             rules: Arc::new(std::sync::RwLock::new(clum_command_kb::RuleSet::default())),
             rules_path: tmp.path().join("command-rules.toml"),
-            approvals: Arc::new(
-                crate::approvals::ApprovalStore::open(&tmp.path().join("approvals.db"))
-                    .expect("open approval store"),
-            ),
+            command_policy: Arc::new(std::sync::RwLock::new(
+                crate::server_config::CommandPolicy::Strict,
+            )),
             policy: crate::policy::PolicyStore::open(&tmp.path().join("audit.db"))
                 .expect("open policy store"),
             principal_name: Arc::new(std::sync::Mutex::new(Some("test".to_string()))),
@@ -1721,9 +1503,9 @@ action = "allow"
         }
     }
 
-    /// 回归：`cmd_escape` 的参数是 rmux CLI，未收录子命令必须 fail-closed 到 ask。
+    /// 回归：`cmd_escape` 的参数是 rmux CLI，未收录子命令必须 fail-closed。
     #[tokio::test]
-    async fn cmd_escape_is_fail_closed_to_approval() {
+    async fn cmd_escape_is_fail_closed_to_deny() {
         let (ctx, _tmp) = grouped_ctx("dev");
         let mut progress = progress();
         let value = execute_tool(
@@ -1735,8 +1517,8 @@ action = "allow"
         .await
         .expect("must be a business envelope");
         assert_eq!(
-            value["error_code"], "APPROVAL_REQUIRED",
-            "unclassified rmux subcommand must ask, got: {value}"
+            value["error_code"], "COMMAND_DENIED",
+            "unclassified rmux subcommand must fail closed, got: {value}"
         );
     }
 
@@ -1760,9 +1542,9 @@ action = "allow"
     }
 
     /// 回归：行编辑控制字符（Ctrl-U/Ctrl-W/ESC）在 TTY 上改变实际执行，
-    /// 至少 Ask（normalize 会记 ControlChar hazard）。
+    /// strict 模式下必须直接拒绝（normalize 会记 ControlChar hazard）。
     #[tokio::test]
-    async fn tty_control_payload_requires_approval() {
+    async fn tty_control_payload_is_denied() {
         let (ctx, _tmp) = grouped_ctx("dev");
         for keys in ["cat\x15rm -rf /", "cat\x17rm -rf /", "cat\x1b[A"] {
             let mut progress = progress();
@@ -1775,16 +1557,15 @@ action = "allow"
             .await
             .expect("must be a business envelope");
             assert_eq!(
-                value["error_code"], "APPROVAL_REQUIRED",
-                "control characters must escalate: {keys:?} -> {value}"
+                value["error_code"], "COMMAND_DENIED",
+                "control characters must fail closed: {keys:?} -> {value}"
             );
         }
     }
 
-    /// 回归：bare respawn 会重跑 pane 既有进程规格（可能来自一次已批准的命令），
-    /// 必须 fail-closed 到审批，否则一次性授权可被无限重放。
+    /// 回归：bare respawn 会重跑 pane 既有进程规格，必须 fail-closed。
     #[tokio::test]
-    async fn bare_respawn_requires_approval() {
+    async fn bare_respawn_is_denied() {
         let (ctx, _tmp) = grouped_ctx("dev");
         let mut progress = progress();
         let value = execute_tool(
@@ -1796,30 +1577,68 @@ action = "allow"
         .await
         .expect("must be a business envelope");
         assert_eq!(
-            value["error_code"], "APPROVAL_REQUIRED",
+            value["error_code"], "COMMAND_DENIED",
             "bare respawn must not bypass adjudication, got: {value}"
         );
     }
 
+    /// permissive: KB 的 ask 不再产生审批/拒绝。测试环境无 bridge，
+    /// 执行阶段连接失败即说明已越过裁决闸门。
     #[tokio::test]
-    async fn asks_unknown_command_and_records_pending_approval() {
-        let (ctx, _tmp) = grouped_ctx("dev");
-        let mut progress = progress();
+    async fn permissive_collapses_ask_to_allow() {
+        // Use a real grant so a capability-layer rejection cannot masquerade as
+        // "past the adjudication gate".
+        let (ctx, _tmp) =
+            ctx_with_command_capability(&[crate::capability::Capability::CommandExec], None).await;
+        *ctx.command_policy.write().unwrap() = crate::server_config::CommandPolicy::Permissive;
+
+        let result = execute_tool(
+            &ctx,
+            "exec",
+            json!({ "host": "devhost", "command": "mkdir /tmp/a-omp01" }),
+            &mut progress(),
+        )
+        .await;
+        match result {
+            Ok(v) => assert!(
+                v["error_code"] != json!("APPROVAL_REQUIRED")
+                    && v["error_code"] != json!("COMMAND_DENIED")
+                    && v["error_code"] != json!("FORBIDDEN"),
+                "permissive must not gate a normal write: {v}"
+            ),
+            Err(_) => { /* no bridge in tests: execution was reached */ }
+        }
+    }
+
+    /// permissive 不绕过显式 deny。
+    #[tokio::test]
+    async fn permissive_still_denies_destructive_rule() {
+        let (ctx, _tmp) =
+            ctx_with_command_capability(&[crate::capability::Capability::CommandExec], None).await;
+        *ctx.command_policy.write().unwrap() = crate::server_config::CommandPolicy::Permissive;
+        *ctx.rules.write().unwrap() = clum_command_kb::RuleSet::from_toml_str(
+            r#"schema_version = 1
+[[rule]]
+id = "deny-rm-root"
+priority = 10
+tool = ["exec"]
+program = ["rm"]
+argv_regex = '^rm\s+(-[a-zA-Z]+\s+)*(/|/\*|/etc|/usr|/var)(/|\s|$)'
+action = "deny"
+reason = "destructive"
+"#,
+        )
+        .expect("rule set parses");
+
         let value = execute_tool(
             &ctx,
             "exec",
-            json!({ "host": "devhost", "command": "systemctl restart nginx" }),
-            &mut progress,
+            json!({ "host": "devhost", "command": "rm -rf /etc" }),
+            &mut progress(),
         )
         .await
-        .expect("ask must be a business error envelope, not a hard Err");
-        assert_eq!(value["ok"], json!(false));
-        assert_eq!(value["error_code"], json!("APPROVAL_REQUIRED"));
-        assert!(
-            value["approval_id"].as_str().is_some(),
-            "ask payload must carry an approval_id"
-        );
-        assert_eq!(ctx.approvals.list_pending().await.unwrap().len(), 1);
+        .expect("deny is a business envelope");
+        assert_eq!(value["error_code"], json!("COMMAND_DENIED"));
     }
 
     /// D-2：`tool` 维度规则必须能命中「无命令字符串」的工具。
@@ -1913,99 +1732,6 @@ reason = "prod 禁读敏感文件"
             batch["error_code"],
             json!("COMMAND_DENIED"),
             "batch_exec 不得绕过 host_group 规则"
-        );
-    }
-
-    /// Review Focus 1：agent 不带 approval_id 重试时必须**复用**同一 pending 项，
-    /// 否则每次重试都新建一条，审批表被同一命令的重复项撑满。
-    #[tokio::test]
-    async fn ask_is_idempotent_per_command() {
-        let (ctx, _tmp) = grouped_ctx("dev");
-        let args = json!({ "host": "devhost", "command": "systemctl restart nginx" });
-
-        let first = execute_tool(&ctx, "exec", args.clone(), &mut progress())
-            .await
-            .unwrap();
-        let second = execute_tool(&ctx, "exec", args.clone(), &mut progress())
-            .await
-            .unwrap();
-
-        assert_eq!(first["error_code"], json!("APPROVAL_REQUIRED"));
-        assert_eq!(second["error_code"], json!("APPROVAL_REQUIRED"));
-        assert_eq!(
-            first["approval_id"], second["approval_id"],
-            "同一命令重复 ask 必须复用同一 approval_id"
-        );
-        assert_eq!(
-            ctx.approvals.list_pending().await.unwrap().len(),
-            1,
-            "不得为同一命令堆积多条 pending"
-        );
-    }
-
-    /// 放行路径闭环：人工批准后带 approval_id 重试 → 消费成功、状态置 consumed；
-    /// 批准后**改命令**再重试 → 指纹不符，必须 APPROVAL_INVALID（防"批 A 执行 B"）。
-    #[tokio::test]
-    async fn approved_command_is_consumed_and_stale_command_rejected() {
-        let (ctx, _tmp) = grouped_ctx("dev");
-        let cmd = "systemctl restart nginx";
-
-        let ask = execute_tool(
-            &ctx,
-            "exec",
-            json!({ "host": "devhost", "command": cmd }),
-            &mut progress(),
-        )
-        .await
-        .unwrap();
-        let id = ask["approval_id"]
-            .as_str()
-            .expect("approval_id")
-            .to_string();
-
-        // 人工批准（服务端 CLI 路径）
-        ctx.approvals
-            .decide(&id, "human:alice", true)
-            .await
-            .unwrap();
-
-        // 带 approval_id 重试 → 裁决被放行，因此不再是 APPROVAL_REQUIRED。
-        // 测试环境没有 bridge，执行阶段会连接失败，这恰好证明已通过裁决闸门。
-        let retry = execute_tool(
-            &ctx,
-            "exec",
-            json!({ "host": "devhost", "command": cmd, "approval_id": id }),
-            &mut progress(),
-        )
-        .await;
-        match retry {
-            Ok(v) => assert_ne!(
-                v["error_code"],
-                json!("APPROVAL_REQUIRED"),
-                "已批准的命令不得再次要求审批"
-            ),
-            Err(_) => { /* 连接失败同样说明已越过裁决闸门 */ }
-        }
-        let after = ctx.approvals.get(&id).await.unwrap().unwrap();
-        assert_eq!(
-            after.status,
-            crate::approvals::ApprovalStatus::Consumed,
-            "放行后必须置为 consumed（一次性授权）"
-        );
-
-        // 批准后换一条命令、复用同一 approval_id → 必须拒绝
-        let stale = execute_tool(
-            &ctx,
-            "exec",
-            json!({ "host": "devhost", "command": "systemctl stop nginx", "approval_id": id }),
-            &mut progress(),
-        )
-        .await
-        .unwrap();
-        assert_eq!(
-            stale["error_code"],
-            json!("APPROVAL_INVALID"),
-            "改命令复用批准必须被拒（防偷渡）"
         );
     }
 }

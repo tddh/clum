@@ -159,7 +159,6 @@ pub fn tools_definition() -> Value {
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "approval_id": { "type": "string", "description": "Retry token for the command rule engine. ONLY set this when re-issuing a call that returned error_code APPROVAL_REQUIRED - pass back that response's approval_id verbatim. Approvals are one-shot and bound to the exact command, tool and host scope; a changed command or a reused id returns APPROVAL_INVALID. Never guess or fabricate this value." },
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
@@ -211,7 +210,6 @@ pub fn tools_definition() -> Value {
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "approval_id": { "type": "string", "description": "Retry token for the command rule engine. ONLY set this when re-issuing a call that returned error_code APPROVAL_REQUIRED - pass back that response's approval_id verbatim. Approvals are one-shot and bound to the exact command, tool and host scope; a changed command or a reused id returns APPROVAL_INVALID. Never guess or fabricate this value." },
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
@@ -226,7 +224,6 @@ pub fn tools_definition() -> Value {
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "approval_id": { "type": "string", "description": "Retry token for the command rule engine. ONLY set this when re-issuing a call that returned error_code APPROVAL_REQUIRED - pass back that response's approval_id verbatim. Approvals are one-shot and bound to the exact command, tool and host scope; a changed command or a reused id returns APPROVAL_INVALID. Never guess or fabricate this value." },
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
@@ -318,7 +315,6 @@ pub fn tools_definition() -> Value {
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "approval_id": { "type": "string", "description": "Retry token for the command rule engine. ONLY set this when re-issuing a call that returned error_code APPROVAL_REQUIRED - pass back that response's approval_id verbatim. Approvals are one-shot and bound to the exact command, tool and host scope; a changed command or a reused id returns APPROVAL_INVALID. Never guess or fabricate this value." },
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
@@ -365,7 +361,6 @@ pub fn tools_definition() -> Value {
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "approval_id": { "type": "string", "description": "Retry token for the command rule engine. ONLY set this when re-issuing a call that returned error_code APPROVAL_REQUIRED - pass back that response's approval_id verbatim. Approvals are one-shot and bound to the exact command, tool and host scope; a changed command or a reused id returns APPROVAL_INVALID. Never guess or fabricate this value." },
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0 (optional, auto-detects if omitted)" },
@@ -409,7 +404,6 @@ pub fn tools_definition() -> Value {
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "approval_id": { "type": "string", "description": "Retry token for the command rule engine. ONLY set this when re-issuing a call that returned error_code APPROVAL_REQUIRED - pass back that response's approval_id verbatim. Approvals are one-shot and bound to the exact command, tool and host scope; a changed command or a reused id returns APPROVAL_INVALID. Never guess or fabricate this value." },
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_ids": { "type": "array", "items": { "type": "string" }, "description": "Target pane IDs (e.g., ['%0', '%1']). If omitted, broadcasts to all panes in the window." },
@@ -425,7 +419,6 @@ pub fn tools_definition() -> Value {
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "approval_id": { "type": "string", "description": "Retry token for the command rule engine. ONLY set this when re-issuing a call that returned error_code APPROVAL_REQUIRED - pass back that response's approval_id verbatim. Approvals are one-shot and bound to the exact command, tool and host scope; a changed command or a reused id returns APPROVAL_INVALID. Never guess or fabricate this value." },
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "args": { "type": "array", "items": { "type": "string" }, "description": "rmux CLI arguments (e.g., ['list-sessions'], ['display-message', '-p', '#{pane_id}'])" }
                     },
@@ -584,7 +577,6 @@ pub fn tools_definition() -> Value {
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "approval_id": { "type": "string", "description": "Retry token for the command rule engine. ONLY set this when re-issuing a call that returned error_code APPROVAL_REQUIRED - pass back that response's approval_id verbatim. Approvals are one-shot and bound to the exact command, tool and host scope; a changed command or a reused id returns APPROVAL_INVALID. Never guess or fabricate this value." },
                         "hosts": { "type": "array", "items": { "type": "string" }, "description": "Hostname list, e.g. [\"tf01\", \"dns-backup\"]" },
                         "command": { "type": "string", "description": "Command to run on each host" },
                         "timeout_ms": { "type": "number", "description": "Per-host timeout in ms (default: 600000 = 10min)", "default": 600000 },
@@ -630,7 +622,6 @@ pub fn tools_definition() -> Value {
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "approval_id": { "type": "string", "description": "Retry token for the command rule engine. ONLY set this when re-issuing a call that returned error_code APPROVAL_REQUIRED - pass back that response's approval_id verbatim. Approvals are one-shot and bound to the exact command, tool and host scope; a changed command or a reused id returns APPROVAL_INVALID. Never guess or fabricate this value." },
                         "hosts": { "type": "array", "items": { "type": "string" }, "description": "Hostname list, e.g. [\"tf01\", \"dns-backup\"]" },
                         "keys": { "type": "string", "description": "Key sequence to send (supports \\n, \\t, \\x03, \\xNN, etc.)" },
                         "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
@@ -764,7 +755,6 @@ pub fn tools_definition() -> Value {
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "approval_id": { "type": "string", "description": "Retry token for the command rule engine. ONLY set this when re-issuing a call that returned error_code APPROVAL_REQUIRED - pass back that response's approval_id verbatim. Approvals are one-shot and bound to the exact command, tool and host scope; a changed command or a reused id returns APPROVAL_INVALID. Never guess or fabricate this value." },
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Pane ID, e.g. %0" },
@@ -791,7 +781,6 @@ pub fn tools_definition() -> Value {
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "approval_id": { "type": "string", "description": "Retry token for the command rule engine. ONLY set this when re-issuing a call that returned error_code APPROVAL_REQUIRED - pass back that response's approval_id verbatim. Approvals are one-shot and bound to the exact command, tool and host scope; a changed command or a reused id returns APPROVAL_INVALID. Never guess or fabricate this value." },
                         "host": { "type": "string", "description": "Hostname, e.g. tf01" },
                         "session_name": { "type": "string", "description": "Session name, e.g. clum (default: clum)", "default": "clum" },
                         "pane_id": { "type": "string", "description": "Source pane ID to split, e.g. %0 (optional, auto-detects if omitted)" },

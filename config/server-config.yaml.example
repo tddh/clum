@@ -3,7 +3,7 @@
 #
 # Most values can be overridden by CLI args (e.g. --listen, --ca-cert).
 # Exceptions with no CLI override: server_addr, token_ttl_hours,
-# recording_keys_dir, approval_ttl_secs, and the whole file_transfer block.
+# recording_keys_dir, command_policy, and the whole file_transfer block.
 
 # ─── Network ───
 listen: "0.0.0.0:9788"
@@ -18,6 +18,12 @@ ca_cert: "/etc/clum/ca.crt"
 
 # ─── Host registry ───
 hosts_file: "/etc/clum/hosts.yaml"
+
+# ─── Command policy ───
+# permissive (default): unknown commands run; only explicit deny rules block
+# (see config/command-rules.toml). No human approval channel.
+# strict: legacy three-state semantics; `ask` fails closed (deny).
+command_policy: permissive
 
 # ─── Storage ───
 audit_db: "/root/.clum/audit.db"
@@ -39,11 +45,6 @@ recordings_max_size_mb: 5000
 
 # ─── Token settings ───
 token_ttl_hours: 24
-
-# ─── Command rule engine ───
-# How long an `ask` verdict waits for human approval (seconds). After the TTL
-# the approval can no longer be consumed. Default: 900 (15 minutes).
-# approval_ttl_secs: 900
 
 # ─── File transfer bandwidth limits ───
 # Default per-stream limit is 0 (unlimited). CUBIC congestion control backs off

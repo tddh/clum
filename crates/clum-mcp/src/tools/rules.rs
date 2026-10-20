@@ -90,7 +90,8 @@ pub(crate) enum Verdict {
 /// 一次工具调用的裁决结果（多主机场景已按最严聚合）。
 pub(crate) struct CallEvaluation {
     pub verdict: Verdict,
-    /// 审批绑定指纹（`sha256:…`）。审批表只存指纹，命令原文不落盘。
+    /// 调用指纹（`sha256:…`）。审批运行时已移除，保留字段供策略审计/未来复用。
+    #[allow(dead_code)]
     pub fingerprint: String,
     /// 已脱敏的可读摘要（审计 detail 与审批列表展示用）
     pub display: String,
@@ -331,49 +332,6 @@ pub(crate) fn redact_command_for_display(cmd: &str) -> String {
     out
 }
 
-/// ask 的返回 payload（含 approval_id，人工凭此放行）
-pub(crate) fn ask_payload(
-    approval_id: &str,
-    source: &str,
-    reason: &str,
-    command: &str,
-    expires_at: &str,
-) -> Value {
-    json!({
-        "ok": false,
-        "error": format!("command requires approval (rule '{source}')"),
-        "error_code": "APPROVAL_REQUIRED",
-        "recovery_hint": format!(
-            "approval id {approval_id} expires at {expires_at}; a human with server access must run: clum-mcp approval approve {approval_id}"
-        ),
-        "retryable": false,
-        "approval_id": approval_id,
-        "rule_id": source,
-        "reason": reason,
-        "expires_at": expires_at,
-        "command": command,
-    })
-}
-
-/// approval_id 校验失败的返回 payload。
-///
-/// 一律拒绝、`retryable: false`：放行校验的任何一环不通过都不得降级为执行。
-/// 审批是**一次性**授权，被消费或校验失败后必须重新申请。
-pub(crate) fn approval_invalid_payload(reason: &str, approval_id: &str) -> Value {
-    json!({
-        "ok": false,
-        "error": format!("approval '{approval_id}' cannot be used: {reason}"),
-        "error_code": "APPROVAL_INVALID",
-        "recovery_hint": "the approval was NOT consumed by this attempt unless stated otherwise; \
-                         re-run without approval_id to request a fresh one. The command, tool and \
-                         host must be byte-identical to the approved request — approvals are \
-                         one-shot and bound to a single command on a single host.",
-        "retryable": false,
-        "approval_id": approval_id,
-        "reason": reason,
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -504,26 +462,6 @@ mod tests {
         assert_eq!(p["rule_id"], "rule:no-rm");
         assert_eq!(p["recovery_hint"], "destructive");
         assert!(p["error"].as_str().unwrap().contains("denied by rule"));
-    }
-
-    #[test]
-    fn ask_payload_carries_approval_metadata() {
-        let p = ask_payload(
-            "ap-1",
-            "rule:prod",
-            "prod change",
-            "systemctl stop nginx",
-            "eod",
-        );
-        assert_eq!(p["ok"], false);
-        assert_eq!(p["error_code"], "APPROVAL_REQUIRED");
-        assert_eq!(p["approval_id"], "ap-1");
-        assert_eq!(p["rule_id"], "rule:prod");
-        assert_eq!(p["expires_at"], "eod");
-        assert!(p["recovery_hint"]
-            .as_str()
-            .unwrap()
-            .contains("clum-mcp approval approve ap-1"));
     }
 
     // ── call_fingerprint ────────────────────────────────────────

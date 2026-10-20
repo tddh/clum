@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+- **命令策略默认改为 permissive**：新增 `command_policy: permissive | strict`（默认 `permissive`）。permissive 下所有 `ask` 一律视为放行，只保留 `deny`；`config/command-kb.toml` 设置 `default_effect = "allow"`，`config/command-rules.toml` 增加破坏性命令清单（rm 关键路径、dd 块设备、mkfs/分区、关机、清防火墙、杀 init、解释器/xargs 包装）。审批运行时整体移除：`clum-mcp approval` CLI、`approvals` 模块、MCP elicitation、`approval_id` 参数、`pending_approvals` 写入。`strict` 保留为「ask → deny」的 fail-closed 模式。审计枚举 `ApprovalRequested`/`ApprovalDecided` 与错误码 `APPROVAL_REQUIRED`/`APPROVAL_INVALID` 仅作历史兼容保留，不再产生。
+- **工具 schema 移除 `approval_id`**：10 个受裁决工具不再接受该参数；旧客户端传入会被忽略/拒绝，需升级。
+- **知识库降级为参考数据**：permissive 模式下生成的 1,600 条 safe-chains 分类不再影响裁决（`ask` 全部失效、`allow` 等于默认值）。文件保留并标记 legacy，待策略稳定后移除；`read_only` 标注继续服务 `command:read`。
+
 ### Added
 - **角色/能力授权模型（P0）**：API Key → principal → role → grant（资源选择器 × capability）判定，**先于**命令规则引擎；默认拒绝，旧 key 自动迁移为 `legacy-group:*` / `legacy-superadmin`（行为不变）。策略与审计同库（`principals`/`roles`/`grants`/`bindings` + `policy_meta` revision，≤1s 热加载）。CLI：`clum-mcp role list|grant|bind|unbind`、`clum-mcp policy explain`，变更写入审计哈希链。新增 `require_approval`（命中时即使规则 allow 也走 `APPROVAL_REQUIRED`）。CLI relay（term/forward/push/pull/list）在连接建立时按 purpose 判定 capability；`replay` 经 HTTPS `/recordings` 下载，按 host + `recording:read` + selector 判定。68 工具 capability 映射由守卫测试锁定。
 - **elicitation 审批、只读执行与通道收敛（P1/P2）**：HTTP MCP 模式下 `ask` 优先通过 rmcp elicitation 在同一次调用内弹框（Accept 继续、Decline/Cancel 拒绝、120s 超时回退 `APPROVAL_REQUIRED`；stdio 自动回退）。新增 `command:read` capability：`exec`/`batch_exec` 只有被 KB 显式标记 `read_only=true` 且最终 `Allow` 的命令可执行；默认拒绝，危险 flag/结构、`sudo`/`doas`、规则 allow 均不能提升为只读。HTTP `/recordings` 从「有组 key 403」改为按路径首段 host + `recording:read` + selector 判定，与 MCP 一致；`host_list`/`host_filter`/`audit_query`/`list_recordings`/`get_recording`/`search_recordings` 的结果过滤改用 role selector 并集（legacy 行为不变）。KB 合并去重后 1,607 条。

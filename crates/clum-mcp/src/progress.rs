@@ -4,8 +4,6 @@ use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
 const THROTTLE_INTERVAL: Duration = Duration::from_millis(200);
-/// Match the design default: a human has 120s to answer an elicitation.
-const ELICITATION_TIMEOUT: Duration = Duration::from_secs(120);
 
 enum ReporterBackend {
     Stdout(Arc<Mutex<tokio::io::Stdout>>),
@@ -68,52 +66,6 @@ impl ProgressReporter {
                 .checked_sub(THROTTLE_INTERVAL)
                 .unwrap_or_else(Instant::now),
             failed: false,
-        }
-    }
-
-    /// The MCP peer for this request, if the transport has one. stdio mode uses
-    /// `Stdout` and therefore falls back to the CLI approval flow.
-    pub fn peer(&self) -> Option<&rmcp::service::Peer<rmcp::RoleServer>> {
-        match &self.backend {
-            ReporterBackend::Peer(peer) => Some(peer),
-            ReporterBackend::Stdout(_) => None,
-        }
-    }
-
-    /// True when the client declared form/url elicitation during initialize.
-    pub fn supports_elicitation(&self) -> bool {
-        self.peer()
-            .and_then(|peer| peer.peer_info())
-            .and_then(|info| info.capabilities.elicitation.clone())
-            .is_some()
-    }
-
-    /// Ask the client to show an approval prompt. Returns `None` when the
-    /// client does not support elicitation or the request times out — callers
-    /// must fall back to `APPROVAL_REQUIRED` (fail-closed).
-    pub async fn elicit(&self, message: String) -> Option<rmcp::model::ElicitationAction> {
-        let peer = self.peer()?;
-        if !self.supports_elicitation() {
-            return None;
-        }
-        let schema = rmcp::model::ElicitationSchema::builder().build().ok()?;
-        let request = rmcp::model::ElicitRequest::new(
-            rmcp::model::ElicitRequestParams::FormElicitationParams {
-                meta: None,
-                message,
-                requested_schema: schema,
-            },
-        );
-        let response = tokio::time::timeout(
-            ELICITATION_TIMEOUT,
-            peer.send_request(rmcp::model::ServerRequest::ElicitRequest(request)),
-        )
-        .await
-        .ok()?
-        .ok()?;
-        match response {
-            rmcp::model::ClientResult::ElicitResult(result) => Some(result.action),
-            _ => None,
         }
     }
 

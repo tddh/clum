@@ -26,8 +26,8 @@ schema_version = 1
 # priority = 50
 # host_group = ["prod"]
 # argv_regex = "^(systemctl (restart|stop|disable)|docker (rm|stop|kill)|kubectl (delete|drain))"
-# action = "ask"
-# reason = "生产环境变更需人工批准（clum-mcp approval approve <id>）"
+# action = "deny"
+# reason = "生产环境变更默认拒绝（审批通道已移除）"
 
 # ───────── 示例：堵住无命令载荷的旁路通道（默认关闭）─────────
 # paste_buffer 的内容在远端缓冲区，拿不到命令文本，默认**不裁决**
@@ -54,3 +54,95 @@ schema_version = 1
 # tool = ["paste_buffer"]
 # action = "ask"
 # reason = "该通道内容无法静态检查，需人工确认"
+
+# ───────── 破坏性命令硬拦截（permissive 策略）─────────
+# 默认放行由 config/command-kb.toml 的 `default_effect = "allow"` 控制。
+# 这里只列「不可逆且没有日常正当用途」的命令。
+#
+# 定位：防误操作 / 防模型幻觉，**不是安全边界**。变量拼接、脚本文件、
+# base64、`bash -c "$X"` 等仍可绕过；真正的边界是 agent key 的权限范围
+# 和「agent 不以 root 运行」。审批通道已移除，命中 deny 直接拒绝。
+
+# 只读的磁盘查看命令先放行（priority 更小，先评估）。
+[[rule]]
+id = "allow-disk-inspect"
+priority = 5
+tool = ["exec", "batch_exec", "shell_command"]
+program = ["fdisk", "parted", "sfdisk", "blkid", "lsblk"]
+argv_regex = '^(\S+)\s+(-l|--list)\b'
+action = "allow"
+reason = "只读磁盘查看"
+
+# 递归删除系统关键路径。
+[[rule]]
+id = "deny-rm-critical-path"
+priority = 10
+tool = ["exec", "batch_exec", "shell_command", "send_keys", "send_text", "batch_send_keys", "broadcast_keys", "paste_buffer"]
+program = ["rm"]
+argv_regex = '^rm\s+(-[a-zA-Z]+\s+)*(/|/\*|/etc|/usr|/var|/boot|/root|/home|~|\$HOME)(/|\s|$)'
+action = "deny"
+reason = "禁止删除系统关键路径"
+
+# 写块设备 / 格式化 / 分区表操作。
+[[rule]]
+id = "deny-block-device"
+priority = 10
+tool = ["exec", "batch_exec", "shell_command", "send_keys", "send_text", "batch_send_keys", "broadcast_keys", "paste_buffer"]
+program = ["dd"]
+argv_regex = 'of=/dev/'
+action = "deny"
+reason = "禁止写裸块设备"
+
+[[rule]]
+id = "deny-format-and-partition"
+priority = 10
+tool = ["exec", "batch_exec", "shell_command", "send_keys", "send_text", "batch_send_keys", "broadcast_keys", "paste_buffer"]
+program = ["mkfs", "mkfs.ext4", "mkfs.xfs", "mkfs.btrfs", "mkfs.f2fs", "mkfs.vfat", "mkfs.ntfs", "wipefs", "fdisk", "sfdisk", "parted"]
+action = "deny"
+reason = "禁止格式化或改写分区表"
+
+# 关机 / 断网 / 杀 init。
+[[rule]]
+id = "deny-power"
+priority = 10
+tool = ["exec", "batch_exec", "shell_command", "send_keys", "send_text", "batch_send_keys", "broadcast_keys", "paste_buffer"]
+program = ["shutdown", "reboot", "halt", "poweroff"]
+action = "deny"
+reason = "禁止关机/重启"
+
+[[rule]]
+id = "deny-flush-firewall"
+priority = 10
+tool = ["exec", "batch_exec", "shell_command", "send_keys", "send_text", "batch_send_keys", "broadcast_keys", "paste_buffer"]
+program = ["iptables", "nft"]
+argv_regex = '(iptables.*\s-F|nft\s+flush)'
+action = "deny"
+reason = "禁止清空防火墙规则（可能导致失联）"
+
+[[rule]]
+id = "deny-kill-init"
+priority = 10
+tool = ["exec", "batch_exec", "shell_command", "send_keys", "send_text", "batch_send_keys", "broadcast_keys", "paste_buffer"]
+program = ["kill"]
+argv_regex = '^kill\s+(-[a-zA-Z]+\s+)*1\s*$'
+action = "deny"
+reason = "禁止向 PID 1 发送信号"
+
+# 解释器包装层：字符串匹配，只能挡住常见写法。
+[[rule]]
+id = "deny-interpreter-payload"
+priority = 20
+tool = ["exec", "batch_exec", "shell_command", "send_keys", "send_text", "batch_send_keys", "broadcast_keys", "paste_buffer"]
+program = ["bash", "sh", "zsh", "dash", "ksh", "eval", "python", "python3", "perl", "ruby", "node"]
+argv_regex = '(rm\s+-[rf]+|dd\s+of=/dev/|mkfs|wipefs|fdisk|parted|shutdown|reboot|iptables\s+-F|nft\s+flush|>+\s*/(etc|boot|usr|var))'
+action = "deny"
+reason = "解释器载荷包含破坏性命令（字符串匹配，非完备）"
+
+[[rule]]
+id = "deny-shell-via-xargs-find"
+priority = 20
+tool = ["exec", "batch_exec", "shell_command", "send_keys", "send_text", "batch_send_keys", "broadcast_keys", "paste_buffer"]
+program = ["xargs", "find"]
+argv_regex = '((sh|bash|zsh|dash)\s+-c|(-exec|-execdir)\s+(rm|sh|bash))'
+action = "deny"
+reason = "禁止通过 xargs/find 间接触发 shell"

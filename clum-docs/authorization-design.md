@@ -249,7 +249,26 @@ CLI relay 是字节流，无法逐命令裁决；在**连接建立时**按 `purp
 
 **审批语义**：relay 是无人在环的字节流，无法执行 `require_approval`。若命中的 grant 要求审批，relay 连接直接 fail-closed 拒绝，并提示改用 MCP 工具；不会静默绕过审批。
 
-边界（明确保留）：
+### 6.3 命令策略模式（2026-10）
+
+审批运行时已移除：`approvals` 模块、`clum-mcp approval` CLI、MCP elicitation、`approval_id` 参数、`pending_approvals` 写入。原因：主流 MCP 客户端（OMP、VS Code 等）未声明 elicitation 能力，唯一可行路径退化为「人登录 server 执行 CLI」，违背「agent 操作、人只对话」的产品前提。
+
+两种模式（`server-config.yaml: command_policy`，启动时读取；变更需重启，规则/KB 仍可 `reload_config` 热重载）：
+
+| 模式 | Ask 语义 | 人工确认 |
+|---|---|---|
+| `permissive`（默认） | 视为 Allow | 无 |
+| `strict` | 视为 Deny（fail-closed） | 无 |
+
+边界与已知局限：
+
+- 破坏性命令由 `config/command-rules.toml` 的显式 deny 规则拦截：rm 关键路径、dd 块设备、mkfs/分区、关机、清防火墙、杀 init、解释器/xargs 包装。
+- 命令字符串规则**不是安全边界**：变量拼接、脚本文件、base64、`bash -c "$X"` 可绕过；它只防误操作与模型幻觉。
+- 真正的边界：agent 的 API key 不含 `host:admin` / `config:reload` / `policy:write`；clum-mcp server 主机不在 agent 的 selector 内；agent 不以 root 运行（主机侧约束）。
+- 知识库 effect 分类在 permissive 下失效，保留 `read_only` 标注供 `command:read`。
+- 审计枚举 `ApprovalRequested` / `ApprovalDecided` 与错误码 `APPROVAL_REQUIRED` / `APPROVAL_INVALID` 仅作历史兼容，不再产生。
+
+**6.2 的边界（明确保留）：**
 
 - relay 内部不再做命令内容裁决（字节流不可解析）；
 - 审计记录 `purpose`、host、session、时长与结果；不记录逐命令；

@@ -1,3 +1,7 @@
+# LEGACY (2026-10): permissive 策略下本文件的 effect 分类不参与裁决
+# （ask 全部视为放行，allow 等于默认值）。保留仅为 strict 回退与参考，
+# 计划在策略稳定后移除。
+#
 # 本文件由 scripts/kb-fuse-safe-chains.py 生成，请勿手工编辑。
 # 数据来源: safe-chains (MIT OR Apache-2.0)
 # source-version: unknown

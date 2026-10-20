@@ -1,7 +1,5 @@
 #![recursion_limit = "512"]
 mod api_keys;
-mod approval_cli;
-mod approvals;
 mod audit;
 mod audit_cli;
 mod bridge_store;
@@ -157,9 +155,6 @@ async fn main() -> anyhow::Result<()> {
     if args.len() > 1 && args[1] == "audit" {
         return audit_cli::run_audit_command().await;
     }
-    if args.len() > 1 && args[1] == "approval" {
-        return approval_cli::run_approval_command().await;
-    }
     if args.len() > 1 && args[1] == "agent" {
         return run_agent_command(&args[2..]).await;
     }
@@ -297,10 +292,6 @@ async fn main() -> anyhow::Result<()> {
         .or_else(|| file_config.command_rules_file.as_ref().map(PathBuf::from))
         .unwrap_or_else(|| PathBuf::from("config/command-rules.toml"));
     let rules = Arc::new(std::sync::RwLock::new(load_rules(&rules_path)?));
-    let approvals = Arc::new(approvals::ApprovalStore::open_with_ttl(
-        &db_path,
-        file_config.approval_ttl_secs,
-    )?);
 
     // SIGHUP 与 reload_config 工具的重载行为一致：hosts / 命令知识库 / 命令规则一起
     // 重载，任一读取或解析失败保留旧值（绝不退化为空规则）。审计的 success 口径比
@@ -400,7 +391,7 @@ async fn main() -> anyhow::Result<()> {
         command_kb_path,
         rules,
         rules_path,
-        approvals,
+        command_policy: Arc::new(std::sync::RwLock::new(file_config.command_policy)),
         policy: Arc::clone(&policy),
         principal_name: Arc::new(std::sync::Mutex::new(None)),
     });

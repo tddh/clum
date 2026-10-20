@@ -12,6 +12,10 @@
 
 schema_version = 1
 
+# permissive 策略：未收录的命令默认放行。破坏性命令由 command-rules.toml 的
+# 显式 deny 规则拦截（见同目录文件）。strict 策略下把上一行改成 "ask"。
+default_effect = "allow"
+
 # ───────── 示例（取消注释即生效）─────────
 
 # 内部工具其实是只读查询 → 放行（避免每次都弹批准）

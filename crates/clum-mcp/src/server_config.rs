@@ -3,6 +3,21 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+/// 命令规则引擎的运行策略。
+///
+/// - `permissive`（默认）：`allow` / `deny` 两态。所有原本的 `ask` 一律视为
+///   放行，不创建审批、不要求 server CLI。破坏性命令由 `command-rules.toml`
+///   的显式 `deny` 规则拦截。
+/// - `strict`（legacy）：保留原三态语义。审批通道已移除，`ask` 直接拒绝
+///   （fail-closed），因此 strict 是「更严格」，不是「人工审批」。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CommandPolicy {
+    #[default]
+    Permissive,
+    Strict,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ServerConfig {
     #[serde(default = "default_listen")]
@@ -18,6 +33,11 @@ pub struct ServerConfig {
     pub audit_db: Option<String>,
     pub command_rules_file: Option<String>,
     pub command_kb_file: Option<String>,
+
+    /// 命令裁决策略。`permissive`（默认）只拦显式 deny；`strict` 把 ask 视为
+    /// 拒绝。审批通道已移除，两种模式都不需要人工批准。
+    #[serde(default)]
+    pub command_policy: CommandPolicy,
     pub static_dir: Option<String>,
     pub recordings_dir: Option<String>,
     pub recording_keys_dir: Option<String>,
@@ -45,10 +65,6 @@ pub struct ServerConfig {
 
     #[serde(default = "default_recordings_max_size_mb")]
     pub recordings_max_size_mb: u64,
-
-    /// 命令规则引擎的审批挂起时间（秒）。超时后不可再批准。
-    #[serde(default = "default_approval_ttl_secs")]
-    pub approval_ttl_secs: i64,
 
     #[serde(default)]
     pub file_transfer: FileTransferConfig,
@@ -130,10 +146,6 @@ fn default_audit_retention_days() -> u32 {
     90
 }
 
-fn default_approval_ttl_secs() -> i64 {
-    900
-}
-
 fn default_audit_max_size_mb() -> u64 {
     500
 }
@@ -168,6 +180,7 @@ impl Default for ServerConfig {
             audit_db: None,
             command_rules_file: None,
             command_kb_file: None,
+            command_policy: CommandPolicy::default(),
             static_dir: None,
             recordings_dir: None,
             recording_keys_dir: None,
@@ -179,7 +192,6 @@ impl Default for ServerConfig {
             audit_sync_interval_secs: default_audit_sync_interval_secs(),
             recordings_retention_days: default_recordings_retention_days(),
             recordings_max_size_mb: default_recordings_max_size_mb(),
-            approval_ttl_secs: default_approval_ttl_secs(),
             file_transfer: FileTransferConfig::default(),
         }
     }

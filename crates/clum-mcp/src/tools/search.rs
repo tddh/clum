@@ -632,9 +632,9 @@ mod tests {
             command_kb_path: std::path::PathBuf::from("/dev/null"),
             rules: Arc::new(std::sync::RwLock::new(clum_command_kb::RuleSet::default())),
             rules_path: std::path::PathBuf::from("/dev/null"),
-            approvals: Arc::new(
-                crate::approvals::ApprovalStore::open_in_memory().expect("open approval store"),
-            ),
+            command_policy: Arc::new(std::sync::RwLock::new(
+                crate::server_config::CommandPolicy::Strict,
+            )),
             policy: crate::policy::PolicyStore::open(&tmp.path().join("policy.db"))
                 .expect("open policy store"),
             recordings_dir: tmp.path().join("recordings"),

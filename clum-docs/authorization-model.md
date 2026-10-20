@@ -215,12 +215,10 @@ deploy:bridge, config:reload, policy:write, usage:read
      allow 且 read_only → 继续
      deny → 原 deny
      其余 → COMMAND_DENIED
-6. approval
-     ask 或 grant.require_approval
-     elicitation 优先（客户端声明能力时）
-     Accept → 同一次调用继续
-     Decline/Cancel → COMMAND_DENIED
-     不支持/超时 → APPROVAL_REQUIRED + approval_id
+6. command policy
+     permissive（默认）→ Ask 视为 Allow
+     strict → Ask 视为 Deny
+     （审批通道已于 2026-10 移除，见 authorization-design.md §6.3）
 7. execute + audit
 ```
 
@@ -289,7 +287,9 @@ KB 是**分类器**，不是安全边界：
 
 ## 9. 审批
 
-### 9.1 elicitation（已实施，HTTP MCP 模式）
+### 9.1 elicitation（历史：2026-10 已移除）
+
+> 审批运行时已删除，本节仅作历史记录。当前语义见 `authorization-design.md` §6.3。
 
 ```text
 ask 命中
@@ -306,13 +306,15 @@ ask 命中
 - 审计 `ApprovalDecided` detail 记录 elicitation accepted/declined；
 - stdio 自定义 JSON-RPC 没有 rmcp peer，自动回退。
 
-### 9.2 CLI 兜底
+### 9.2 CLI 兜底（已于 2026-10 移除）
 
-- `APPROVAL_REQUIRED` + `approval_id`；
-- 人类在 server 本机执行 `clum-mcp approval approve <id>`；
-- 一次性、绑定 agent + tool + host + 指纹；
-- 审批表只存指纹，不存命令原文；
-- `require_approval` 把 `allow` 升格为 `ask`，不能放宽 `deny`。
+> 审批运行时已删除，本节仅作历史记录。当前语义见 `authorization-design.md` §6.3：`permissive` 放行 `ask`，`strict` 直接拒绝。
+
+- ~~`APPROVAL_REQUIRED` + `approval_id`~~
+- ~~人类在 server 本机执行 `clum-mcp approval approve <id>`~~
+- ~~一次性、绑定 agent + tool + host + 指纹~~
+- ~~审批表只存指纹，不存命令原文~~
+- `require_approval` 仍把 `allow` 升格为 `ask`（permissive 放行、strict 拒绝），不能放宽 `deny`。
 
 ### 9.3 策略写
 
@@ -357,7 +359,7 @@ clum-mcp policy explain --key agent-dev --tool exec --host tf001
 | 工具调用 | principal、tool、host、结果、duration |
 | 授权拒绝 | capability、selector、host |
 | 命令裁决 | rule/source、segments、hazards（脱敏摘要） |
-| 审批 | requested/decided、approval_id、source、approver |
+| 审批（历史） | requested/decided、approval_id、source、approver（2026-10 后不再产生） |
 | 策略变更 | 变更命令、操作者（CLI）、时间 |
 | relay | purpose、host、agent |
 
@@ -436,7 +438,7 @@ policy_meta(key, value)   -- revision
 - legacy 等价性、默认拒绝、unbind 不恢复；
 - selector（group/labels/glob/None host/空 selector）；
 - 热加载失败保留旧快照；
-- `require_approval` 升级、指纹剔除 `approval_id`；
+- `require_approval` 升级（permissive 放行 / strict 拒绝）；审批/`approval_id` 相关断言已于 2026-10 移除；
 - CLI relay purpose 映射；
 - 策略 CLI 端到端（迁移/授权/拒绝/审计）；
 - elicitation 方法存在性与客户端能力判断（编译/单测层面）；

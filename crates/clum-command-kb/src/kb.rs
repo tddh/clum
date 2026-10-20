@@ -7,8 +7,9 @@ use crate::effect::Effect;
 #[derive(Debug, Deserialize, Serialize)]
 pub struct KbFile {
     pub schema_version: u32,
+    /// `None` = 文件没有声明；运行期 overlay 据此决定是否覆盖默认值。
     #[serde(default)]
-    pub default_effect: Effect,
+    pub default_effect: Option<Effect>,
     #[serde(default)]
     pub command: Vec<CommandEntry>,
 }
@@ -84,7 +85,7 @@ impl KnowledgeBase {
         }
         Ok(Self {
             commands,
-            default_effect: file.default_effect,
+            default_effect: file.default_effect.unwrap_or_default(),
         })
     }
 
@@ -104,6 +105,11 @@ impl KnowledgeBase {
     /// 叠加 overlay：同名命令整条替换（overlay 优先）。
     pub fn merge_overlay_str(&mut self, text: &str) -> Result<()> {
         let file: KbFile = toml::from_str(text).context("parse knowledge base overlay")?;
+        // 运行期 overlay 可以改默认判定（permissive 模式依赖它把未命中命令放行）。
+        // 只有显式声明才覆盖，避免把"未声明"误当成 Ask。
+        if let Some(effect) = file.default_effect {
+            self.default_effect = effect;
+        }
         for entry in file.command {
             self.commands.insert(entry.name.clone(), entry);
         }

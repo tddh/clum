@@ -123,18 +123,20 @@
 
 ---
 
-## 14. 命令规则引擎（deny / ask / allow）
+## 14. 命令规则引擎（permissive / strict）
 
-1. **fail-closed**：解析失败、未知命令、危险结构（重定向 / 命令替换 / 反引号 / heredoc / 包装器嵌套超深）一律**至少 `ask`**。未知命令的默认动作是**编译期常量** `Ask`（`Effect::default()`）：`RuleSet` 没有 `default_effect` 字段、`merge_overlay_str` 也不覆盖它，所以运行时配置**无法**把默认值改成 `allow`（此前文档把它写成可配置项，属误导，已更正）。
+> **2026-10 变更**：审批运行时已移除（`approvals` 模块、`clum-mcp approval`、elicitation、`approval_id`）。默认策略为 `permissive`：只有显式 `deny` 拦截，`ask` 一律放行。`strict` 模式下 `ask` 直接拒绝。命令规则是**防误操作护栏，不是安全边界**。
+
+1. **默认放行（permissive）**：未知命令、KB 的 `ask`、解析失败全部放行；只有 `config/command-rules.toml` 的显式 `deny` 拦截。`strict` 模式下 `ask` → `deny`（fail-closed）。`KbFile.default_effect` 是 `Option<Effect>`，运行期 overlay 可以覆盖（`merge_overlay_str`），`config/command-kb.toml` 用 `default_effect = "allow"` 表达 permissive 默认值。
 2. **聚合取最严**：复合命令按 `Deny > Ask > Allow` 取最严，由 `clum-command-kb` 的 `Effect` 派生 `Ord` + `max()` 保证，不是调用方约定。**多主机同理**：`batch_exec` 的每个目标主机组各评估一次，跨组取最严，因此"任一主机命中严规则"即整体从严。**主机组未知时**：`deny` / `ask` 规则仍然匹配（从严，避免组信息缺失导致 prod 规则失效）；组限定的 `allow` 规则**跳过**（否则 `host_group=["dev"] allow` 会放行所有组未知主机），回落到知识库（未知 → `ask`）。
-3. **approval 不经 MCP**：审批通道只在服务端 CLI（`clum-mcp approval`），agent key 没有任何批准权限。工具面维持 68 个不变。
+3. **无审批通道**：`clum-mcp approval` CLI、`approvals` 表写入、MCP elicitation、`approval_id` 参数均已移除。`strict` 下 `ask` 直接拒绝；`permissive` 下放行。工具面维持 68 个不变。
 4. **规则热重载失败保留旧规则**：绝不因配置解析错误退化为「无规则」。
-5. **权限优先**：`authorize`（P0 capability + resource selector 判定，见 §15）先于规则裁决执行；规则**不能**授予权限层已拒绝的访问。`require_approval` 只能把 `allow` 收紧为 `ask`，不能放宽 `deny`。
+5. **权限优先**：`authorize`（P0 capability + resource selector 判定，见 §15）先于规则裁决执行；规则**不能**授予权限层已拒绝的访问。`require_approval` 只把 `allow` 收紧为 `ask`（permissive 下仍放行、strict 下拒绝），不能放宽 `deny`。
 6. **覆盖边界是显式的，且由测试守护**：被裁决的工具 = `extract_command` 覆盖的 **10 个**（`exec`/`shell_command`/`batch_exec` 读 `command`，`send_keys`/`batch_send_keys`/`broadcast_keys` 读 `keys`，`send_text` 读 `text`，`respawn_pane`/`split_pane_with` 读 `command`+`args`，`cmd_escape` 读 rmux CLI 参数）。`paste_buffer` 的内容在远端缓冲区、默认不裁决，但按 `tool` 限定的规则对它**确实生效**（指纹为 `sha256(tool+args)`）。**带 `command` 的 `respawn_pane` 与不带 command 的 bare respawn 都 fail-closed 到 `ask`**（后者会重跑既有进程规格，可能重放已批准命令）。**覆盖集由 `every_payload_tool_is_adjudicated_or_whitelisted` 从 schema 自动校验**：新增任何带 `command`/`keys`/`text`/`args` 的工具却忘记登记，测试立即失败——不再依赖人工清单（历史教训：`broadcast_keys`、`split_pane_with`、`respawn_pane` 均曾因此漏网，真正的绕过永远出现在过滤器覆盖不到的地方）。
 7. **评估对象必须等于执行对象**：任何在执行前会做解码/展开的参数，必须在**裁决之前**完成一次（`normalize_payload_args`），执行侧不得再次解码。`send_keys` 族的 `\x0a` 曾让 `ls \x0arm -rf /` 被判 allow 却执行两条命令；`unescape_keys` 不幂等，因此「入口解码 + 执行侧不解码」是唯一正确形态。
-8. **知识库是运行时可改的，不需要重新编译**：二进制内嵌的约 1,600 条只是「开箱默认值」；`config/command-kb.toml` 是运行时覆盖文件（同名命令整条覆盖，`reload_config` 一起重载）。任何判定修正或新增都走该文件。覆盖文件**缺失 = 用默认值**（正常）；**存在但解析失败 = 启动失败**（fail-closed，禁止静默退回默认值让运维以为覆盖生效）。`--command-kb` / `command_kb_file` 可改路径。
-9. **放行是一次性消费**：`approved` 只能被「同 agent + 同工具 + 同主机 + 同指纹」消费一次，消费即 `consumed`。校验由**单条带完整 WHERE 的原子 UPDATE** 完成（`affected == 1` 才放行），因此并发重放同一 `approval_id` 只有一个赢家；任何一项不符一律 `APPROVAL_INVALID`，**绝不降级为放行**。审批表只存**指纹**（`sha256:`）不存命令原文，人类可读的**脱敏**摘要在 `reason` 列。
-10. **审批归因不是强认证**：`--approver` 可被覆盖，真正的授权边界是「能登录服务端主机执行 `clum-mcp approval`」。审计 detail 因此**独立**记录 `approver_os=`（取自 `SUDO_USER`/`USER`），与声称的 approver 不一致即是伪造线索。
+8. **知识库是运行时可改的，但在 permissive 下仅作参考**：二进制内嵌的约 1,600 条（safe-chains 生成）在 permissive 模式下不影响裁决，标记为 legacy；`config/command-kb.toml` 是运行时覆盖文件（同名命令整条覆盖、可改 `default_effect`，`reload_config` 一起重载）。覆盖文件**缺失 = 用内嵌默认值**（正常）；**存在但解析失败 = 启动失败**（fail-closed）。`read_only` 标注继续服务 `command:read`。`--command-kb` / `command_kb_file` 可改路径。
+9. ~~放行是一次性消费~~ **（历史，已失效）**：审批运行时已在 2026-10 移除，`pending_approvals` 表不再读写；审计枚举 `ApprovalRequested` / `ApprovalDecided` 仅为历史记录保留。
+10. ~~审批归因不是强认证~~ **（历史，已失效）**：不再存在人工批准路径；安全边界改为「agent key 的 capability 范围 + server 主机隔离 + agent 不以 root 运行」。
 
 ## 15. 角色能力授权（P0）
 

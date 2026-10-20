@@ -605,25 +605,23 @@ clum-mcp audit verify [--db /root/.clum/audit.db]
 
 **备份/演练注意**：拷贝审计库做演练或分析时用 python3 `sqlite3` 的 `backup()` API（在线一致快照，自动合并 WAL）；**禁止在线 cp 三件套**（撕裂风险）；任何对审计库的直改演练先做快照副本，产物用毕清理；生产机不为此安装 sqlite3 CLI。
 
-## 命令规则裁决（deny / ask / allow）
+## 命令规则裁决（permissive / strict）
 
-clum 在执行命令前会按规则裁决，可能返回三个新的 error_code：
+clum 在执行命令前按规则裁决。默认 `permissive`：未命中显式 deny 即执行。
 
-| error_code | 含义 | 你该怎么做 |
+| 结果 | 含义 | 你该怎么做 |
 |---|---|---|
-| `COMMAND_DENIED` | 命令被规则硬拒绝 | **不要重试**。看 `recovery_hint` 与 `rule_id`，改用只读等价命令，或请管理员调整规则文件 |
-| `APPROVAL_REQUIRED` | 命令挂起等**人类**批准 | **不要自己批准、不要换个写法绕过**。客户端支持 elicitation 时会在同一次调用内弹框；否则把 `approval_id` 与 `command` 转告用户，等人类在服务端执行 `clum-mcp approval approve <approval_id>`，批准后**带上 `approval_id` 原样重发同一条命令**（命令、工具、主机都必须逐字节一致） |
-| `APPROVAL_INVALID` | 带的 `approval_id` 不可用 | 批准是**一次性**的：已被消费、已过期、命令被改动、换了工具或主机，都会落到这里。**不要重试同一个 id**——去掉 `approval_id` 重新发起申请 |
+| 正常执行 | 未命中 deny（包括未知命令） | 无 |
+| `COMMAND_DENIED` | 命中显式 deny 规则（破坏性命令） | **不要重试、不要换写法绕过**。看 `rule_id`；确属误伤时请管理员调整 `config/command-rules.toml` |
 
 要点：
 
-- 批准权只属于人类：优先由 MCP elicitation 在客户端弹框；客户端不支持或超时（120s）时回退到「能登录服务端主机的人类执行 `clum-mcp approval`」。agent 没有任何批准通道。
-- 批准绑定「**同一条命令 + 同一工具 + 同一主机**（batch 类工具为整个 `hosts` 集合）」，且**只能消费一次**；默认 15 分钟过期。改一个字符就要重新申请。
-- 重复申请同一命令不会堆积：未过期时**复用同一个 `approval_id`**，所以重试是安全的。
-- 只读命令（`ls` / `cat` / `grep` / `kubectl get` / `systemctl status` 等）默认放行，不会打扰你。
-- 复合命令取最严：`ls && rm -rf /` 整体按 `rm` 处理；含 `$( )`、反引号、**引号外**重定向的命令至少需人工批准（双引号内的 `>` `<` 是字面字符，不触发）。
-- ⚠️ **交互式按键会被拦**：`send_keys` 发 Ctrl-C（`\x03`）、ESC 序列（`\x1b:q!\n`）、单字符（`q`、`y`）时，规则引擎无法把它识别为已知命令 → 判 `ask`。若 `exec` 因终端处于 editor/pager 被拒，这些恢复按键同样需要人类批准；更顺的做法是请用户在 `clum-cli term <host>` 里直接处理。`send_keys` 的参数会在裁决**之前**统一解码（`\x0a`/`\x0d` → 换行），CR 按 Enter 切段、其余 C0 控制字符（Ctrl-U/Ctrl-W/ESC）记危险结构并至少 `ask`，所以「看似无害的前缀 + 转义换行/清行 + 危险命令」不再能绕过。
-- ⚠️ **不要用 Bash 调 `clum-cli` 执行命令**：`term`/`forward` 等 CLI 中继通道不经过命令规则引擎，也没有逐命令审批/审计。命令类远端操作必须走 MCP 工具。**例外**：客户端本地文件 ↔ 远程传输只有 `clum-cli push/pull` 一条路（该通道不执行 shell 命令），见上文文件操作决策树。
+- **没有人工审批通道**。`APPROVAL_REQUIRED` / `APPROVAL_INVALID` / `approval_id` 已移除，只作为历史错误码出现在旧日志里。
+- `strict` 模式下，原先的 `ask` 一律直接拒绝（fail-closed），同样不产生审批。
+- 破坏性清单（rm 关键路径、dd 块设备、mkfs/分区、关机、清防火墙、杀 init、解释器/xargs 包装）由 `config/command-rules.toml` 维护。它是**防误操作的护栏，不是安全边界**：`bash -c "$X"`、变量拼接、脚本文件仍可能绕过。
+- 只读命令直接执行；复合命令取最严：`ls && rm -rf /` 整体按 `rm` 处理。
+- `send_keys` 的参数会在裁决**之前**统一解码（`\x0a`/`\x0d` → 换行）；CR 按 Enter 切段，其余 C0 控制字符（Ctrl-U/Ctrl-W/ESC）记危险结构。
+- ⚠️ **不要用 Bash 调 `clum-cli` 执行命令**：`term`/`forward` 等 CLI 中继通道不经过命令规则引擎。命令类远端操作必须走 MCP 工具。**例外**：客户端本地文件 ↔ 远程传输只有 `clum-cli push/pull` 一条路（该通道不执行 shell 命令），见上文文件操作决策树。
 
 ## 经验沉淀
 
