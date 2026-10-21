@@ -227,8 +227,8 @@ json!({"ok": false, "error": ...})
 | `CLI_FAILED` | rmux CLI 回退失败 | false | bridge CLI 回退 9 处（**新增**） |
 | `PROTOCOL_ERROR` | 帧协议错误 | false | bridge proxy.rs（**新增**） |
 | `COMMAND_DENIED` | 命令被规则硬拒绝 | false | MCP 规则引擎（`tools/rules.rs` deny 命中） |
-| `APPROVAL_REQUIRED` | 命令挂起等人工批准 | false | MCP 规则引擎（`tools/rules.rs` ask 命中） |
-| `APPROVAL_INVALID` | 审批凭证不可用（已消费/过期/命令或主机不符） | false | 审批消费校验（`tools/mod.rs`） |
+| `APPROVAL_REQUIRED` | **历史（2026-10 移除）**：permissive 下不再产生；strict 下 `ask` 返回 `COMMAND_DENIED` | false | 审批运行时已删除，仅旧日志兼容 |
+| `APPROVAL_INVALID` | **历史（2026-10 移除）** | false | 审批运行时已删除 |
 | `UNKNOWN` | 未分类兜底 | false | 其余 |
 
 ---

@@ -1,5 +1,8 @@
 # clum 权限模型设计：从「主机分组」到「主体 × 角色 × 能力」
 
+> **2026-10 变更**：审批运行时（elicitation / `approval_id` / server CLI）已移除；
+> 全文涉及审批的描述（§4.4、§5、§6、§10、§11、§13、§15）均为历史记录，当前语义见 §6.3。
+>
 > 状态：**P0/P1/P2 已实施（2026-10-20）**。P1：elicitation、HTTP `/recordings`
 > capability、无 host 工具 role-selector 过滤。P2：`command:read` 只读执行。
 > CLI relay 与 labels 选择器已在 P0 落地。
@@ -50,9 +53,9 @@ host    → { group }
 1. 主体（api_key）可以绑定多个角色；角色由「资源选择器 × 能力」授权组成。
 2. 默认拒绝；没有任何授权的主体不能调用任何工具。
 3. 工具通过一张**受测试保护的映射表**落到能力（capability），新增工具漏映射时测试失败。
-4. 审批以 **MCP elicitation** 为主：`ask` 时在 agent 客户端弹出批准框，同一次工具调用内完成；客户端不支持或超时时回退到现有 `APPROVAL_REQUIRED` + server CLI。
+4. ~~审批以 **MCP elicitation** 为主~~（2026-10 移除）：当前由 `command_policy` 决定 `ask` 的语义——permissive 放行、strict 拒绝；无人工审批通道。
 5. 策略存储在 SQLite（与审计同库），通过 server CLI 管理，不再新增配置文件。
-6. 管理员可全权操作，但 `policy:write` 与审批分离，且禁止自我提权。
+6. 管理员可全权操作，但 `policy:write` 与 agent 运行时能力分离，且禁止自我提权。
 
 ### 非目标（本设计明确不做）
 
@@ -74,7 +77,7 @@ host    → { group }
 | Grant | `resource_type × selector × actions × require_approval` |
 | Capability | 稳定能力动词，如 `command:exec`、`file:write`、`approval:decide` |
 | Selector | 资源选择器：host group / labels / name glob |
-| Elicitation | MCP 协议中 server 主动请求客户端展示 UI 并返回用户输入的能力 |
+| Elicitation | **历史（2026-10 移除）**：MCP 协议中 server 主动请求客户端 UI 的能力，已不再用于审批 |
 
 ---
 
@@ -107,10 +110,9 @@ graph TD
   D -->|有授权| E["命令规则引擎<br/>deny / ask / allow"]
   E -->|deny| X["COMMAND_DENIED"]
   E -->|allow| Z["执行 + 审计"]
-  E -->|ask / require_approval| A["MCP elicitation<br/>客户端弹框"]
-  A -->|Accept| Z
-  A -->|Deny| X
-  A -->|超时/不支持| Y["APPROVAL_REQUIRED + approval_id"]
+  E -->|ask / require_approval| A["策略模式"]
+  A -->|permissive| Z
+  A -->|strict| X
 ```
 
 ### 5.1 内置角色（第一版只需要三个）
@@ -121,7 +123,7 @@ graph TD
 | `operator` | 按 group/labels 授予的读、会话、命令、文件、转发能力 | 默认不带管理能力 |
 | `readonly` | 读能力（host/session/terminal/recording/audit） | 审计、排障 |
 
-`approval:decide` 不授予任何 API key：审批由 elicitation（客户端 UI）或 server CLI 的人类完成。
+审批运行时已移除，不存在 `approval:decide`；API key 不持有任何批准能力。
 
 ### 5.2 能力清单
 
@@ -187,18 +189,19 @@ graph TD
      tool → capability ∈ actions
 3. command_rule_engine()       # 仅命令类工具（10 个）
      deny > ask > allow；hazard 升格
-4. approval
-     ask 或 grant.require_approval → MCP elicitation
+4. command policy
+     permissive: ask / require_approval → allow
+     strict: ask / require_approval → deny
 5. execute + audit
 ```
 
 关键顺序：**能力判定先于命令解析**。没有 `command:exec` 的主体不会进入命令规则引擎。
 
-### 6.1 审批：elicitation 为主
+### 6.1 审批：elicitation 为主（历史，2026-10 已移除）
 
-> **实施状态**：已实施（HTTP MCP 模式）。`ask` 优先 elicitation：Accept 同一次调用继续，
-> Decline/Cancel 拒绝，120s 超时或客户端不支持回退 `APPROVAL_REQUIRED` + server CLI。
-> stdio 自定义 JSON-RPC 没有 rmcp peer，自动回退。
+> **实施状态**：已移除。本节仅保留设计记录；当前语义见 §6.3。
+> 审批运行时（elicitation、`approval_id`、server CLI）已删除，`ask` 由 `command_policy`
+> 决定：permissive 放行，strict 拒绝。
 
 实施前提（已核实）：
 
@@ -377,9 +380,9 @@ clum-mcp policy explain --key agent-dev --tool exec --host tf001
 | legacy 等价性 | 旧 group key 在新旧判定下结果一致 | ✅ `policy::tests` + `tools::tests` |
 | 默认拒绝 | 新 key 未绑定角色 → `FORBIDDEN` | ✅ `policy::tests` |
 | 越权矩阵 | `readonly` 不能 exec；跨组不能 attach；`operator` 不能 `deploy_bridge` | ✅ selector/capability 单测 |
-| 策略写确认 | `role grant/bind/unbind` 由本机 shell 访问权 + 审计约束；CLI 无法 elicitation | ✅（设计约束） |
-| 审批条件 | `require_approval=1` 时即使命令 allow 也触发审批 | ✅ 复用 `APPROVAL_REQUIRED`（`escalate_to_ask`） |
-| elicitation 降级 | 客户端不支持/超时 → `APPROVAL_REQUIRED` | ✅ `progress.rs::elicit` |
+| 策略写确认 | `role grant/bind/unbind` 由本机 shell 访问权 + 审计约束；CLI 不经过 MCP | ✅（设计约束） |
+| ~~审批条件~~（历史） | `require_approval` 现在只决定 `ask` 语义（permissive 放行 / strict 拒绝） | `escalate_to_ask` |
+| ~~elicitation 降级~~（历史，2026-10 移除） | 审批运行时已删除 | — |
 | 策略热重载 | 解析失败保留旧快照 | ✅ `policy::tests` |
 | CLI relay | `term/push/forward/pull/list` 按 purpose 判定 capability；跨组拒绝 | ✅ `quic_server::purpose_capabilities` |
 | replay 下载 | `clum-cli replay` 走 HTTPS `/recordings`，按 host + `recording:read` 判定 | ✅ |
@@ -400,18 +403,17 @@ clum-mcp policy explain --key agent-dev --tool exec --host tf001
 
 | 风险/问题 | 说明 | 处置 |
 |---|---|---|
-| 客户端不支持 elicitation | 取决于 MCP 客户端实现（OpenCode 已有 form 支持，其他客户端未知） | 自动降级到 `APPROVAL_REQUIRED` |
-| elicitation 超时 | 无人值守场景会卡住工具调用 | 默认 120s，超时 fail-closed 并回退 |
-| 管理员 agent 被注入 | 可修改策略 | 策略写需要 server 本机 shell；`admin` 不含 `approval:decide` |
-| 策略写无调用者身份 | 本机 CLI 无法获知 principal，也无法 elicitation | 已知边界：信任边界是 server 本机 shell + 审计 |
+| ~~客户端不支持 elicitation~~（历史） | 审批运行时已移除 | 由 `command_policy` 取代 |
+| 管理员 agent 被注入 | 可修改策略 | 策略写需要 server 本机 shell；`admin` 不用于 agent 运行时 |
+| 策略写无调用者身份 | 本机 CLI 无法获知 principal，也不经过 MCP | 已知边界：信任边界是 server 本机 shell + 审计 |
 | 策略存在 DB 的启动顺序 | 首次启动需要 bootstrap admin key | 保留 `server-config.yaml` 的 bootstrap 段 |
 | CLI relay | 已按 purpose 在连接建立时判定 capability | 已收敛（§6.2） |
 | 工具面冻结 | 不新增工具，管理走 CLI | 已确认 |
 
-### 已确认决策（2026-10-19）
+### 已确认决策（2026-10-19，2026-10-21 修订）
 
-1. **elicitation 是 agent 侧唯一的审批通道**；server CLI 仅作兜底（客户端不支持/超时时）。
-2. **不需要 server TTY 二次确认**：策略写操作由 elicitation 确认；`admin` 不含 `approval:decide`。
+1. **无人工审批通道**（2026-10-21）：`ask` 由 `command_policy` 决定——permissive 放行、strict 拒绝；elicitation / `approval_id` / server CLI 已移除。
+2. **策略写只受 server 本机 shell 访问权约束**；`admin` 不用于 agent 运行时。
 3. **策略与审计同库**（`audit.db`），不拆独立 `policy.db`。
 4. **CLI relay 按 purpose 纳入 capability**（见 §6.2）：连接建立时判定，relay 内不逐命令裁决。
 
@@ -422,10 +424,10 @@ clum-mcp policy explain --key agent-dev --tool exec --host tf001
 | 现有机制 | 关系 |
 |---|---|
 | 旧 `authorize`（仅 group 隔离） | P0 后由 capability + selector 判定替代；legacy role 保持等价 |
-| `command-rules.toml`（deny/ask/allow） | 保留，位于 capability 之后；`require_approval` 与 `ask` 合并为同一审批流程 |
+| `command-rules.toml`（deny/allow） | 保留，位于 capability 之后；`ask` 由 `command_policy` 决定（permissive 放行 / strict 拒绝） |
 | `command-kb.toml` | 保留，命令内容分类不进入权限模型 |
-| `pending_approvals` | 保留；elicitation 成功时不落 pending，回退路径继续使用 |
-| 审计哈希链 | 策略变更与审批决策均写入 |
+| `pending_approvals` | **历史（2026-10 移除）**：表结构保留兼容旧审计，不再读写 |
+| 审计哈希链 | 策略变更与命令拒绝均写入 |
 | 工具面 68 | 不新增；capability 映射是内部判定 |
 
 ---
@@ -484,7 +486,7 @@ clum-mcp policy explain --key agent-dev --tool exec --host tf001 \
 - **旧 key 零变化**：已 materialise 的 key 绑定 legacy role；服务运行期间新建、尚未 materialise 的 key 走 `legacy_fallback`，复刻旧 group 规则（无组 = superadmin，有组 = 同组全工具、排除 `host_set_meta` / `reload_config`）。
 - **默认拒绝**：一旦 principal 已 materialise，绑定即权威；空绑定 = 拒绝，显式 `unbind` 不会因重启被迁移恢复。
 - **能力先于命令解析**：`authorize` 在规则引擎之前执行；跨组/缺能力的调用不会进入命令评估。
-- **`require_approval`**：命中 grant 时把 `allow` 升级为 `ask`（`deny`/`ask` 不变），复用 `APPROVAL_REQUIRED` + `approval_id`；非命令类工具的审批指纹剔除 `approval_id`，批准后原样重发可消费。
+- **`require_approval`**：命中 grant 时把 `allow` 升级为 `ask`（`deny` 不变）；审批运行时已于 2026-10 移除，`ask` 由 `command_policy` 决定（permissive 放行 / strict 拒绝）。
 - **热加载**：CLI 写库 bump revision；server 在工具调用/relay 连接时探测（1 秒节流）。快照解析失败保留旧快照并记录 error。
 - **CLI relay**：`term → session:attach + terminal:input + session:read`、`forward → forward:create`、`push → file:write`、`pull → file:read`、`list → host:read`；未知 purpose 在认证模式下拒绝。relay 内仍不逐命令裁决。
 - **replay**：`clum-cli replay` 不走 QUIC relay，而是 HTTPS `GET /recordings` + Bearer。`http_server` 现在按首段 host + `recording:read` + selector 判定，与 MCP 一致。

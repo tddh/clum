@@ -143,7 +143,7 @@
 1. **默认拒绝**：已 materialise 的 principal 没有匹配 grant → 拒绝；空绑定同样拒绝。
 2. **迁移等价**：已有 key 自动绑定 legacy role；运行期未 materialise 的新 key 走 `legacy_fallback`，复刻旧 group 规则。
 3. **绑定权威**：显式 `bind/unbind` 后以 DB 为准；`unbind` 清空绑定不会被重启迁移恢复。
-4. **能力先于命令解析**：无 `command:exec` / `command:read` 的 principal 不进入命令规则引擎；`require_approval` 命中时只能把 `allow` 收紧为 `ask`，不能放宽 `deny`。
+4. **能力先于命令解析**：无 `command:exec` / `command:read` 的 principal 不进入命令规则引擎；`require_approval` 命中时把 `allow` 收紧为 `ask`（permissive 下仍放行、strict 下拒绝），不能放宽 `deny`。
 5. **映射完备**：68 个工具全部有 capability；新增工具漏映射时 `capability::tests` 失败。
 6. **加载失败保留旧快照**：策略解析失败绝不退化为全放行（旧快照继续服务）。
 7. **策略写是人类通道**：`clum-mcp role grant/bind/unbind` 只能在 server 本机 shell 执行；CLI 不在 MCP 请求内，无法 elicitation；所有变更写入审计哈希链。
@@ -152,9 +152,9 @@
 10. **全局能力必须用全局 grant**：`config:reload` / `policy:write` 没有目标主机，组/labels/name 作用域的 grant 不能授权它们（判定要求 selector 为 `all`）。
 11. **内置 grant 不可编辑**：`builtin:*`（admin 全权、legacy-*）拒绝 CLI 改写；legacy role 整体由迁移维护。
 12. **只读执行是白名单，不是强隔离**：`command:read` 只放行 `exec`/`batch_exec` 中被显式标记 `read_only=true` 且最终 `Allow` 的命令；未标记/未知/危险结构/危险 flag/`sudo`/`doas` 一律非只读；规则 `allow` 不能提权；非只读命令直接拒绝，不进入审批。
-13. **elicitation 只覆盖 MCP 请求内的 ask**：客户端声明能力且未超时（120s）时优先弹框；否则回退 `APPROVAL_REQUIRED`。stdio 自定义协议没有 rmcp peer。
+13. ~~elicitation 只覆盖 MCP 请求内的 ask~~ **（历史，2026-10 移除）**：审批运行时已删除，`ask` 由 `command_policy` 处理（permissive 放行 / strict 拒绝）。
 
-**重审时机**：MCP 客户端 elicitation 行为变化、新增 resource_type/selector 维度、或命令白名单出现误判时。
+**重审时机**：`command_policy` 默认值变更、新增 resource_type/selector 维度、或破坏性命令规则出现误判/绕过时。
 
 ## 不再重复踩的坑（本清单的来历）
 

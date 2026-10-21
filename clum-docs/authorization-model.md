@@ -21,9 +21,9 @@
 | 策略热加载（revision + ≤1s 节流），失败保留旧快照 | `policy.rs` |
 | `role list/grant/bind/unbind`、`policy explain` | `policy_cli.rs` |
 | CLI relay 按 purpose 判定 capability（term/forward/push/pull/list） | `quic_server.rs` |
-| `require_approval` 升级为 `ask`（复用 `APPROVAL_REQUIRED`） | `tools/mod.rs::escalate_to_ask` |
+| `require_approval` 升级为 `ask`（permissive 放行 / strict 拒绝） | `tools/mod.rs::escalate_to_ask` |
 | 策略变更写入审计哈希链 | `policy_cli.rs` |
-| elicitation 审批（HTTP MCP 模式） | `progress.rs::elicit` + `tools/mod.rs` Ask 分支 |
+| ~~elicitation 审批~~（2026-10 移除） | — |
 | HTTP `/recordings` 接入 `recording:read` + selector | `http_server.rs` 认证中间件 |
 | 无 host 工具按 role selector 过滤 | `tools/mod.rs::allowed_host_names` |
 | `command:read` 只读执行（白名单、默认拒绝） | `capability.rs` + `tools/mod.rs` + `clum-command-kb` |
@@ -32,10 +32,10 @@
 
 | 缺口 | 影响 | 归属 |
 |---|---|---|
-| 策略写仍为 server 本机 CLI | CLI 不在 MCP 请求内，无法 elicitation；信任边界是 shell 访问权 | 设计约束 |
+| 策略写仍为 server 本机 CLI | CLI 不在 MCP 请求内，不经过命令规则引擎；信任边界是 shell 访问权 | 设计约束 |
 | 命令分类依赖 KB 准确性 | `command:read` 只放行显式白名单，误判方向为拒绝 | 持续维护 |
 | 审计写失败 fail-open | 审计不是强制门 | 已知债务 |
-| stdio 模式无 elicitation peer | 审批回退到 `APPROVAL_REQUIRED` + server CLI | 传输限制 |
+| 无人工审批通道 | permissive 放行 / strict 拒绝；命令规则仅作防误操作护栏 | 2026-10 决策 |
 
 ### 1.3 核心矛盾
 
@@ -50,12 +50,12 @@ clum 的 68 个工具里，`exec` / `batch_exec` 是通用外壳：同一个 cap
 | 约束 | 对权限模型的含义 |
 |---|---|
 | **agent-first** | 日常操作由策略自动判定；只读、低风险命令不应逐条审批 |
-| **人类可选介入** | 人类只在 `ask`、`require_approval`、策略写时出现 |
+| **人类可选介入** | 人类只在策略写时出现；命令执行无人工审批 |
 | **双通道** | MCP 工具走完整判定；CLI relay 在连接建立时按 purpose 判定；两者共享 principal/policy |
 | **工具面 68 冻结** | 不新增专用工具；新能力通过 capability 表达 |
-| **默认拒绝** | 无匹配 grant → `FORBIDDEN`；未知命令 → `ask`；只读未标记 → 拒绝 |
+| **默认拒绝** | 无匹配 grant → `FORBIDDEN`；未知命令 → permissive 放行 / strict 拒绝；只读未标记 → 拒绝 |
 | **能力先于命令解析** | 没有 `command:exec`/`command:read` 的调用不会进入规则引擎 |
-| **可审计** | principal、role、grant、capability、exec mode、approval source 全部入审计链 |
+| **可审计** | principal、role、grant、capability、exec mode、command policy 全部入审计链 |
 | **不是堡垒机** | 不承诺命令级强隔离；强隔离靠远端账号/沙箱（见 §13） |
 | **central server + QUIC + bridge + rmux** | 授权在 server 侧完成；bridge 不参与策略判定；relay 无法逐命令裁决 |
 
@@ -76,10 +76,10 @@ flowchart TD
   C -->|有授权| E["命令规则引擎<br/>normalize → KB + rules"]
   E -->|只读模式且非只读命令| RD["COMMAND_DENIED"]
   E -->|deny| D["COMMAND_DENIED"]
-  E -->|ask / require_approval| A["审批<br/>P0: server CLI<br/>P1: elicitation"]
+  E -->|ask / require_approval| A["策略模式"]
   E -->|allow| X["执行 + 审计"]
-  A -->|Accept| X
-  A -->|Deny/超时| D
+  A -->|permissive| X
+  A -->|strict| D
 ```
 
 三层职责：
@@ -87,8 +87,8 @@ flowchart TD
 | 层 | 回答的问题 | 失败方向 |
 |---|---|---|
 | capability + selector | 这个主体能不能用这个工具、对这台主机 | 默认拒绝 |
-| 命令规则 + KB | 这条命令能不能跑 | 未知/解析失败 → ask；只读模式 → 拒绝 |
-| 审批 | 是否有人类批准这次具体操作 | 失败/超时 → 不放行 |
+| 命令规则 + KB | 这条命令能不能跑 | permissive：仅显式 deny 拦截；strict：未知/解析失败/ask → 拒绝 |
+| ~~审批~~（历史，2026-10 移除） | 无人工审批；`ask` 由 `command_policy` 决定 | permissive 放行 / strict 拒绝 |
 
 ---
 
@@ -190,7 +190,7 @@ deploy:bridge, config:reload, policy:write, usage:read
 - 默认拒绝，显式白名单，危险 flag/hazard 强制非只读；
 - 规则 `allow` 不能提权；
 - `sudo`/`doas` 前缀在 v1 视为非只读；
-- 非只读命令直接 `COMMAND_DENIED`，不进入 `ask`（审批不能提权）。
+- 非只读命令直接 `COMMAND_DENIED`，不进入策略模式（审批不能提权）。
 
 ---
 
@@ -209,7 +209,7 @@ deploy:bridge, config:reload, policy:write, usage:read
 3. normalize payload
      send_keys 族统一解码（裁决 = 执行）
 4. command_rule_engine（仅命令类工具）
-     normalize → KB 分类 + 规则 deny/ask/allow
+     normalize → KB 分类 + 规则 deny/allow
      多主机取最严
 5. read_only gate（仅 ReadOnly 模式）
      allow 且 read_only → 继续
@@ -229,8 +229,8 @@ deploy:bridge, config:reload, policy:write, usage:read
 | 无 capability / selector 不匹配 | `FORBIDDEN` |
 | 规则 deny | `COMMAND_DENIED` |
 | 只读模式下的非只读命令 | `COMMAND_DENIED` |
-| 规则 ask / require_approval | `APPROVAL_REQUIRED` |
-| 审批凭证无效 | `APPROVAL_INVALID` |
+| 规则 ask / require_approval（strict） | `COMMAND_DENIED` |
+| ~~审批凭证无效~~ | **历史（2026-10 移除）** |
 | 未知工具 | `INVALID_PARAMS`（rmcp unknown tool） |
 
 消息必须包含 `not in your group` 或 `requires superadmin` 以保持分类器兼容
@@ -260,7 +260,8 @@ config/command-kb.toml（运行时覆盖，reload_config 热加载）
 三层合并去重后 **1,607** 条（由 `documented_entry_count_matches_builtin` 测试锁定）。
 
 分类：`Inert/SafeRead → allow`、`SafeWrite → ask`、未知/解析失败 → `ask`。
-危险结构（重定向、命令替换、反引号、heredoc、TTY 控制字符）至少 `ask`。
+这些 `ask` 在 **permissive** 下视为放行，在 **strict** 下视为拒绝。
+危险结构（重定向、命令替换、反引号、heredoc、TTY 控制字符）同样按策略模式处理。
 P2 增加 `read_only` 标记（默认 false）。
 
 ### 8.2 规则文件
@@ -269,7 +270,7 @@ P2 增加 `read_only` 标记（默认 false）。
 
 - 维度：`tool` × `program` × `argv_regex` × `host_group` × `caller_group`；
 - priority 升序，首个命中即停；
-- 动作：`deny` / `ask` / `allow`；
+- 动作：`deny` / `allow`（strict 下 `ask` 视为 `deny`）；
 - 非法正则、重复 id 加载失败；
 - 主机组未知：deny/ask 仍匹配（从严），组限 allow 跳过；
 - 规则 `allow` 不能授予 capability，也不能把命令提升为只读。
@@ -280,7 +281,7 @@ KB 是**分类器**，不是安全边界：
 
 - 它减少管理员配置量，提供开箱可用性；
 - 准确性上界决定只读模式的便利性，不决定强隔离；
-- 未标记/未知一律拒绝（只读模式）或 `ask`（Full 模式）；
+- 未标记/未知一律拒绝（只读模式）或按策略模式处理（Full 模式）；
 - 强隔离靠 §13。
 
 ---
@@ -319,9 +320,9 @@ ask 命中
 ### 9.3 策略写
 
 - `role grant/bind/unbind` 由 **server 本机人类**执行，信任边界是 shell 访问权；
-- CLI 是独立进程，不在 MCP 请求内，**无法 elicitation**；本方案不再声称策略写走 elicitation；
+- CLI 是独立进程，不在 MCP 请求内；策略写不经过命令规则引擎；
 - 所有变更写入审计哈希链；
-- `admin` 不含 `approval:decide`；API key 永远不能自我批准。
+- `admin` 不用于 agent 运行时；API key 不持有策略写能力。
 
 ---
 
@@ -441,7 +442,7 @@ policy_meta(key, value)   -- revision
 - `require_approval` 升级（permissive 放行 / strict 拒绝）；审批/`approval_id` 相关断言已于 2026-10 移除；
 - CLI relay purpose 映射；
 - 策略 CLI 端到端（迁移/授权/拒绝/审计）；
-- elicitation 方法存在性与客户端能力判断（编译/单测层面）；
+- `command_policy` permissive/strict 转换与破坏性规则拦截；
 - HTTP `/recordings` capability（现有 HTTP 测试覆盖鉴权路径）；
 - 无 host 工具 role-selector 过滤（legacy 等价测试）；
 - `command:read` 白名单、危险 flag、sudo、规则 allow 不提权、只读闸门。

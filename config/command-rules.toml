@@ -1,9 +1,11 @@
 # clum 命令规则（人工维护，支持 reload_config 热重载）
 #
-# 三态动作：deny（直接拦截）/ ask（挂起等人工批准）/ allow（放行）
-# 规则按 priority 升序评估，首个命中生效；未命中则查内置知识库，知识库也未命中时按
-# **编译期默认值 `ask`** 处理（fail-closed）。
-# 权限层（authorize 的 group 隔离）先于本文件生效——本文件是权限之后的第二道闸。
+# 动作：deny（直接拦截）/ allow（放行）。
+# - permissive（默认）：未命中任何规则即执行；`ask` 视为放行。
+# - strict：`ask` 直接拒绝；未命中且 KB 未收录同样拒绝。
+# 规则按 priority 升序评估，首个命中生效。审批运行时已移除，不存在人工批准。
+# 权限层（authorize 的 capability + selector）先于本文件生效——本文件是权限之后的第二道闸。
+# 命令规则是防误操作护栏，不是安全边界。
 
 schema_version = 1
 

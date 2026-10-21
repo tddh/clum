@@ -1,6 +1,6 @@
 # clum 部署文档
 
-> 最后更新：2026-09-12
+> 最后更新：2026-10-21
 
 ## 架构（Central Server 模式）
 
@@ -57,6 +57,13 @@ bash deploy/deploy-mcp.sh ./target/x86_64-unknown-linux-musl/release/clum-mcp ro
 - 首次部署时生成默认 `server-config.yaml`
 - 创建 `clum-mcp.service` systemd 服务并启动
 - **不铺设 `/releases/` 静态产物**（见 §2）
+
+**命令策略文件（server 端）：**
+
+- `server-config.yaml` 的 `command_policy` 控制 `ask` 语义：`permissive`（默认，放行）或 `strict`（拒绝）。该值启动时读取，变更需重启。
+- systemd 单元未设置 `WorkingDirectory`，进程默认工作目录是 `/`；因此相对路径 `config/command-kb.toml` / `config/command-rules.toml` 实际解析为 **`/config/command-kb.toml`** / **`/config/command-rules.toml`**。
+- 部署方式：把仓库的 `config/command-kb.toml`、`config/command-rules.toml` 整文件推送到 `/config/`，再调用 `reload_config`（或 `kill -HUP`）。
+- 文件缺失时：KB 使用内嵌默认值，规则为空——permissive 下只拦截内嵌 KB 的显式 deny（当前为 0 条），因此**必须部署 `command-rules.toml` 才有破坏性防护**。
 
 ### 2. 添加 Bridge
 

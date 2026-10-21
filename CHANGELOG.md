@@ -8,6 +8,9 @@
 - **知识库降级为参考数据**：permissive 模式下生成的 1,600 条 safe-chains 分类不再影响裁决（`ask` 全部失效、`allow` 等于默认值）。文件保留并标记 legacy，待策略稳定后移除；`read_only` 标注继续服务 `command:read`。
 
 ### Added
+
+> 注：本段中关于 elicitation 审批、`approval_id`、`pending_approvals`、`clum-mcp approval` 的条目已被本版 `### Changed` 撤销，保留仅为历史记录；当前行为以 `### Changed` 与 `clum-docs/authorization-design.md` §6.3 为准。
+
 - **角色/能力授权模型（P0）**：API Key → principal → role → grant（资源选择器 × capability）判定，**先于**命令规则引擎；默认拒绝，旧 key 自动迁移为 `legacy-group:*` / `legacy-superadmin`（行为不变）。策略与审计同库（`principals`/`roles`/`grants`/`bindings` + `policy_meta` revision，≤1s 热加载）。CLI：`clum-mcp role list|grant|bind|unbind`、`clum-mcp policy explain`，变更写入审计哈希链。新增 `require_approval`（命中时即使规则 allow 也走 `APPROVAL_REQUIRED`）。CLI relay（term/forward/push/pull/list）在连接建立时按 purpose 判定 capability；`replay` 经 HTTPS `/recordings` 下载，按 host + `recording:read` + selector 判定。68 工具 capability 映射由守卫测试锁定。
 - **elicitation 审批、只读执行与通道收敛（P1/P2）**：HTTP MCP 模式下 `ask` 优先通过 rmcp elicitation 在同一次调用内弹框（Accept 继续、Decline/Cancel 拒绝、120s 超时回退 `APPROVAL_REQUIRED`；stdio 自动回退）。新增 `command:read` capability：`exec`/`batch_exec` 只有被 KB 显式标记 `read_only=true` 且最终 `Allow` 的命令可执行；默认拒绝，危险 flag/结构、`sudo`/`doas`、规则 allow 均不能提升为只读。HTTP `/recordings` 从「有组 key 403」改为按路径首段 host + `recording:read` + selector 判定，与 MCP 一致；`host_list`/`host_filter`/`audit_query`/`list_recordings`/`get_recording`/`search_recordings` 的结果过滤改用 role selector 并集（legacy 行为不变）。KB 合并去重后 1,607 条。
 - **命令规则引擎（deny / ask / allow 三态）**：新增 `clum-command-kb` crate——命令先经 quote-aware 归一化（切分 `&&`/`;`/`|`/重定向/命令替换，剥离 `sudo`/`env`/`timeout` 等包装器）再裁决；复合命令取最严、危险结构强制升格、解析失败 fail-closed。内置知识库随代码维护（124 条人工 vet 命令，全部带 `source` provenance），`data/overlay.toml` 为运维 CLI 增量标注，`config/command-rules.toml` 为可热重载的用户规则（priority 升序、首中即停）。
