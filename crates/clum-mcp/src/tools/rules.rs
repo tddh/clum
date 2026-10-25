@@ -263,15 +263,15 @@ pub(crate) fn call_fingerprint(tool_name: &str, command: Option<&str>, args: &Va
                 if let Some(v) = args.get(*field) {
                     h.update([0u8]);
                     h.update(field.as_bytes());
-                    h.update([b'=']);
+                    h.update(b"=");
                     h.update(serde_json::to_string(v).unwrap_or_default().as_bytes());
                 }
             }
         }
         // 无命令载荷：用规范化 args。serde_json 未开 preserve_order → Map 是 BTreeMap，
         // 键序稳定，故等价参数得到同一指纹（有测试固化该假设）。
-        // `approval_id` 是重试凭证，不能参与指纹：首次 ask 时 args 不含它，
-        // 批准后带 id 重发必须得到同一指纹，否则 consume 永远 FingerprintMismatch。
+        // 历史兼容：旧客户端仍可能带 `approval_id`（审批运行时已于 2026-10 移除）。
+        // 它是重试凭证而非执行上下文，必须剔除，否则同一逻辑调用会得到不同指纹。
         None => {
             let mut args = args.clone();
             if let Some(object) = args.as_object_mut() {

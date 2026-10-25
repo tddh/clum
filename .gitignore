@@ -60,6 +60,7 @@ clum-docs/project-evaluation-2026-08-03.md
 # 临时文件
 *.tmp
 *.bak
+__pycache__/
 .qoder/*
 .qoder
 clum-docs/superpowers/plans/*

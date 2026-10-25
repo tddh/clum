@@ -1006,11 +1006,23 @@ mod tests {
         let recordings = dir.path().join("recordings");
         tokio::fs::create_dir_all(&recordings).await.unwrap();
 
-        // Create an old date dir (2020-01-01) and a recent date dir (2026-07-22).
-        let old_dir = recordings.join("2020-01-01");
-        let new_dir = recordings.join("2026-07-22");
+        // 日期相对当前时间构造：绝对日期会在 retention_days 之后变成“过期”，
+        // 让测试随日历失效（2026-07-22 + 90 天 = 2026-10-20 起必红）。
+        let today = chrono::Utc::now().date_naive();
+        let old_name = (today - chrono::Duration::days(100))
+            .format("%Y-%m-%d")
+            .to_string();
+        let new_name = today.format("%Y-%m-%d").to_string();
+        assert_ne!(old_name, new_name);
+        let old_dir = recordings.join(&old_name);
+        let new_dir = recordings.join(&new_name);
+        let future_name = (today + chrono::Duration::days(1))
+            .format("%Y-%m-%d")
+            .to_string();
+        let future_dir = recordings.join(&future_name);
         tokio::fs::create_dir_all(&old_dir).await.unwrap();
         tokio::fs::create_dir_all(&new_dir).await.unwrap();
+        tokio::fs::create_dir_all(&future_dir).await.unwrap();
 
         // Put dummy .cast files in each.
         tokio::fs::write(old_dir.join("session1.cast"), b"old cast data\n")
@@ -1025,6 +1037,9 @@ mod tests {
         tokio::fs::write(new_dir.join("session2.meta"), b"{}\n")
             .await
             .unwrap();
+        tokio::fs::write(future_dir.join("session3.cast"), b"future cast data\n")
+            .await
+            .unwrap();
 
         // Run cleanup with retention_days=90 — old dir should be deleted.
         let (deleted, freed) = cleanup_recordings(&recordings, 90, 1024).await.unwrap();
@@ -1033,6 +1048,10 @@ mod tests {
         assert!(freed > 0, "should report bytes freed");
         assert!(!old_dir.exists(), "old dir should be removed");
         assert!(new_dir.exists(), "new dir should remain");
+        assert!(
+            future_dir.exists(),
+            "future-dated dir must never be deleted"
+        );
     }
 
     #[tokio::test]

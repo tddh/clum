@@ -49,7 +49,8 @@ enum RoleCommand {
         /// Comma-separated capability verbs, e.g. command:exec,file:read.
         #[arg(long, value_delimiter = ',')]
         actions: Vec<String>,
-        /// Require human approval for calls matched by this grant.
+        /// Tighten matching calls from allow to ask. Blocks only under
+        /// `command_policy: strict`; permissive still executes. No human approval.
         #[arg(long)]
         require_approval: bool,
     },

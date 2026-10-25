@@ -20,6 +20,7 @@ with an explicit version before relying on provenance.
 
 | Version | Supported          |
 |---------|--------------------|
+| 0.19.x  | ✅ Supported       |
 | 0.18.x  | ✅ Supported       |
 | 0.17.x  | ✅ Supported       |
 | 0.16.x  | ✅ Supported       |
@@ -35,7 +36,7 @@ with an explicit version before relying on provenance.
 clum consists of four components connected over TLS:
 
 1. **clum-mcp** — Central MCP Server: HTTP for AI clients + QUIC for Bridge registration and CLI data plane
-2. **clum-cli** — CLI tool for humans to attach to remote sessions via Server relay
+2. **clum-cli** — CLI tool for humans: connects directly to a bridge by default, or through the Server relay when `--server-addr` is set
 3. **rmux-bridge** — Bridge daemon deployed on target Linux hosts, reverse-connects to Central Server
 4. **AI clients** — Connect to Central Server via Streamable HTTP with API Key auth
 

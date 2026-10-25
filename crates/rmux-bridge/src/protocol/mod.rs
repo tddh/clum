@@ -1,6 +1,6 @@
 //! RMUX protocol layer: connects to a local RMUX daemon over a Unix socket
-//! and translates JSON requests into RMUX SDK calls. Handles all 55 tool
-//! message types plus pane output streaming.
+//! and translates JSON requests into RMUX SDK calls. Handles every MCP tool
+//! message type plus pane output streaming.
 
 use anyhow::Result;
 use regex::Regex;

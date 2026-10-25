@@ -967,7 +967,20 @@ pub async fn execute_tool(
                 }
             }
         }
-        _ => anyhow::bail!("unknown tool: {}", tool_name),
+        _ => {
+            // schema 与 dispatch 是两份手写清单。新增工具只改 schema、忘记加
+            // 分支时，调用方应看到可定位的 server bug，而不是含糊的 unknown tool。
+            let registered = crate::schema::tools_definition()["tools"]
+                .as_array()
+                .is_some_and(|tools| tools.iter().any(|t| t["name"].as_str() == Some(tool_name)));
+            if registered {
+                anyhow::bail!(
+                    "server bug: tool '{}' is registered in the schema but has no dispatch branch",
+                    tool_name
+                );
+            }
+            anyhow::bail!("unknown tool: {}", tool_name)
+        }
     };
 
     let duration_ms = start.elapsed().as_millis() as u64;

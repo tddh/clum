@@ -4,7 +4,8 @@
 用法:
     python3 scripts/kb-fuse-safe-chains.py <safe-chains 源码目录> [输出路径] [源版本]
 
-源版本缺省时尝试从上游 git HEAD 读取，读不到则写 unknown。
+源版本缺省时尝试从上游 git HEAD 读取；仍无法确定时**默认拒绝生成**，
+需显式传入源版本，或传 `--allow-unknown-source` 明确接受未锚定快照。
 
 safe-chains 的 commands/**/*.toml 为每条命令标注一个 level:
     Inert     无副作用   -> allow
@@ -97,15 +98,16 @@ def strictest_effect(levels: list[str]) -> str:
 
 
 def main() -> int:
-    if len(sys.argv) < 2:
+    raw_args = sys.argv[1:]
+    args = [a for a in raw_args if a != "--allow-unknown-source"]
+    allow_unknown = len(args) != len(raw_args)
+    if not args:
         print(__doc__)
         return 1
 
-    src = pathlib.Path(sys.argv[1])
+    src = pathlib.Path(args[0])
     out = pathlib.Path(
-        sys.argv[2]
-        if len(sys.argv) > 2
-        else "crates/clum-command-kb/data/generated.toml"
+        args[1] if len(args) > 1 else "crates/clum-command-kb/data/generated.toml"
     )
 
     commands_dir = src / "commands"
@@ -137,7 +139,13 @@ def main() -> int:
             if prev is None or EFFECT_RANK[effect] > EFFECT_RANK[prev]:
                 entries[name] = effect
 
-    version = source_version(src, sys.argv[3] if len(sys.argv) > 3 else None)
+    version = source_version(src, args[2] if len(args) > 2 else None)
+    if version == "unknown" and not allow_unknown:
+        sys.exit(
+            "ERROR: cannot determine the upstream source version. Pass it as the "
+            "third argument, or pass --allow-unknown-source to record 'unknown' "
+            "(this makes the generated data unanchored and unsuitable for redistribution)."
+        )
 
     lines = [
         "# 本文件由 scripts/kb-fuse-safe-chains.py 生成，请勿手工编辑。",

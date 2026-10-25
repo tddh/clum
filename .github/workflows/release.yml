@@ -16,15 +16,17 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.96.0
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release -p clum-mcp -p clum-cli
+      - run: cargo build --locked --release -p clum-mcp -p clum-cli
       - name: Package
         run: |
           mkdir -p pkg/config pkg/.opencode/skills/clum-mcp
           cp target/release/clum-mcp target/release/clum-cli pkg/
-          cp config/hosts.example.yaml config/mcp-config.example.json config/rmux.conf pkg/config/
-          cp .opencode/skills/clum-mcp/SKILL.md pkg/.opencode/skills/clum-mcp/
+          cp config/hosts.example.yaml config/mcp-config.example.json \
+             config/server-config.yaml.example config/bridge.env.example \
+             config/command-rules.toml config/command-kb.toml pkg/config/
+          cp SKILL.md pkg/.opencode/skills/clum-mcp/
           cp README.md pkg/
           tar czf clum-macos-arm64.tar.gz -C pkg .
       - uses: actions/upload-artifact@v4
@@ -39,23 +41,25 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.96.0
         with:
           targets: x86_64-unknown-linux-musl
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update && sudo apt-get install -y musl-tools
-      - run: cargo build --target x86_64-unknown-linux-musl --release -p clum-mcp -p clum-cli -p rmux-bridge
+      - run: cargo build --locked --target x86_64-unknown-linux-musl --release -p clum-mcp -p clum-cli -p rmux-bridge
       - name: Package
         run: |
           mkdir -p pkg/config pkg/deploy pkg/.opencode/skills/clum-mcp
           cp target/x86_64-unknown-linux-musl/release/clum-mcp pkg/
           cp target/x86_64-unknown-linux-musl/release/clum-cli pkg/
           cp target/x86_64-unknown-linux-musl/release/rmux-bridge pkg/
-          cp config/hosts.example.yaml config/mcp-config.example.json config/rmux.conf pkg/config/
+          cp config/hosts.example.yaml config/mcp-config.example.json \
+             config/server-config.yaml.example config/bridge.env.example \
+             config/command-rules.toml config/command-kb.toml pkg/config/
           cp deploy/install-bridge.sh deploy/install-daemon.sh pkg/deploy/
           cp deploy/rmux-daemon.service pkg/deploy/
           cp deploy/generate-certs.sh pkg/deploy/
-          cp .opencode/skills/clum-mcp/SKILL.md pkg/.opencode/skills/clum-mcp/
+          cp SKILL.md pkg/.opencode/skills/clum-mcp/
           cp README.md pkg/
           tar czf clum-linux-x86_64.tar.gz -C pkg .
       - uses: actions/upload-artifact@v4
@@ -63,33 +67,9 @@ jobs:
           name: linux-x86_64
           path: clum-linux-x86_64.tar.gz
 
-  build-windows:
-    name: Windows (x86_64)
-    runs-on: windows-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release -p clum-mcp -p clum-cli
-      - name: Package
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path pkg/config, pkg/.opencode/skills/clum-mcp
-          Copy-Item target/release/clum-mcp.exe, target/release/clum-cli.exe pkg/
-          Copy-Item config/hosts.example.yaml, config/mcp-config.example.json, config/rmux.conf pkg/config/
-          Copy-Item .opencode/skills/clum-mcp/SKILL.md pkg/.opencode/skills/clum-mcp/
-          Copy-Item README.md pkg/
-          Compress-Archive -Path pkg/* -DestinationPath clum-windows-x86_64.zip
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows-x86_64
-          path: clum-windows-x86_64.zip
-
   release:
     name: Create Release
-    needs: [build-macos, build-linux, build-windows]
+    needs: [build-macos, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -103,5 +83,4 @@ jobs:
           files: |
             clum-macos-arm64.tar.gz
             clum-linux-x86_64.tar.gz
-            clum-windows-x86_64.zip
           generate_release_notes: true

@@ -682,7 +682,12 @@ pub async fn handle_interactive_data(
         anyhow::bail!("fcntl F_SETFL failed: {}", std::io::Error::last_os_error());
     }
 
-    let async_fd = AsyncFd::new(master_fd).context("failed to create AsyncFd for PTY")?;
+    // SAFETY: `master_fd` is an `OwnedFd` moved into the `AsyncFd`, so this
+    // registration owns the only handle to that fd number for its lifetime.
+    // The handle kept in session state is an independent `try_clone`,
+    // i.e. a different fd number, so it cannot close or reuse it.
+    let async_fd =
+        unsafe { AsyncFd::register(master_fd) }.context("failed to create AsyncFd for PTY")?;
 
     let recorder: Option<CastRecorder> = make_recorder(
         recording_enabled,

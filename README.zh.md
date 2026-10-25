@@ -1,5 +1,7 @@
 # clum
 
+[![CI](https://github.com/tddh/clum/actions/workflows/ci.yml/badge.svg)](https://github.com/tddh/clum/actions/workflows/ci.yml)
+
 > clum —— 让 AI 安全、可靠地操作远程终端。（0.10.0 起由 yunying 改名；沿革：agent-ops → yunying → clum）
 
 > AI Agent 与人类运维远程操作 Linux 主机的安全基础设施 —— 基于 rmux 提供持久化终端会话与全链路审计日志，AI 端通过 MCP 协议调用，人类端通过 CLI PTY 透传直连，支持文件传输、端口转发与多主机编排。
@@ -227,7 +229,9 @@ clum-mcp agent revoke <name>    # 吊销 Key
 # 角色 / 能力策略（P0）：默认拒绝；旧 Key 迁移为 legacy role，行为不变
 clum-mcp role list
 clum-mcp role grant operator --group dev --actions host:read,session:attach,command:exec
-clum-mcp role grant operator --group prod --actions command:exec --require-approval
+# --require-approval 只把 allow 收紧为 ask：默认 permissive 下 ask 仍会执行，
+# 仅在 command_policy: strict 下拒绝。不存在人工审批通道。
+clum-mcp role grant operator --group prod --actions command:exec
 clum-mcp role bind --key agent-dev --role operator
 clum-mcp policy explain --key agent-dev --tool exec --host tf001
 

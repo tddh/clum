@@ -31,7 +31,12 @@ use std::sync::Arc;
 use anyhow::Context;
 
 #[derive(Parser)]
-#[command(name = "clum-mcp", version, about)]
+#[command(
+    name = "clum-mcp",
+    version,
+    about,
+    after_help = "Subcommands (parsed before clap): audit | agent | role | policy | bridge"
+)]
 struct Cli {
     #[arg(long, default_value = "stdio")]
     mode: String,

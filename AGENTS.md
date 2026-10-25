@@ -29,6 +29,7 @@
 clum/
 ├── crates/              # Rust crates
 │   ├── clum-cli/   # CLI 交互式终端
+│   ├── clum-command-kb/ # 命令归一化 / 知识库 / 规则引擎（deny/ask/allow）
 │   ├── clum-core/  # 共享类型（HostConfig, AuditEvent, AuditAction）
 │   ├── clum-mcp/   # MCP Server（Central Server 模式 / stdio 本地模式）
 │   └── rmux-bridge/   # Bridge proxy

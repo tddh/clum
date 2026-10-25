@@ -1,5 +1,7 @@
 # clum
 
+[![CI](https://github.com/tddh/clum/actions/workflows/ci.yml/badge.svg)](https://github.com/tddh/clum/actions/workflows/ci.yml)
+
 > *clum* — safe, reliable remote terminals for AI agents. (Renamed from yunying in 0.10.0; lineage: agent-ops → yunying → clum.)
 
 > Secure infrastructure for AI agents and human operators managing Linux hosts — persistent terminal sessions powered by rmux, full-chain audit logging, MCP-native interface for AI clients + CLI PTY passthrough for humans, with file transfer, port forwarding, and multi-host orchestration.
@@ -227,7 +229,10 @@ clum-mcp agent revoke <name>    # Revoke a key
 # Role / capability policy (P0): default deny; existing keys migrate to legacy roles
 clum-mcp role list
 clum-mcp role grant operator --group dev --actions host:read,session:attach,command:exec
-clum-mcp role grant operator --group prod --actions command:exec --require-approval
+# --require-approval only tightens allow -> ask. Under the default `permissive`
+# policy ask still executes; it blocks only under `command_policy: strict`.
+# There is no human approval channel.
+clum-mcp role grant operator --group prod --actions command:exec
 clum-mcp role bind --key agent-dev --role operator
 clum-mcp policy explain --key agent-dev --tool exec --host tf001
 

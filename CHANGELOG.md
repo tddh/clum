@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-10-24
+
+### Security
+- **依赖安全升级**：quinn-proto 0.11.16 → 0.11.18（消除 5 条远程 panic/内存耗尽/限制绕过公告）、rustls 0.23.42 → 0.23.46（4 条）、rustls-webpki 0.103.13 → 0.103.16、webpki-roots/webpki-root-certs 1.0.9 → 1.0.10、tokio 1.53.1 → 1.53.3（`AsyncFd::new` I/O safety unsound，项目在 PTY 路径使用）。
+- **CI 新增 `cargo audit`**，并把 `rust-toolchain.toml` 与所有 workflow 固定到 1.96.0，避免 stable 上游新增 lint 直接打破 `-D warnings`。
+- **PTY `AsyncFd` 迁移到 `AsyncFd::register`**：tokio 1.53.3 将 `AsyncFd::new` 标记为 deprecated（I/O safety）。PTY master 的 `OwnedFd` 独占所有权，session state 中保存的是独立的 `try_clone`（不同 fd 号），因此用 unsafe `register` 并附 SAFETY 说明，行为不变。
+
+### Fixed
+- **发布流水线修复**：打包步骤引用不存在的 `config/rmux.conf` 与已删除的 `.opencode/skills/clum-mcp/SKILL.md`，导致 macOS/Linux 自 v0.18.0 起构建失败；现改用真实存在的示例配置与根 `SKILL.md`。
+- **Windows 发布 job 移除**：`clum-cli` 的 `libc::mkstemp` 与 `clum-mcp` 的 `Permissions::from_mode` 均为 Unix-only API 且无 `cfg` 门控，Windows 构建从未成功；在补齐门控前不再发布未经验证的产物。
+- **时间炸弹测试**：`test_cleanup_removes_old_directories` 把 `2026-07-22` 硬编码为“近期目录”，在 2026-10-20（90 天保留期）后必红；改为基于 `Utc::now()` 相对构造。
+
 ### Changed
 - **命令策略默认改为 permissive**：新增 `command_policy: permissive | strict`（默认 `permissive`）。permissive 下所有 `ask` 一律视为放行，只保留 `deny`；`config/command-kb.toml` 设置 `default_effect = "allow"`，`config/command-rules.toml` 增加破坏性命令清单（rm 关键路径、dd 块设备、mkfs/分区、关机、清防火墙、杀 init、解释器/xargs 包装）。审批运行时整体移除：`clum-mcp approval` CLI、`approvals` 模块、MCP elicitation、`approval_id` 参数、`pending_approvals` 写入。`strict` 保留为「ask → deny」的 fail-closed 模式。审计枚举 `ApprovalRequested`/`ApprovalDecided` 与错误码 `APPROVAL_REQUIRED`/`APPROVAL_INVALID` 仅作历史兼容保留，不再产生。
 - **工具 schema 移除 `approval_id`**：10 个受裁决工具不再接受该参数；旧客户端传入会被忽略/拒绝，需升级。

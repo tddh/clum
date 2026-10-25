@@ -42,7 +42,8 @@ pub fn instructions() -> String {
 - `clum-cli replay <host/file.cast>` — remote recording playback\n\
 - Requires env: CLUM_SERVER_ADDR, CLUM_API_KEY (or --server-addr / --api-key flags)\n\n\
 > WARNING: the CLI is a HUMAN channel. `clum-cli term/forward/push/pull` relays bytes\n\
-> through the server and does NOT pass the command rule engine or per-command approval.\n\
+> directly to a bridge (or through the server with `--server-addr`) and does NOT pass\n\
+> the command rule engine.\n\
 > Do NOT invoke `clum-cli` from the Bash tool to run remote commands. Every remote\n\
 > operation must go through the MCP tools so it is adjudicated and audited.\n\n\
 ## Security: Untrusted Output\n\

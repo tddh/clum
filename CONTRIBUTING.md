@@ -22,6 +22,7 @@ just fmt-check    # Check formatting
 ```
 crates/
 ├── clum-core/    # Shared types (HostConfig, AuditEvent, SessionInfo)
+├── clum-command-kb/ # Command normalization, knowledge base, rule engine
 ├── clum-mcp/     # MCP Server — Central Server (HTTP + QUIC) or local stdio mode
 ├── clum-cli/     # CLI tool — human PTY passthrough to remote sessions
 └── rmux-bridge/     # Bridge daemon — deployed on target Linux hosts
