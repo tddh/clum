@@ -17,9 +17,31 @@ impl ProtocolProxy {
             Err(e) => return json!({"ok": false, "error": e.to_string()}),
         };
         match session.new_window().await {
-            Ok(_) => json!({"ok": true, "window_created": true}),
+            Ok(window) => {
+                let window_index = window.target().window_index;
+                let pane_id = match window.panes().await {
+                    Ok(panes) => panes.first().map(|p| format!("{}", p.id)),
+                    Err(e) => {
+                        tracing::warn!(error = %e, window_index, "split_window: pane listing failed; returning pane_id=null");
+                        None
+                    }
+                };
+                Self::split_window_response(window_index, pane_id)
+            }
             Err(e) => json!({"ok": false, "error": e.to_string()}),
         }
+    }
+
+    /// split_window 成功响应契约：window_index + pane_id 让调用方直接寻址新窗口。
+    /// pane 枚举失败只降级 pane_id 为 null——窗口已创建，整体报失败会误导
+    /// 调用方重试、创建重复窗口。
+    fn split_window_response(window_index: u32, pane_id: Option<String>) -> serde_json::Value {
+        json!({
+            "ok": true,
+            "window_created": true,
+            "window_index": window_index,
+            "pane_id": pane_id,
+        })
     }
 
     pub async fn handle_close_window(
@@ -240,5 +262,31 @@ impl ProtocolProxy {
             }
             Err(e) => json!({"ok": false, "error": e.to_string()}),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn split_window_response_carries_addressing_fields() {
+        // 响应契约：调用方依赖 window_index + pane_id 直接寻址新窗口，
+        // 字段缺失/改名会破坏 SKILL/TOOLS 的临时窗口工作流。
+        let resp = ProtocolProxy::split_window_response(2, Some("%7".to_string()));
+        assert_eq!(resp["ok"], json!(true));
+        assert_eq!(resp["window_created"], json!(true));
+        assert_eq!(resp["window_index"], json!(2));
+        assert_eq!(resp["pane_id"], json!("%7"));
+    }
+
+    #[test]
+    fn split_window_response_pane_lookup_failure_does_not_flip_ok() {
+        // 窗口已创建成功：pane 枚举失败只降级 pane_id 为 null，
+        // 整体报失败会误导调用方重试、创建重复窗口。
+        let resp = ProtocolProxy::split_window_response(2, None);
+        assert_eq!(resp["ok"], json!(true));
+        assert_eq!(resp["window_index"], json!(2));
+        assert!(resp["pane_id"].is_null());
     }
 }

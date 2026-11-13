@@ -2,11 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+- **临时窗口工作流（治理 pane 碎片化与 dead pane 累积）**：`split_window` 响应新增 `window_index` + `pane_id`（此前仅 `window_created: true`，调用方无法直接寻址新窗口）；SKILL/schema 将 `split_pane`/`split_pane_with` 收窄为真·同屏并行，独立任务或默认 pane 被占（exec REFUSED_STATE）引导改用 `split_window` 临时窗口（显式传 pane_id，自动探测只看 window 0）；exec 非 ready 拒绝建议统一附临时窗口选项；多次 split 后补 `select_layout` 重排指引。临时窗口默认保留（不挤压共享 pane），用户要求清理时 `close_window` 整窗回收。
+
 ## [0.19.0] - 2026-10-24
 
 ### Security
 - **依赖安全升级**：quinn-proto 0.11.16 → 0.11.18（消除 5 条远程 panic/内存耗尽/限制绕过公告）、rustls 0.23.42 → 0.23.46（4 条）、rustls-webpki 0.103.13 → 0.103.16、webpki-roots/webpki-root-certs 1.0.9 → 1.0.10、tokio 1.53.1 → 1.53.3（`AsyncFd::new` I/O safety unsound，项目在 PTY 路径使用）。
-- **CI 新增 `cargo audit`**，并把 `rust-toolchain.toml` 与所有 workflow 固定到 1.96.0，避免 stable 上游新增 lint 直接打破 `-D warnings`。
+- **CI 新增 `cargo audit`**，并把 `rust-toolchain.toml` 与所有 workflow 固定到 1.99.1，避免 stable 上游新增 lint 直接打破 `-D warnings`。
 - **PTY `AsyncFd` 迁移到 `AsyncFd::register`**：tokio 1.53.3 将 `AsyncFd::new` 标记为 deprecated（I/O safety）。PTY master 的 `OwnedFd` 独占所有权，session state 中保存的是独立的 `try_clone`（不同 fd 号），因此用 unsafe `register` 并附 SAFETY 说明，行为不变。
 
 ### Fixed

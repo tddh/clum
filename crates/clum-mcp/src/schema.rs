@@ -26,6 +26,7 @@ pub fn instructions() -> String {
 - Destructive tools (`close_pane`, `paste_buffer`, `respawn_pane`) still require explicit `pane_id`.\n\
 - `exec` supports `clear_screen: true` and `timeout_ms` for long commands.\n\
 - After closing a pane: `respawn_pane` to restart the shell.\n\
+- Independent task, or default pane busy (exec REFUSED_STATE)? Open a temporary window with `split_window` (returns window_index + pane_id) and pass that pane_id explicitly — auto-detect only looks at window 0. Do NOT split window 0 for every task: panes shrink and dead panes pile up. Keep temporary windows by default; `close_window` only when the user asks to clean up.\n\
 - `cmd_escape` for direct rmux CLI access (advanced).\n\n\
 ## Audit\n\
 - `audit_query` — query the **Server-side** centralized audit log (all MCP tool calls: who, when, which host, what action, success/failure). Use this to review operation history.\n\
@@ -255,7 +256,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "split_window",
-                "description": "Create a new empty window in a session (like a browser tab), containing a single pane with the default shell.\n\nUse this to create separate workspaces within a session.\n\nDo NOT use to split an existing pane — use split_pane instead. The direction parameter is currently ignored.",
+                "description": "Create a new empty window in a session (like a browser tab), containing a single pane with the default shell.\n\nPREFERRED for independent tasks or when the default pane is busy (exec REFUSED_STATE, long-running job): a temporary window is full-size and never shrinks the shared panes in window 0. Returns window_index + pane_id — pass that pane_id explicitly to later calls (auto-detect only looks at window 0).\n\nKeep the window when done (it harms nothing); close_window only when the user asks to clean up. Do NOT use to split an existing pane — use split_pane for genuine side-by-side work. The direction parameter is currently ignored.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -312,7 +313,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "exec",
-                "description": "Execute a shell command on a remote Linux host in an existing session pane, waiting for it to exit and returning full output plus exit code.\n\nUse this for self-terminating commands you expect to finish (ls, cat, grep, df, systemctl, kubectl, curl). PREFER combining read-only checks with && or ; (e.g. 'df -h && free -m') to save round-trips.\n\nDo NOT use for interactive programs (vim, htop) — use send_keys. Do NOT use for long-running commands (builds, ansible) — use shell_command then monitor with wait_for_text / stream_pane. Do NOT use for large-output commands — use send_keys + collect_until_exit. Refuses to run when the terminal is not in ready state (e.g. inside vim/less). On timeout (ok:false, error_code:TIMEOUT) the command keeps running — the response's `output` field carries the partial visible text, but partial_output / terminal_state / cursor are NOT set on the exec timeout path (those three are only filled in by the bridge-side wait_* and collect_until_exit timeouts). Use capture_pane to inspect the current state, or wait_exit / wait_for_text to continue monitoring.",
+                "description": "Execute a shell command on a remote Linux host in an existing session pane, waiting for it to exit and returning full output plus exit code.\n\nUse this for self-terminating commands you expect to finish (ls, cat, grep, df, systemctl, kubectl, curl). PREFER combining read-only checks with && or ; (e.g. 'df -h && free -m') to save round-trips.\n\nDo NOT use for interactive programs (vim, htop) — use send_keys. Do NOT use for long-running commands (builds, ansible) — use shell_command then monitor with wait_for_text / stream_pane. Do NOT use for large-output commands — use send_keys + collect_until_exit. Refuses to run when the terminal is not in ready state (e.g. inside vim/less); the refusal suggests either restoring that terminal or opening a temporary window with split_window — prefer the window when the terminal belongs to the user or another task. On timeout (ok:false, error_code:TIMEOUT) the command keeps running — the response's `output` field carries the partial visible text, but partial_output / terminal_state / cursor are NOT set on the exec timeout path (those three are only filled in by the bridge-side wait_* and collect_until_exit timeouts). Use capture_pane to inspect the current state, or wait_exit / wait_for_text to continue monitoring.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -329,7 +330,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "split_pane",
-                "description": "Split an existing pane into two panes. horizontal = top/bottom, vertical = left/right. The new pane runs a default shell.\n\nUse this to create multiple panes within a window for parallel work.\n\nDo NOT use to create a new window — use split_window. Do NOT use when you want to run a command immediately in the new pane — use split_pane_with.",
+                "description": "Split an existing pane into two panes. horizontal = top/bottom, vertical = left/right. The new pane runs a default shell.\n\nUse ONLY for genuine side-by-side work in one view (e.g. tail -f monitor next to an interactive shell). For an independent task, or when the default pane is busy, use split_window instead — repeated splits shrink window 0's panes and leave dead panes behind. After several splits, use select_layout to even out pane sizes.\n\nDo NOT use to create a new window — use split_window. Do NOT use when you want to run a command immediately in the new pane — use split_pane_with.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -778,7 +779,7 @@ pub fn tools_definition() -> Value {
             },
             {
                 "name": "split_pane_with",
-                "description": "Split an existing pane and immediately run a command in the new pane — combines split_pane and command execution.\n\nUse this for parallel workflows where you want to start multiple commands simultaneously. shell=true (default) runs via /bin/sh -c; shell=false passes args directly. Supports custom cwd, env, title, and keep_alive_on_exit.",
+                "description": "Split an existing pane and immediately run a command in the new pane — combines split_pane and command execution.\n\nUse ONLY for genuine side-by-side parallel work in one view. For an independent task, or when the default pane is busy (exec REFUSED_STATE), use split_window instead — repeated splits shrink window 0's panes and accumulate dead panes. shell=true (default) runs via /bin/sh -c; shell=false passes args directly. Supports custom cwd, env, title, and keep_alive_on_exit.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {

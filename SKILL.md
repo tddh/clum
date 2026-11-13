@@ -322,6 +322,8 @@ wait_stable(host, session_name, pane_id)
 | `repl` | `send_keys("exit()\n")` 退出 REPL |
 | `unknown` | `capture_pane` 查看文本后自行判断 |
 
+> 💡 当前终端可能属于用户或其他任务：若恢复操作会打断它（如退出用户正在看的 vim），改用 `split_window` 开临时窗口执行自己的命令（显式传返回的 pane_id），不打扰当前终端。
+
 ### 不二过
 
 **同类错误不犯第二次。** 如果某个操作因特定原因失败（如 exec 被 REFUSED_STATE 拒绝），修正后重试时不要再犯同样的错误。失败后先理解为什么，再换方式重试——不要反复用同样的参数调用同一个工具。
@@ -362,6 +364,15 @@ wait_stable(host, session_name, pane_id)
 2. collect_until_exit(max_bytes=10485760)
    → 流式收集所有输出直到进程退出
 ```
+
+### 临时窗口工作流（独立任务 / 默认 pane 被占）
+```
+1. split_window(host, session_name) → {"window_index": N, "pane_id": "%X"}
+2. exec(host, session_name, pane_id="%X", command=...)  // 必须显式传 pane_id，自动探测只看 window 0
+3. 任务结束：窗口默认保留（不挤压共享 pane，滞留无害）；用户要求清理时 close_window(window_index=N) 整窗回收
+```
+
+> 为什么不用 split_pane_with 开独立任务：split 会把 window 0 的共享 pane 越切越小，dead pane 也会累积；临时窗口全尺寸、互不干扰。
 
 ### 多步骤任务汇报
 
@@ -435,7 +446,9 @@ wait_stable(host, session_name, pane_id)
 ├── 需要实时监控输出 → `send_keys` + `stream_pane` 循环
 ├── 多台主机 → `batch_exec`（同步等待每台结果）
 ├── 多台主机发按键、发完不等结果 → `batch_send_keys`
-├── 需要分屏并行 → `split_pane_with`
+├── 默认 pane 被占用（exec REFUSED_STATE、长任务运行中）或启动独立新任务 → `split_window` 开临时窗口（全尺寸、不影响共享 pane）；后续调用**显式传返回的 pane_id**（自动探测只看 window 0）
+│   ⚠️ 新窗口默认成为活动窗口，会切换人类 `term --mux` 的视图；raw 直通（term 默认）不受影响
+├── 真·同屏并行（如 tail -f 监控 + 旁边操作）→ `split_pane_with`；不要为每个独立任务反复 split window 0——pane 会越切越小
 └── 发送含 \n \t 字面量的文本 → `send_text`（不解释转义，区别于 send_keys）
 
 需要输出？
@@ -462,8 +475,9 @@ wait_stable(host, session_name, pane_id)
 └── 关闭隧道 → `forward_close`
 
 Pane 管理？
-├── 分屏 → `split_pane`
-├── 分屏并执行 → `split_pane_with`
+├── 分屏 → `split_pane`（仅真·同屏并行；独立任务用 `split_window`，见上）
+├── 分屏并执行 → `split_pane_with`（同上）
+│   💡 多次 split 后 pane 尺寸不均 → `select_layout` 重排（tiled / even-horizontal 等）
 ├── 关闭 pane → `close_pane`（⚠️ 需用户明确同意）
 ├── 重启进程 → `respawn_pane`
 ├── 移动 pane → `break_pane` / `join_pane`
@@ -472,7 +486,8 @@ Pane 管理？
     ⚠️ broadcast_keys = 单台主机上的多个 pane；**跨主机多台机器**用 `batch_send_keys`（见下）
 
 Window 管理？
-├── 新建窗口 → `split_window`
+├── 新建临时工作窗口 → `split_window`（返回 window_index + pane_id；后续调用显式传 pane_id）
+│   💡 临时窗口默认保留；用户说"清理"时 `close_window` 整窗回收，比逐 pane 判定所有权安全
 ├── 关闭窗口 → `close_window`（⚠️ 需用户明确同意）
 ├── 切换窗口 → `select_window`
 ├── 调整布局 → `select_layout`

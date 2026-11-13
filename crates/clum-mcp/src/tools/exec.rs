@@ -303,13 +303,21 @@ where
             Some(_) => "Terminal state is unknown. Use capture_pane to inspect terminal content.",
             None => "Terminal state unavailable: precheck failed (connection error, or rmux-bridge predates terminal_state support). Use capture_pane to inspect the terminal, then retry; upgrade rmux-bridge if it is older.",
         };
+        // 非 ready 拒绝统一附临时窗口选项：当前终端可能属于用户或其他任务，
+        // 开新窗口不打扰它，也避免反复 split window 0。precheck 失败（None）
+        // 路径不提供——连接本身可能不可用。
+        let suggestion = if state_name.is_some() {
+            format!("{suggestion} Or open a temporary window with split_window and run there (pass the returned pane_id explicitly) — leaves this terminal untouched.")
+        } else {
+            suggestion.to_string()
+        };
 
         return SendOutcome::Done(ExecResult {
             ok: false,
             output: String::new(),
             exit_code: None,
             duration_ms: 0,
-            error: Some(suggestion.to_string()),
+            error: Some(suggestion),
             terminal_state: precheck_state.clone(),
             cursor: None,
             pre_terminal_state: precheck_state,
@@ -1160,6 +1168,35 @@ mod tests {
             .await;
             let outcome = exec_send(&mut stream, "clum", "%0", "ls", 5000).await;
             assert_refused(outcome, state, hint);
+        }
+    }
+
+    #[tokio::test]
+    async fn exec_send_refusal_offers_temporary_window_option() {
+        // 非 ready 拒绝建议必须给出临时窗口选项：不打扰当前终端、不反复 split window 0。
+        // precheck 失败（None）路径除外——连接本身可能不可用。
+        for state in [
+            "editor", "pager", "password", "confirm", "running", "repl", "unknown",
+        ] {
+            let mut stream = mock_bridge(move |req| match req["type"].as_str() {
+                Some("capture_pane") => {
+                    json!({"ok": true, "text": "", "terminal_state": state})
+                }
+                _ => json!({"ok": false, "error": "unexpected"}),
+            })
+            .await;
+            let outcome = exec_send(&mut stream, "clum", "%0", "ls", 5000).await;
+            match outcome {
+                SendOutcome::Done(r) => {
+                    assert!(r.refused, "state={state} 应 refused");
+                    let err = r.error.unwrap_or_default();
+                    assert!(
+                        err.contains("split_window"),
+                        "state={state} 拒绝建议应提供临时窗口选项，实际: {err}"
+                    );
+                }
+                SendOutcome::Sent(_) => panic!("state={state} 不应发送命令"),
+            }
         }
     }
 

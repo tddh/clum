@@ -409,8 +409,10 @@
 
 **安全检查拒绝**：
 ```json
-{"ok": false, "refused": true, "error": "Terminal is in editor (vim/nano). Use send_keys to interact with editor, or exit editor first.", "pre_terminal_state": "editor"}
+{"ok": false, "refused": true, "error": "Terminal is in editor (vim/nano). Use send_keys to interact with editor, or exit editor first. Or open a temporary window with split_window and run there (pass the returned pane_id explicitly) — leaves this terminal untouched.", "pre_terminal_state": "editor"}
 ```
+
+> 💡 拒绝建议（precheck 失败除外）均附带临时窗口选项：用 `split_window` 开新窗口执行，不打扰当前终端。
 
 > `terminal_state`、`pre_terminal_state` 和 `cursor` 由 bridge 检测后返回；旧版 bridge（无 `terminal_state` 能力）下 exec 直接拒绝（见上方 fail-closed），不会以缺字段的方式"向后兼容"放行。
 
@@ -481,7 +483,7 @@
 
 ### `split_pane`
 
-在当前窗格内分屏，返回新 pane 的 ID。
+在当前窗格内分屏，返回新 pane 的 ID。**仅用于真·同屏并行**（如监控 + 操作并排）；独立任务或默认 pane 被占用时用 `split_window` 开临时窗口——反复 split 会把 pane 越切越小。
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
@@ -494,7 +496,7 @@
 
 ### `split_window`
 
-在会话中创建新窗口（非 pane 分屏）。
+在会话中创建新窗口（非 pane 分屏），作为独立任务的全尺寸临时工作区。
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
@@ -502,11 +504,13 @@
 | `session_name` | string | | default `clum` |
 | `direction` | string | | `horizontal` 或 `vertical`（当前无效，仅兼容保留） |
 
-> **注意**：`split_window` 创建全新空 window，不含额外 pane。如需 pane 级别的左右/上下分屏，请用 `split_pane`。
+**返回** `{"ok": true, "window_created": true, "window_index": N, "pane_id": "%X"}` —— `pane_id` 为新窗口初始 pane；后续调用必须**显式传该 pane_id**（自动探测只看 window 0）。pane 枚举失败时 `pane_id` 为 null 但窗口已创建，用 `list_window_panes(window_index=N)` 找回。
+
+> **注意**：`split_window` 创建全新空 window，仅含默认 shell 的初始 pane。如需 pane 级别的左右/上下分屏，请用 `split_pane`。新窗口默认成为活动窗口（会切换人类 `term --mux` 视图；raw 直通不受影响）。
 
 ### `split_pane_with`
 
-分屏并同时在新 pane 中启动命令（原子操作，避免先分屏再 spawn 的中间状态）。
+分屏并同时在新 pane 中启动命令（原子操作，避免先分屏再 spawn 的中间状态）。**仅用于真·同屏并行**；独立任务用 `split_window`。多次 split 后 pane 尺寸不均时用 `select_layout` 重排。
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|:---:|------|
