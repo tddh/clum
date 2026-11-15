@@ -115,8 +115,8 @@ pub struct ClumServer {
 }
 
 impl ServerHandler for ClumServer {
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_instructions(crate::schema::instructions())
     }
 

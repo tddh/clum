@@ -4,6 +4,7 @@
 
 ### Changed
 - **临时窗口工作流（治理 pane 碎片化与 dead pane 累积）**：`split_window` 响应新增 `window_index` + `pane_id`（此前仅 `window_created: true`，调用方无法直接寻址新窗口）；SKILL/schema 将 `split_pane`/`split_pane_with` 收窄为真·同屏并行，独立任务或默认 pane 被占（exec REFUSED_STATE）引导改用 `split_window` 临时窗口（显式传 pane_id，自动探测只看 window 0）；exec 非 ready 拒绝建议统一附临时窗口选项；多次 split 后补 `select_layout` 重排指引。临时窗口默认保留（不挤压共享 pane），用户要求清理时 `close_window` 整窗回收。
+- **rmcp 3.0.0 → 3.10.0（安全修复 + 协议跟进）**：消除 RUSTSEC-2026-0461（Streamable HTTP server 工具 schema 缓存无界，CVSS 7.5 DoS，直接命中 clum server）；同版顺带覆盖 RUSTSEC-2026-0457/0462（OAuth client SSRF、client 响应体无界缓冲——clum 未启用 `client` feature，本就不受影响）。`ServerHandler::get_info` 返回类型由已弃用的 `ServerInfo` 改为 `ServerConfig`（3.4 起弃用，`-D warnings` 下必须改）。保持精确 pin `=3.10.0`。验证：`just check`/`test`（600 通过）/`lint`/`fmt` 全绿；stdio 冒烟 18/18；真实 Streamable HTTP transport 冒烟 17/17（legacy initialize 握手 + session 复用 + 68 工具 + 错误契约 + session-less 400 + 2026-07-28 stateless discover）。注：quinn 三条网络 DoS 公告与 libsqlite3 CVE 不在本次范围，另行处理。
 
 ## [0.19.0] - 2026-10-24
 

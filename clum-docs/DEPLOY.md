@@ -107,7 +107,7 @@ curl -fsSLk -H "Authorization: Bearer <download_token>" https://SERVER:9788/rele
 |------|------|
 | 目标主机 | Linux x86_64，systemd，有 SSH 访问 |
 | RMUX | `rmux` 0.10.0 daemon 已安装并运行（`curl -fsSL https://rmux.io/install.sh \| sh`，版本由部署脚本固定） |
-| 构建机 | Rust 1.88+（由依赖 `rmcp 3.0.0` 的 `rust-version = "1.88"` 决定），`x86_64-linux-musl-gcc`（交叉编译用 `brew install FiloSottile/musl-cross/musl-cross`） |
+| 构建机 | Rust 1.88+（由依赖 `rmcp 3.10.0` 的 `rust-version = "1.88"` 决定），`x86_64-linux-musl-gcc`（交叉编译用 `brew install FiloSottile/musl-cross/musl-cross`） |
 | 端口 | Server 监听 9788（TCP HTTP + UDP QUIC）；Bridge 为出站连接，无需开放入站端口 |
 | 证书 | 自签名 TLS 证书（`openssl` 即可） |
 
