@@ -466,12 +466,13 @@ const GROUP_SCOPED_TOOLS: &[&str] = &[
     "search_recordings",
 ];
 
-/// Fingerprint for approvals that are not driven by a command payload.
-/// Deterministic so a retry with the same args matches the pending approval.
+/// Fingerprint for policy-driven Ask verdicts (no command payload).
+/// 审批运行时已移除（2026-10），当前指纹仅填充裁决结构体；人工审批是既定路线图，
+/// 重建审批时用它把「待审批记录」绑定到确定性的 tool+args，重试才能对上同一条审批。
 fn policy_approval_fingerprint(tool_name: &str, args: &Value) -> String {
     use sha2::{Digest, Sha256};
-    // `approval_id` is a retry credential: including it would make the retry
-    // after approval hash differently and deadlock the one-shot approval.
+    // 剔除 `approval_id`：重建审批后它是重试凭证，若计入哈希，批准后的重试会
+    // 算出不同指纹、对不上待审批记录（一次性审批死锁）。现在保留该行为以保持契约。
     let mut args = args.clone();
     if let Some(object) = args.as_object_mut() {
         object.remove("approval_id");
@@ -1212,7 +1213,7 @@ mod tests {
         assert_eq!(
             policy_approval_fingerprint("host_set_meta", &base),
             policy_approval_fingerprint("host_set_meta", &with_id),
-            "approval_id is a retry credential and must not change the fingerprint"
+            "approval_id must not change the fingerprint (retry-credential contract, reserved for approval rebuild)"
         );
     }
 

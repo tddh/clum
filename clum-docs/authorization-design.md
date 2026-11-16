@@ -202,6 +202,10 @@ graph TD
 > **实施状态**：已移除。本节仅保留设计记录；当前语义见 §6.3。
 > 审批运行时（elicitation、`approval_id`、server CLI）已删除，`ask` 由 `command_policy`
 > 决定：permissive 放行，strict 拒绝。
+>
+> **版本演进（2026-11-16 注）**：rmcp 已于 0.19.1 批次升级 `=3.0.0` → `=3.10.0`
+> （消除 RUSTSEC-2026-0461 等）；`elicitation` feature 声明已于 2026-11-16 从 Cargo.toml 移除
+> （代码零引用）。人工审批为既定路线图，重建时加回 feature；本节保留原设计供参考。
 
 实施前提（已核实）：
 

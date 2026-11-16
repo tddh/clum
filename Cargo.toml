@@ -30,7 +30,10 @@ quinn = "0.11"
 fastrand = "2"
 clap = "4"
 serde_norway = "0.9"
-rmcp = { version = "=3.10.0", features = ["server", "transport-streamable-http-server", "elicitation"] }
+# elicitation feature 已移除（2026-11-16）：审批运行时 2026-10 拆除，代码零引用。
+# 人工审批是既定路线图（必然要做），重建时在此加回 "elicitation" 并评估客户端支持度；
+# 设计记录见 clum-docs/authorization-design.md §6.1。
+rmcp = { version = "=3.10.0", features = ["server", "transport-streamable-http-server"] }
 axum = "0.8"
 shell-words = "1.1"
 parking_lot = "0.12"

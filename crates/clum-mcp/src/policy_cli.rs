@@ -4,8 +4,9 @@
 //! as MCP tools: an agent can only change policy if a human runs this CLI.
 //! Every mutation is written to the audit hash chain as `ConfigReload`.
 //!
-//! P1 will gate mutations behind MCP elicitation; until then the trust boundary
-//! is "shell access to the server host".
+//! 信任边界是「server 本机 shell 访问」，这是刻意设计而非过渡状态：Agent 无法
+//! 自改授权策略。人工审批是既定路线图（必然要做），重建时审批入口同样放在人侧
+//! 通道，不改变本 CLI 的信任边界；历史设计见 authorization-design.md §6.1。
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};

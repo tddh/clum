@@ -232,8 +232,9 @@ pub fn legacy_superadmin_actions() -> Vec<Capability> {
 }
 
 /// Full administrator role: all business capabilities plus management.
-/// Deliberately excludes `approval:decide` (not part of this enum): approvals
-/// are decided by a human through elicitation or the server CLI.
+/// 审批运行时已于 2026-10 移除（`approval:decide` 不在枚举中，无 elicitation 通道）。
+/// 人工审批是既定路线图：重建时审批决定权必须留在人侧通道（server CLI / 控制台），
+/// 不得做成 Agent 可自调的 MCP 工具，因此本枚举届时也不应新增 approval:decide。
 pub fn admin_actions() -> Vec<Capability> {
     Capability::ALL.to_vec()
 }
